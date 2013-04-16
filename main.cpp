@@ -28,59 +28,6 @@ cv::Mat thresholded_frame;
 cv::Mat grey_frame;
 cv::Mat bgFrame;
 
-//using namespace cv;
-
-// cvTracks for tracking
-//cvb::CvTracks tracks;
-//unsigned int blobNumber = 0;
-
-/*
-CvScalar cvBlobMeanColor(cvb::CvBlob const *blob, IplImage const *imgLabel, IplImage const *img)
-{
-    int stepLbl = imgLabel->widthStep/(imgLabel->depth/8);
-    int stepImg = img->widthStep/(img->depth/8);
-    int imgLabel_width = imgLabel->width;
-    int imgLabel_height = imgLabel->height;
-    int imgLabel_offset = 0;
-    int img_width = img->width;
-    int img_height = img->height;
-    int img_offset = 0;
-    if(imgLabel->roi)
-    {
-      imgLabel_width = imgLabel->roi->width;
-      imgLabel_height = imgLabel->roi->height;
-      imgLabel_offset = (imgLabel->nChannels * imgLabel->roi->xOffset) + (imgLabel->roi->yOffset * stepLbl);
-    }
-    if(img->roi)
-    {
-      img_width = img->roi->width;
-      img_height = img->roi->height;
-      img_offset = (img->nChannels * img->roi->xOffset) + (img->roi->yOffset * stepImg);
-    }
-
-    cvb::CvLabel *labels = (cvb::CvLabel *)imgLabel->imageData + imgLabel_offset;
-    unsigned char *imgData = (unsigned char *)img->imageData + img_offset;
-
-    double mb = 0;
-    double mg = 0;
-    double mr = 0;
-    double pixels = (double)blob->area;
-
-    for (unsigned int r=0; r<(unsigned int)imgLabel_height; r++, labels+=stepLbl, imgData+=stepImg)
-      for (unsigned int c=0; c<(unsigned int)imgLabel_width; c++)
-      {
-        if (labels[c]==blob->label)
-        {
-          mb += ((double)imgData[img->nChannels*c+0])/pixels; // B
-          mg += ((double)imgData[img->nChannels*c+1])/pixels; // G
-          mr += ((double)imgData[img->nChannels*c+2])/pixels; // R
-        }
-      }
-
-    return cvScalar(mr, mg, mb);
-}
-*/
-
 //minor statistics functions
 double interquantile_range(std::vector<double> sizes)
 {
@@ -979,23 +926,7 @@ int main(int argv, char* argc[])
       cvb::CvBlobs tracked_blobs;
       cvb::CvBlobs blob1;
       cvb::CvBlobs::iterator it=blobs.begin();
-      /*
-         while (it!=blobs.end())
-         {
-         cvb::CvBlob *blob=(*it).second;
-         cv::putText(preframe,
-         std::to_string((*it).first),
-         cv::Point2d(blob->centroid.x-10,blob->centroid.y-10),
-         cv::FONT_HERSHEY_PLAIN,
-         0.8,
-         cv::Scalar(0,0,255),
-         1,
-         CV_AA);
-         it++;
-         }
-         cvRenderBlobs(labelImg, blobs, &ipl_preframe, &ipl_preframe);
-         cv::imshow("Label Frame",preframe);
-         */
+
       if(preBlobs.size()>0)
       {
         larvae_track(blobs,preBlobs,tracked_blobs);
@@ -1041,54 +972,6 @@ int main(int argv, char* argc[])
               CV_AA);
           cv::Mat larvaROI(frame, cv::Rect(blob->minx-1,blob->miny-1,blob->maxx-blob->minx+2,blob->maxy-blob->miny+2));
 
-          /* calculation of normalized color and size per blob */
-          /* BEGIN */
-          /*
-          cv::Mat larvaROItmp(grey_frame,
-              cv::Rect(blob->minx,
-                       blob->miny,
-                       blob->maxx-blob->minx,
-                       blob->maxy-blob->miny)
-              );
-          cv::Mat larvaROINorm;
-          cv::Mat larvaROINormThres;
-
-          cv::inRange(larvaROItmp,cv::Scalar(0),cv::Scalar(30),mask);
-          cv::bitwise_not(mask,mask);
-          larvaROItmp.copyTo(larvaROINorm,mask);
-          cv::equalizeHist(larvaROINorm,larvaROINorm);
-          cv::normalize(larvaROINorm,larvaROINorm,0,255,cv::NORM_MINMAX);
-
-          cvb::CvBlobs cur_blobs;
-          cv::threshold(larvaROINorm,
-              larvaROINormThres,
-              thresholdlow,
-              thresholdhigh,
-              cv::THRESH_BINARY);
-          IplImage tinyFrame = larvaROINormThres;
-          IplImage *tinyLabel=cvCreateImage(cvGetSize(&tinyFrame), IPL_DEPTH_LABEL, 1);
-          unsigned int tinyRes=cvLabel(&tinyFrame, tinyLabel, cur_blobs);
-
-          cv::Scalar a;
-          cvtColor(larvaROINorm,larvaROINorm,CV_GRAY2BGR);
-          tinyFrame=larvaROINorm;
-          a=cvb::cvBlobMeanColor(cur_blobs[1], tinyLabel,&tinyFrame);
-          std::cout << "MEAN COLOR OF BLOB " << sstm.str() << ": " << a << std::endl;
-          std::cout << "MEAN SIZE OF BLOB " << sstm.str() << ": " << cur_blobs[1]->area << std::endl;
-          */
-          /* END */
-
-          //larvaSpline* newLarvaSpline=detected_larvae[it->first].splines.back();
-          /*
-             std::cout << "M: Spline for ID: " << sstm.str()  << std::endl;
-             std::cout << "M: Spline: " << newLarvaSpline->bspline << std::endl;
-             std::cout << "M: Size: " << newLarvaSpline->bspline->size << std::endl;
-             std::cout << "M: Stride: " << newLarvaSpline->bspline->stride << std::endl;
-             std::cout << "M: Data: " << newLarvaSpline->bspline->data << std::endl;
-             std::cout << "M: Block: " << newLarvaSpline->bspline->block << std::endl;
-             std::cout << "M: Owner: " << newLarvaSpline->bspline->owner << std::endl;
-             std::cout <<  std::endl;
-             */
           detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI);
           cv::circle(frame,
               cv::Point2d(blob->centroid.x,blob->centroid.y), // circle centre
@@ -1105,24 +988,7 @@ int main(int argv, char* argc[])
           it++;
         }
       }
-      /*
-         it=blobs.begin();
-         while (it!=blobs.end())
-         {
-         std::stringstream sstm;
-         sstm << (*it).first;
-         cvb::CvBlob *blob=(*it).second;
-         cv::putText(frame,
-         sstm.str(),
-         cv::Point2d(blob->centroid.x-10,blob->centroid.y-10),
-         cv::FONT_HERSHEY_PLAIN,
-         0.8,
-         cv::Scalar(0,0,255),
-         1,
-         CV_AA);
-         it++;
-         }
-         */
+
       //cvUpdateTracks(blobs, tracks, 2, 900);
       cvReleaseImage(&labelImg);
 
