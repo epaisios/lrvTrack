@@ -7,10 +7,6 @@
 #include <opencv2/video/background_segm.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <math.h>
-#include <tbb/tbb.h>
-#include <gsl/gsl_bspline.h>
-#include <gsl/gsl_multifit.h>
-#include <gsl/gsl_rng.h>
 #include "cvblob.h"
 #include <iostream>
 #include <stdlib.h>
@@ -18,6 +14,7 @@
 #include <string>
 
 #define MIN_DISCARD_DISTANCE 30
+#define ROI_PADDING 2
 
 static double VIDEO_FPS=24.0;
 static unsigned int CURRENT_FRAME=0;
@@ -27,6 +24,7 @@ cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;
 cv::Mat bgFrame;
+IplImage *labelImg;
 
 //minor statistics functions
 double interquantile_range(std::vector<double> sizes)
@@ -201,17 +199,20 @@ class larvaSkel{
       int rows = inputarray.rows;
       int cols = inputarray.cols;
       cv::Mat img,img_thr;
-      cv::normalize(inputarray, img_thr, 0, 255, CV_MINMAX );
-      /*cv::adaptiveThreshold(img, img_thr, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, 
-                            CV_THRESH_BINARY, 9, -5);*/
-      cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-      cv::erode(img_thr, img_thr, element);
-      cv::dilate(img_thr, img_thr, element);
+      cv::normalize(inputarray, img, 0, 255, CV_MINMAX );
+      img_thr=img;
+      cv::adaptiveThreshold(img, img_thr, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, 
+                           CV_THRESH_BINARY, 9, -5);
       cv::threshold(img_thr,
           img_thr,
-          40,
+          10,
           255,
           cv::THRESH_BINARY);
+      //cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+      //cv::erode(img_thr, img_thr, element);
+      //cv::dilate(img_thr, img_thr, element);
+      //cv::imshow("Threshold", img_thr);
+      //cv::imshow("Blob", inputarray);
       img_thr.convertTo(img_thr,CV_32FC1);
 
       img_thr.copyTo(skelImg);
@@ -265,25 +266,27 @@ class larvaSkel{
           skelImg.at<float>( i, j) = p_enlarged_src.at<float>( i+1, j+1);
           if (skelImg.at<float>( i, j) > 0)
           {
-            skelPoints.push_back(cv::Point(j,i));
+            skelPoints.push_back(cv::Point(j-ROI_PADDING,i-ROI_PADDING));
           }
         }
       }
-      //skelImg.convertTo(skelImgColor,CV_8UC1);
-      cvtColor(skelImg,skelImgColor,CV_GRAY2BGR);
+
+      //cv::imshow("Skeleton", skelImg);
       getStartingPoints();
     }
     
-    void drawSkeleton(cv::Mat &img)
+
+    void drawSkeleton(cv::Mat &img,cv::Scalar col=cv::Scalar(0,0,0))
     {
       for (int i=0;i<skelPoints.size();i++)
       {
           cv::circle(img,
               skelPoints[i], // circle centre
               0,       // circle radius
-              cv::Scalar(0,0,0), // color
+              col, // color
               -1);              // thickness
       }
+      /*
       if (startPoints.size()==2)
       {
         for (int i=0;i<startPoints.size();i++)
@@ -295,6 +298,7 @@ class larvaSkel{
               -1);              // thickness
         }
       }
+      */
     }
 
     void getStartingPoints()
@@ -339,7 +343,7 @@ class larvaSkel{
         if (nonZeroNBs==1)
         {
           // We have a candidate starting point
-          startPoints.push_back(skelPoints[i]); 
+          startPoints.push_back(cvPoint(skelPoints[i].x,skelPoints[i].y)); 
         }
       }
     }
@@ -347,15 +351,27 @@ class larvaSkel{
 
 /* Skeletonization Part ends here */
 
-unsigned int getSurroundingSize(cv::Point point, cvb::CvBlob* larvaBlob,int radius)
+double getSurroundingSize(cv::Point point, cvb::CvBlob* blob)
 {
-  cv::Mat bigLarvaImg=cv::Mat::zeros(frame.size(),frame.depth());
-  IplImage ipl_frame=bigLarvaImg;
-  cvb::cvRenderContourChainCode(&larvaBlob->contour,&ipl_frame);
-  cv::Mat ROI = cv::Mat::zeros(frame.size(),frame.depth());
-  cv::circle(ROI, point,radius,cv::Scalar(255,255,255),-1);
-  cv::Mat area=bigLarvaImg & ROI;
-  return cv::countNonZero(area);
+  cv::Mat bigLarvaImg,larvaImg;
+
+  //bigLarvaImg=frame(cv::Rect(blob->minx-10,blob->miny-10,blob->maxx-blob->minx+10,blob->maxy-blob->miny+10));
+  grey_frame.copyTo(larvaImg);
+  IplImage* ipl_frame = new IplImage(larvaImg);
+  cv::Mat ROI=larvaImg(cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
+
+  cv::Mat cROI(ROI.size(),ROI.depth());
+  cROI=cv::Scalar(0,0,0);
+  cv::normalize(ROI, ROI, 0, 255, CV_MINMAX );
+  cv::circle(cROI, cv::Point(point.x+ROI_PADDING,point.y+ROI_PADDING),1,cv::Scalar(255,255,255),-1);
+  cv::Mat area=ROI&cROI;
+  //cv::imshow("Skeleton",area);
+  //cv::imshow("Blob",ROI);
+  //cv::waitKey(1);
+  double nz=cv::norm(area,cv::NORM_L1);
+  //double nz=cv::countNonZero(area);
+  return nz;
+  //return 1;
 }
 
 /*
@@ -433,28 +449,58 @@ bool findInVector(std::vector<unsigned int> &flattenedCluster, unsigned int ID)
 
 std::map<unsigned int,larvaObject> detected_larvae;
 
+double diff(cv::Point &a, cv::Point &b)
+{
+  return (fabs(a.x-b.x)+fabs(a.y-b.y));
+}
 
-void findHeadTail(std::vector<cv::Point> &startPoints, cvb::CvBlob *blob,cv::Point &Head, cv::Point &Tail)
+void findHeadTail(std::vector<cv::Point> &startPoints, larvaObject *lrv ,cv::Point &Head, cv::Point &Tail)
 {
   int max=0,min=65535;
   int i=0;
-  for (i=0; i<startPoints.size(); i++)
+  if(lrv->start_frame==CURRENT_FRAME)
   {
-    unsigned int tmpsz=getSurroundingSize(startPoints[i],blob, 20);
-    if (tmpsz>max)
+    for (i=0; i<startPoints.size(); i++)
     {
-      Head=startPoints[i];
+      unsigned int tmpsz=getSurroundingSize(startPoints[i],lrv->blobs.back());
+      if (tmpsz>max)
+      {
+        Tail=startPoints[i];
+        max=tmpsz;
+      }
+      if (tmpsz<min)
+      {
+        Head=startPoints[i];
+        min=tmpsz;
+      }
     }
-    if (tmpsz<min)
+    if (max==min)
+      std::cerr << "PROBLEM AREAS AROUND HEAD AND TAIL ARE THE SAME" << std::endl;
+    if (Head==Tail && i!=2)
     {
-      Tail=startPoints[i];
+      std::cerr << "PROBLEM HEAD AND TAIL ARE THE SAME" << std::endl;
     }
   }
-  if (max==min)
-    std::cerr << "PROBLEM AREAS AROUND HEAD AND TAIL ARE THE SAME" << std::endl;
-  if (Head==Tail && i!=2)
+  else
   {
-    std::cerr << "PROBLEM HEAD AND TAIL ARE THE SAME" << std::endl;
+    double hmin=65535;
+    double tmin=65535;
+    for (i=0; i<startPoints.size(); i++)
+    {
+      double hdiff=diff(lrv->heads.back(),startPoints[i]);
+      double tdiff=diff(lrv->tails.back(),startPoints[i]);
+      if (hdiff<hmin)
+      {
+        Head=startPoints[i];
+        hmin=hdiff;
+      }
+      if (tdiff<tmin)
+      {
+        Tail=startPoints[i];
+        tmin=tdiff;
+      }
+
+    }
   }
 }
 
@@ -467,7 +513,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
   {
     unsigned int ID=(*it).first;
     cvb::CvBlob* blob=(*it).second;
-    cv::Mat larvaROI(grey_frame, cv::Rect(blob->minx-1,blob->miny-1,blob->maxx-blob->minx+2,blob->maxy-blob->miny+2));
+    cv::Mat larvaROI(grey_frame, cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
     std::map<unsigned int,larvaObject>::iterator curLarva;
     if ((curLarva=detected_larvae.find(ID))==detected_larvae.end())
     {
@@ -487,7 +533,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       larvaSkel newLarvaSkel(larvaROI);
       newLarva.lrvskels.push_back(newLarvaSkel);
       cv::Point Head,Tail;
-      findHeadTail(newLarva.lrvskels.back().startPoints,blob,Head,Tail);
+      findHeadTail(newLarva.lrvskels.back().startPoints,&newLarva,Head,Tail);
       newLarva.heads.push_back(Head);
       newLarva.tails.push_back(Tail);
       //cv::imshow("Skeleton", newLarvaSkel.skelImgColor);
@@ -535,7 +581,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         //cur_larva->splines.push_back(newLarvaSpline);
         //std::cout << "Updated Larva: " << ID << " area: " << blob->area << " area_mean: " << cur_larva->area_mean << " inblob: NO" << std::endl ;
         cv::Point Head,Tail;
-        findHeadTail(cur_larva->lrvskels.back().startPoints,blob,Head,Tail);
+        findHeadTail(cur_larva->lrvskels.back().startPoints,cur_larva,Head,Tail);
         cur_larva->heads.push_back(Head);
         cur_larva->tails.push_back(Tail);
       }
@@ -813,7 +859,7 @@ int main(int argv, char* argc[])
   cv::Mat preframe;
   cv::Mat grey_bgFrame;
   unsigned int fg_threshold=10;
-  unsigned int thresholdlow=40;
+  unsigned int thresholdlow=35;
   unsigned int thresholdhigh=255;
   unsigned int cannylow=70;
   unsigned int cannyhigh=255;
@@ -835,6 +881,10 @@ int main(int argv, char* argc[])
   //memset(inactive, 0, sizeof(int)*50);
   cv::namedWindow("Extracted Frame");
   //cv::namedWindow("Skeleton");
+  //cv::namedWindow("Blob");
+  //cv::namedWindow("Threshold");
+  //cv::moveWindow("Blob",0,100);
+  //cv::moveWindow("Threshold",0,200);
   //cvCreateTrackbar("FOO", "Extracted Frame" , (int *) &LARVAE_COUNT, 30 , NULL);
 
   //cv::namedWindow("Label Frame");
@@ -918,11 +968,11 @@ int main(int argv, char* argc[])
       cvb::CvBlobs blobs;
       //IplImage ipl_preframe = preframe;
       IplImage ipl_thresholded = thresholded_frame;
-      IplImage *labelImg=cvCreateImage(cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
+      labelImg=cvCreateImage(cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
       //cv::imshow("Skeleton",cv::Mat(labelImg));
       unsigned int result=cvLabel(&ipl_thresholded, labelImg, blobs);
       //std::cout << "###########  Total Blobs: " << blobs.size() << std::endl;
-      cvb::cvFilterByArea(blobs, 31, 300);
+      cvb::cvFilterByArea(blobs, 31, 150);
       cvb::CvBlobs tracked_blobs;
       cvb::CvBlobs blob1;
       cvb::CvBlobs::iterator it=blobs.begin();
@@ -971,20 +1021,26 @@ int main(int argv, char* argc[])
               1,
               CV_AA);
           cv::Mat larvaROI(frame, cv::Rect(blob->minx-1,blob->miny-1,blob->maxx-blob->minx+2,blob->maxy-blob->miny+2));
-
-          detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI);
+          
+          detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,cv::Scalar(0,0,255));
           cv::circle(frame,
               cv::Point2d(blob->centroid.x,blob->centroid.y), // circle centre
               1,       // circle radius
               cv::Scalar(255,0,0), // color
               -1);              // thickness
-
           cv::circle(frame,
-              cv::Point2d(), // circle centre
+              cv::Point2d(detected_larvae[it->first].heads.back().x+blob->minx,detected_larvae[it->first].heads.back().y+blob->miny), // circle centre
               1,       // circle radius
-              cv::Scalar(255,0,0), // color
+              cv::Scalar(0,255,0), // color
+              -1);              // thickness
+        /*
+          cv::circle(frame,
+              cv::Point2d(detected_larvae[it->first].tails.back().x+blob->minx,detected_larvae[it->first].tails.back().y+blob->miny), // circle centre
+              1,       // circle radius
+              cv::Scalar(0,0,255), // color
               -1);              // thickness
           
+          */
           it++;
         }
       }
