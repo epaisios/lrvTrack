@@ -14,7 +14,7 @@
 #include <string>
 
 #define MIN_DISCARD_DISTANCE 30
-#define ROI_PADDING 2
+#define ROI_PADDING 7
 
 static double VIDEO_FPS=24.0;
 static unsigned int CURRENT_FRAME=0;
@@ -191,34 +191,19 @@ class larvaSkel{
     }
 
   public:
-    cv::Mat skelImgColor;
     std::vector <cv::Point> startPoints;
+  
 
     larvaSkel(cv::Mat &inputarray) {
       bool bDone = false;
       int rows = inputarray.rows;
       int cols = inputarray.cols;
-      cv::Mat img,img_thr;
-      cv::normalize(inputarray, img, 0, 255, CV_MINMAX );
-      img_thr=img;
-      cv::adaptiveThreshold(img, img_thr, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, 
-                           CV_THRESH_BINARY, 9, -5);
-      cv::threshold(img_thr,
-          img_thr,
-          10,
-          255,
-          cv::THRESH_BINARY);
-      //cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-      //cv::erode(img_thr, img_thr, element);
-      //cv::dilate(img_thr, img_thr, element);
-      //cv::imshow("Threshold", img_thr);
-      //cv::imshow("Blob", inputarray);
+      cv::Mat img_thr;
+      inputarray.copyTo(img_thr);
       img_thr.convertTo(img_thr,CV_32FC1);
-
       img_thr.copyTo(skelImg);
       
       skelImg.convertTo(skelImg,CV_32FC1);
-      skelImgColor=cv::Mat::zeros(skelImg.size(),CV_8UC3);
 
       /// pad source
       cv::Mat p_enlarged_src = cv::Mat(rows + 2, cols + 2, CV_32FC1);
@@ -260,18 +245,32 @@ class larvaSkel{
         /// copy
         p_thinMat2.copyTo(p_enlarged_src);
       }
+      //Point2 *skelPointCurve=(Point2 *) malloc(rows*cols*sizeof(Point2Struct));
+      //cv::GaussianBlur(p_enlarged_src,p_enlarged_src,cv::Size(2,2),0,0);
       // copy result
+      int cPoints=0;
       for(int i = 0; i < rows; i++) {
         for(int j = 0; j < cols; j++) {
           skelImg.at<float>( i, j) = p_enlarged_src.at<float>( i+1, j+1);
           if (skelImg.at<float>( i, j) > 0)
           {
-            skelPoints.push_back(cv::Point(j-ROI_PADDING,i-ROI_PADDING));
+            skelPoints.push_back(cv::Point(j,i));
+        //    skelPointCurve[cPoints].x=i;
+        //    skelPointCurve[cPoints++].y=cols-j+1;
           }
         }
       }
 
-      //cv::imshow("Skeleton", skelImg);
+      
+      //skelImg=cv::Mat::zeros(skelImg.size(),skelImg.depth());
+      //FitCurve(skelPointCurve,skelPoints.size(),0.1,skelImg);
+      //free(skelPointCurve);
+      //cv::imshow("Curve", skelImg);
+      //cv::moveWindow("Threshold",0,100);
+      //cv::moveWindow("Curve",0,100);
+      //cv::moveWindow("Skeleton",0,200);
+
+
       getStartingPoints();
     }
     
@@ -286,19 +285,6 @@ class larvaSkel{
               col, // color
               -1);              // thickness
       }
-      /*
-      if (startPoints.size()==2)
-      {
-        for (int i=0;i<startPoints.size();i++)
-        {
-          cv::circle(img,
-              startPoints[i], // circle centre
-              1,       // circle radius
-              cv::Scalar(0,255,0), // color
-              -1);              // thickness
-        }
-      }
-      */
     }
 
     void getStartingPoints()
@@ -354,20 +340,19 @@ class larvaSkel{
 double getSurroundingSize(cv::Point point, cvb::CvBlob* blob)
 {
   cv::Mat bigLarvaImg,larvaImg;
-
-  //bigLarvaImg=frame(cv::Rect(blob->minx-10,blob->miny-10,blob->maxx-blob->minx+10,blob->maxy-blob->miny+10));
+  int PADDR=4;
   grey_frame.copyTo(larvaImg);
   IplImage* ipl_frame = new IplImage(larvaImg);
   cv::Mat ROI=larvaImg(cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
-
+  cv::circle(ROI, cv::Point(point.x,point.y),1,cv::Scalar(0),-1);
   cv::Mat cROI(ROI.size(),ROI.depth());
-  cROI=cv::Scalar(0,0,0);
-  cv::normalize(ROI, ROI, 0, 255, CV_MINMAX );
-  cv::circle(cROI, cv::Point(point.x+ROI_PADDING,point.y+ROI_PADDING),1,cv::Scalar(255,255,255),-1);
+  cROI=cv::Scalar(0);
+  //cv::normalize(ROI, ROI, 0, 255, CV_MINMAX );
+  cv::circle(cROI, cv::Point(point.x,point.y),7,cv::Scalar(255),-1);
   cv::Mat area=ROI&cROI;
-  //cv::imshow("Skeleton",area);
-  //cv::imshow("Blob",ROI);
-  //cv::waitKey(1);
+  cv::imshow("Skeleton",area);
+  cv::imshow("Blob",ROI);
+  cv::waitKey(1);
   double nz=cv::norm(area,cv::NORM_L1);
   //double nz=cv::countNonZero(area);
   return nz;
@@ -504,6 +489,35 @@ void findHeadTail(std::vector<cv::Point> &startPoints, larvaObject *lrv ,cv::Poi
   }
 }
 
+void createLarvaROI(cv::Mat &frame, cv::Mat &ROI, cvb::CvBlob *blob)
+{
+    ROI=cv::Mat(frame, cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
+      
+}
+
+void createLarvaContour(cv::Mat &lrvROI, cvb::CvBlob *blob,int type=CV_8UC1)
+{
+    int sizes[1];
+    cvb::CvContourPolygon cntPoly=*cvb::cvConvertChainCodesToPolygon(&blob->contour);
+    lrvROI=cv::Mat::zeros(blob->maxy-blob->miny+(2*ROI_PADDING),blob->maxx-blob->minx+(2*ROI_PADDING),type);
+    cv::Point *ContourPoints[1];
+    ContourPoints[0]=(cv::Point*) malloc(blob->contour.chainCode.size()*sizeof(cv::Point));
+    sizes[0]=cntPoly.size();
+    for (int i=0;i<=cntPoly.size();i++)
+    {
+      ContourPoints[0][i].x=cntPoly[i].x-blob->minx+ROI_PADDING;
+      ContourPoints[0][i].y=cntPoly[i].y-blob->miny+ROI_PADDING;
+    }
+    if(lrvROI.channels()==3)
+    {
+      cv::fillPoly(lrvROI,(const cv::Point**) ContourPoints,sizes,1,cv::Scalar(255,255,255));
+    }
+    else
+    {
+      cv::fillPoly(lrvROI,(const cv::Point**) ContourPoints,sizes,1,cv::Scalar(255));
+    }
+}
+
 void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 {
   cvb::CvBlobs::iterator it=In.begin();
@@ -513,7 +527,10 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
   {
     unsigned int ID=(*it).first;
     cvb::CvBlob* blob=(*it).second;
-    cv::Mat larvaROI(grey_frame, cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
+    //cv::Mat larvaROI(grey_frame, cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
+    cv::Mat larvaROI;
+    createLarvaContour(larvaROI,blob);
+    //cv::imshow("Skeleton",larvaROI);
     std::map<unsigned int,larvaObject>::iterator curLarva;
     if ((curLarva=detected_larvae.find(ID))==detected_larvae.end())
     {
@@ -563,8 +580,6 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       cur_larva->lrvskels.push_back(newLarvaSkel);
       if (!findInVector(larvaeInClusters,ID))
       {
-        // New mean=(old mean * larva instances + new size) / (larva instances + 1)
-        //cur_larva->area_mean=((cur_larva->area_mean*cur_larva->blobs.size())+blob->area)/(cur_larva->blobs.size()+1);
         cur_larva->area_mean=((cur_larva->area_mean+blob->area)/2);
       
         if (cur_larva->area_max < blob->area)
@@ -972,7 +987,7 @@ int main(int argv, char* argc[])
       //cv::imshow("Skeleton",cv::Mat(labelImg));
       unsigned int result=cvLabel(&ipl_thresholded, labelImg, blobs);
       //std::cout << "###########  Total Blobs: " << blobs.size() << std::endl;
-      cvb::cvFilterByArea(blobs, 31, 150);
+      cvb::cvFilterByArea(blobs, 31, 250);
       cvb::CvBlobs tracked_blobs;
       cvb::CvBlobs blob1;
       cvb::CvBlobs::iterator it=blobs.begin();
@@ -1020,7 +1035,7 @@ int main(int argv, char* argc[])
               cv::Scalar(255,255,255),
               1,
               CV_AA);
-          cv::Mat larvaROI(frame, cv::Rect(blob->minx-1,blob->miny-1,blob->maxx-blob->minx+2,blob->maxy-blob->miny+2));
+          cv::Mat larvaROI(frame, cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
           
           detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,cv::Scalar(0,0,255));
           cv::circle(frame,
@@ -1028,8 +1043,16 @@ int main(int argv, char* argc[])
               1,       // circle radius
               cv::Scalar(255,0,0), // color
               -1);              // thickness
+          /*
+          detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,cv::Scalar(0,0,255));
           cv::circle(frame,
-              cv::Point2d(detected_larvae[it->first].heads.back().x+blob->minx,detected_larvae[it->first].heads.back().y+blob->miny), // circle centre
+              cv::Point2d(blob->contour.startingPoint.x,blob->contour.startingPoint.y), // circle centre
+              1,       // circle radius
+              cv::Scalar(0,255,0), // color
+              -1);              // thickness
+              */
+          cv::circle(larvaROI,
+              cv::Point2d(detected_larvae[it->first].heads.back().x,detected_larvae[it->first].heads.back().y), // circle centre
               1,       // circle radius
               cv::Scalar(0,255,0), // color
               -1);              // thickness
