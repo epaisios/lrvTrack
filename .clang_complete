@@ -1,5 +1,5 @@
--I/opt/opencv/2.4.4/include/opencv
--I/opt/opencv/2.4.4/include/opencv2
--I/opt/opencv/2.4.4/include
+-I/opt/opencv/2.4.5/include/opencv
+-I/opt/opencv/2.4.5/include/opencv2
+-I/opt/opencv/2.4.5/include
 -I/usr/local/include
 -I.
