@@ -16,6 +16,13 @@
 
 #define MIN_DISCARD_DISTANCE 30
 #define ROI_PADDING 2
+#define MAX_HORIZ_RESOLUTION 22000 //Pixels
+
+#ifndef NO_SSE
+#define ltsqrt SSESqrt_Recip_Times_X
+#else
+#define ltsqrt sqrt
+#endif
 
 static double VIDEO_FPS=24.0;
 static unsigned int CURRENT_FRAME=0;
@@ -28,31 +35,107 @@ cv::Mat bgFrame;
 IplImage *labelImg;
 
 typedef std::pair<cv::Point_<int>,cv::Point_<int> > PointPair;
+typedef std::unordered_map<PointPair, double> DistanceMap;
+
+// SSE Optimized reciprocal sqrt and mutliplies it by pIn to get the sqrt
+// Optimized sqrt from http://stackoverflow.com/questions/1528727/why-is-sse-scalar-sqrtx-slower-than-rsqrtx-x
+inline void SSESqrt_Recip_Times_X( float * pOut, float * pIn )
+{
+  __m128 in = _mm_load_ss( pIn );
+  _mm_store_ss( pOut, _mm_mul_ss( in, _mm_rsqrt_ss( in ) ) );
+  // compiles to movss, movaps, rsqrtss, mulss, movss
+}
 
 namespace std{
 template <typename T >
 struct hash<cv::Point_<T> > {
   public:
     size_t operator()(cv::Point_<T> a) const throw() {
-      size_t h = (997 + a.x )*997+a.y;
+      size_t h = (47+ a.x )*47+a.y;
       return h;
     }
 };
+
 
 template <typename T >
 struct hash<pair<cv::Point_<T>, cv::Point_<T> > > {
   public:
     size_t operator()(pair<cv::Point_<T>,cv::Point_<T> > a) const throw() {
-      size_t max = MAX(hash<cv::Point_<T> >()(a.first),
-                       hash<cv::Point_<T> >()(a.second));
-      size_t min = MIN(hash<cv::Point_<T> >()(a.first),
-                       hash<cv::Point_<T> >()(a.second));
-      size_t h = (997 + max)*997+min;
+      size_t h = (997 + MAX(hash<cv::Point_<T> >()(a.first),
+                           hash<cv::Point_<T> >()(a.second)))*997+
+                       MIN(hash<cv::Point_<T> >()(a.first),
+                           hash<cv::Point_<T> >()(a.second));
       return h;
     }
 };
 }
 
+class LarvaDistanceMap{
+  private:
+    static const int MAX_POINTS_IN_CONTOUR=1000;
+    std::map<int,double> distances; 
+    std::vector<cv::Point> &points;
+    cv::Mat px;
+    cv::Mat py;
+    int MinDist;
+    int MinDistPoints;
+  public:
+    class my2ndPoint 
+    {
+      private:
+        LarvaDistanceMap &parent;
+        int p1;
+      public:
+      my2ndPoint(LarvaDistanceMap& p, int fstPoint):parent(p),p1(fstPoint){}
+
+      double &operator[](int p2)
+      {
+        return parent.distances[p1*MAX_POINTS_IN_CONTOUR+p2];
+      }
+      double &operator[](cv::Point p2)
+      {
+        int index_p2=std::distance(parent.points.begin(),
+                               std::find(parent.points.begin(),
+                                         parent.points.end(),
+                                         p2)
+                               );
+        return parent.distances[p1*MAX_POINTS_IN_CONTOUR+index_p2];
+      }
+
+    };  
+
+    my2ndPoint operator[](int p1)
+    {
+      return my2ndPoint(*this,p1);
+    }
+    my2ndPoint operator[](cv::Point p1)
+    {
+      int index_p1=std::distance(points.begin(),
+          std::find(points.begin(),
+            points.end(),
+            p1)
+          );
+      return my2ndPoint(*this,index_p1);
+    }
+    friend class my2ndPoint;
+
+    LarvaDistanceMap(std::vector<cv::Point> &ps):points(ps){
+      points=ps;
+      for (int i=0;i<=ps.size();i++)
+      {
+        px=ps[i].x;
+        py=ps[i].y;
+      }
+    }
+    void getPxPy(cv::Mat &x,cv::Mat &y){
+      x=px;
+      y=py;
+    }
+    void getDistances(cv::Point p1)
+    {
+    }
+
+};
 
 void createLarvaROI(cv::Mat &frame, cv::Mat &ROI, cvb::CvBlob &blob)
 {
@@ -88,24 +171,12 @@ void createLarvaContour(cv::Mat &lrvROI,
       ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING;
       ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING;
     }
-    if(lrvROI.channels()==3)
-    {
-      cv::fillPoly(lrvROI,
-                   (const cv::Point**) ContourPoints,
-                   sizes,
-                   1,
-                   cv::Scalar(255,255,255)
-                  );
-    }
-    else
-    {
-      cv::fillPoly(lrvROI,
-                   (const cv::Point**) ContourPoints,
-                   sizes,
-                   1,
-                   cv::Scalar(255)
-                  );
-    }
+    cv::fillPoly(lrvROI,
+        (const cv::Point**) ContourPoints,
+        sizes,
+        1,
+        cv::Scalar(255)
+        );
     free(ContourPoints[0]);
     delete(cntPoly);
 
@@ -142,9 +213,9 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 }
 
 
-void lBFS(cv::Point p1, 
+inline void lBFS(cv::Point p1, 
           std::vector<cv::Point> &Points ,
-          std::unordered_map<PointPair, double> &Distances,
+          DistanceMap &Distances,
           PointPair &MAXPair,
           cv::Point MidPoint,
           double MAX)
@@ -170,8 +241,11 @@ void lBFS(cv::Point p1,
           Q.push(Points[i]);
         Distances[cur_pi]=Distances[cur_pi];
         double newDst = Distances[cur_pi]+Distances[p1_cur] + 
-                        2*sqrt(Distances[cur_pi]*Distances[p1_cur]);
-        double MPDst = dst_pi_MP+dst_p1_MP + 2*sqrt(dst_pi_MP * dst_p1_MP);
+                        2*(Distances[cur_pi]*Distances[p1_cur]);
+        float multres=dst_pi_MP * dst_p1_MP;
+        float sqrtres[1];
+        ltsqrt(sqrtres,&multres);
+        double MPDst = dst_pi_MP+dst_p1_MP + 2*sqrtres[0];
         if (newDst < MPDst)
           newDst=MPDst;
         if (Distances[p1_pi]>newDst)
@@ -184,11 +258,10 @@ void lBFS(cv::Point p1,
 }
 
 void computeInnerDistances(cvb::CvBlob &blob,
-                           std::unordered_map<PointPair, double> &Distances,
+                           DistanceMap &Distances,
                            PointPair &MAXPair, 
                            cv::Point &MidPoint)
 {
-  //std::unordered_map<PointPair, double> Weights;
   std::vector<cv::Point> Points;
   cvb::CvContourPolygon *cntPoly=
                              cvb::cvConvertChainCodesToPolygon(&blob.contour);
@@ -692,7 +765,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       newLarva.lrvskels.push_back(newLarvaSkel);
 
       // In this block we compute the inner distances for the larva
-      std::unordered_map<PointPair,double> Distances;
+      DistanceMap Distances;
       PointPair MAXPair;
       computeInnerDistances(blob,Distances,MAXPair,newLarvaSkel.MidPoint);
       
@@ -764,7 +837,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         cv::Point Head,Tail;
         
         // Map to keep the distances of each point to all the others
-        std::unordered_map<PointPair,double> Distances;
+        DistanceMap Distances;
         // Pair of points to keep the points with the Maximum distance (i.e. head and tail :) )
         PointPair MAXPair;
 
@@ -786,7 +859,8 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
                               );
         //execute the function to find which is which and assign appropriately
         //to Head/Tail.
-        findHeadTail(startPoints,cur_larva,Head,Tail,true);
+        //findHeadTail(startPoints,cur_larva,Head,Tail,true);
+        findHeadTail(startPoints,cur_larva,Head,Tail);
         
         //Add head and tail to the history
         cur_larva.heads.push_back(Head);
@@ -1137,28 +1211,20 @@ int main(int argv, char* argc[])
       cv::Mat fg_image;
       cv::Mat mask;
 
-      //cv::GaussianBlur(frame, image, cv::Size(0, 0), 2);
-      //cv::addWeighted(frame, 1.5, image, -0.5, 0, image);
-      //frame=image;
+      // Captured frame to BW (necessary for various filters and speed)
       cvtColor(frame,grey_frame,CV_BGR2GRAY);
+      
+      //Background subtraction is done by eliminating areas outside of the
+      //detected petri-dish
+      // Here we subtract from the BW captured frame the background frame.
       cv::addWeighted(grey_frame, 1.0, grey_bgFrame, -3.0, 0.0, fg_frame);
       fgROI=cv::Mat::zeros(fg_frame.rows , fg_frame.cols,fg_frame.depth());
       cv::circle(fgROI, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/1.0),cv::Scalar(255),-1);
       cv::circle(frame, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/1.0),cv::Scalar(0,255,0),1);
       fg_image=fg_frame&fgROI;
       cv::Mat fg_image_norm;
-      //cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
-      //cv::imshow("Skeleton",fg_image_norm);
-      //
-      cv::SimpleBlobDetector blobDetect;
-      cv::inRange(fg_image,cv::Scalar(0),cv::Scalar(30),mask);
-      cv::bitwise_not(mask,mask);
-      fg_image.copyTo(image,mask);
-      //cv::equalizeHist(image,fg_image);
       cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
-      std::vector<cv::KeyPoint> keypoints ;
-      blobDetect.detect(fg_image_norm,keypoints);
-
+      //fg_image_norm=fg_image;
       cv::threshold(fg_image_norm,
           thresholded_frame,
           thresholdlow,
@@ -1167,7 +1233,6 @@ int main(int argv, char* argc[])
       //cv::dilate(thresholded_frame,working_frame,cv::Mat(),cv::Point(-1,-1),1);
       //thresholded_frame=working_frame;
       cvb::CvBlobs blobs;
-      cvb::CvBlobs all_blobs;
       IplImage ipl_thresholded = thresholded_frame;
       labelImg=cvCreateImage(cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
       //cv::imshow("Skeleton",cv::Mat(labelImg));
