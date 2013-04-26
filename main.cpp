@@ -70,16 +70,27 @@ struct hash<pair<cv::Point_<T>, cv::Point_<T> > > {
 };
 }
 
+void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point> &points)
+{
+      cvb::CvContourPolygon *cntPoly=
+                             cvb::cvConvertChainCodesToPolygon(&p.contour);
+      cvb::CvContourPolygon::iterator a=cntPoly->begin();
+      while(a!=cntPoly->end())
+      {
+        points.push_back(*a++);
+      }
+      delete cntPoly;
+}
+
 class LarvaDistanceMap{
   private:
-    static const int MAX_POINTS_IN_CONTOUR=1000;
-    std::map<int,double> distances; 
-    std::vector<cv::Point> &points;
+    std::vector<double> distances; 
     cv::Mat px;
     cv::Mat py;
     int MinDist;
     int MinDistPoints;
   public:
+    std::vector<cv::Point> &points;
     class my2ndPoint 
     {
       private:
@@ -90,7 +101,7 @@ class LarvaDistanceMap{
 
       double &operator[](int p2)
       {
-        return parent.distances[p1*MAX_POINTS_IN_CONTOUR+p2];
+        return parent.distances[p1*parent.points.size()+p2];
       }
       double &operator[](cv::Point p2)
       {
@@ -99,7 +110,7 @@ class LarvaDistanceMap{
                                          parent.points.end(),
                                          p2)
                                );
-        return parent.distances[p1*MAX_POINTS_IN_CONTOUR+index_p2];
+        return parent.distances[p1*parent.points.size()+index_p2];
       }
 
     };  
@@ -120,12 +131,13 @@ class LarvaDistanceMap{
     friend class my2ndPoint;
 
     LarvaDistanceMap(std::vector<cv::Point> &ps):points(ps){
-      points=ps;
+      distances.reserve(points.size()*points.size());
+      /*
       for (int i=0;i<=ps.size();i++)
       {
         px=ps[i].x;
         py=ps[i].y;
-      }
+      }*/
     }
     void getPxPy(cv::Mat &x,cv::Mat &y){
       x=px;
@@ -213,44 +225,46 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 }
 
 
-inline void lBFS(cv::Point p1, 
+inline void lBFS(int p1, 
           std::vector<cv::Point> &Points ,
-          DistanceMap &Distances,
+          LarvaDistanceMap &Distances,
           PointPair &MAXPair,
           cv::Point MidPoint,
           double MAX)
 {
-  std::queue<cv::Point> Q;
+  std::queue<int> Q;
   Q.push(p1);
-  double dst_p1_MP = (p1.x-MidPoint.x)*(p1.x-MidPoint.x)+
-                     (p1.y-MidPoint.y)*(p1.y-MidPoint.y);
+  double dst_p1_MP = (Points[p1].x-MidPoint.x)*(Points[p1].x-MidPoint.x)+
+                     (Points[p1].y-MidPoint.y)*(Points[p1].y-MidPoint.y);
   while (!Q.empty())
   {
-    cv::Point cur=Q.front();
+    int cur=Q.front();
     Q.pop();
     for(int i=0; i<Points.size() ; i++)
     {
-      PointPair cur_pi = PointPair(cur,Points[i]);
-      PointPair p1_pi= PointPair(p1,Points[i]);
-      PointPair p1_cur= PointPair(p1,cur);
+      PointPair cur_pi = PointPair(Points[cur],Points[i]);
+      PointPair p1_pi= PointPair(Points[p1],Points[i]);
+      PointPair p1_cur= PointPair(Points[p1],Points[cur]);
       double dst_pi_MP=(Points[i].x-MidPoint.x)*(Points[i].x-MidPoint.x)+
                        (Points[i].y-MidPoint.y)*(Points[i].y-MidPoint.y);
-      if (Distances[cur_pi]>0)
+      if (Distances[cur][i]>0)
       {
-        if (Distances[p1_pi]<0)
-          Q.push(Points[i]);
-        Distances[cur_pi]=Distances[cur_pi];
-        double newDst = Distances[cur_pi]+Distances[p1_cur] + 
-                        2*(Distances[cur_pi]*Distances[p1_cur]);
+        if (Distances[p1][i]<0)
+          Q.push(i);
+        double newDst = Distances[cur][i]+Distances[p1][cur] + 
+                        2*(Distances[cur][i]*Distances[p1][cur]);
         float multres=dst_pi_MP * dst_p1_MP;
         float sqrtres[1];
         ltsqrt(sqrtres,&multres);
         double MPDst = dst_pi_MP+dst_p1_MP + 2*sqrtres[0];
         if (newDst < MPDst)
           newDst=MPDst;
-        if (Distances[p1_pi]>newDst)
-          Distances[p1_pi]=newDst;
-        if (Distances[p1_pi]>MAX)
+        if (Distances[p1][i]>newDst)
+        {
+          Distances[p1][i]=newDst;
+          Distances[i][p1]=newDst;
+        }
+        if (Distances[p1][i]>MAX)
           MAXPair=p1_pi;
       }
     }
@@ -258,47 +272,46 @@ inline void lBFS(cv::Point p1,
 }
 
 void computeInnerDistances(cvb::CvBlob &blob,
-                           DistanceMap &Distances,
+                           LarvaDistanceMap &Distances,
                            PointPair &MAXPair, 
                            cv::Point &MidPoint)
 {
   std::vector<cv::Point> Points;
-  cvb::CvContourPolygon *cntPoly=
-                             cvb::cvConvertChainCodesToPolygon(&blob.contour);
   cv::Mat contour;
   createLarvaContour(contour,blob);
   cv::Mat workingContour;
   contour.copyTo(workingContour);
+  std::vector<cv::Point> &points=Distances.points;
   int origNZ=countNonZero(contour);
   double MAX=0;
-  for (int i=0;i<cntPoly->size();i++)
+  for (int i=0;i<points.size();i++)
   {
-    cv::Point p1=cv::Point((*cntPoly)[i].x,(*cntPoly)[i].y);
-    Points.push_back(p1);
-    Distances.insert(make_pair(PointPair(p1,p1),0));
-    Distances.insert(make_pair(PointPair(p1,p1),0));
-    for (int j=i+1;j<(*cntPoly).size();j++)
+    cv::Point p1=cv::Point(points[i].x,points[i].y);
+    Distances[i][i]=0;
+    for (int j=i+1;j<points.size();j++)
     {
-      cv::Point p2((*cntPoly)[j].x,(*cntPoly)[j].y);
+      cv::Point p2(points[j].x,points[j].y);
       cv::line(workingContour,
                p1,
                p2,
                cv::Scalar(255));
       if (countNonZero(workingContour)>origNZ)
       {
-        Distances.insert(make_pair(PointPair(p1,p2),-1));
+        Distances[i][j]=-1;
+        Distances[j][i]=-1;
       }
       else
       {
         PointPair p1p2 = PointPair(p1,p2);
-        double xdiff=(*cntPoly)[i].x-(*cntPoly)[j].x;
-        double ydiff=(*cntPoly)[i].y-(*cntPoly)[j].y;
-        Distances[p1p2]=xdiff*xdiff+ydiff*ydiff;
-        Distances[p1p2]=Distances[p1p2];
+        double xdiff=points[i].x-points[j].x;
+        double ydiff=points[i].y-points[j].y;
+        double sqDst=xdiff*xdiff+ydiff*ydiff;
+        Distances[i][j]=sqDst;
+        Distances[j][i]=sqDst;
 
-        if (MAX<Distances[p1p2])
+        if (MAX<Distances[i][j])
         {
-          MAX=Distances[p1p2];
+          MAX=Distances[i][j];
           MAXPair=p1p2;
         }
       }
@@ -306,13 +319,11 @@ void computeInnerDistances(cvb::CvBlob &blob,
     }
   }
 
-  for (int i=0;i<cntPoly->size();i++)
+  for (int i=0;i<points.size();i++)
   {
-    cv::Point p1((*cntPoly)[i].x,(*cntPoly)[i].y);
-    lBFS(p1,Points,Distances,MAXPair,MidPoint,MAX);
+    cv::Point p1(points[i].x,points[i].y);
+    lBFS(i,points,Distances,MAXPair,MidPoint,MAX);
   }
-  delete cntPoly;
-
 }
 
 /* Skeletonization based on the algorithm of Zhang and Suen 
@@ -765,7 +776,9 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       newLarva.lrvskels.push_back(newLarvaSkel);
 
       // In this block we compute the inner distances for the larva
-      DistanceMap Distances;
+      std::vector<cv::Point> cntPoints;
+      blobToPointVector(blob,cntPoints);
+      LarvaDistanceMap Distances(cntPoints);
       PointPair MAXPair;
       computeInnerDistances(blob,Distances,MAXPair,newLarvaSkel.MidPoint);
       
@@ -837,8 +850,10 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         cv::Point Head,Tail;
         
         // Map to keep the distances of each point to all the others
-        DistanceMap Distances;
         // Pair of points to keep the points with the Maximum distance (i.e. head and tail :) )
+        std::vector<cv::Point> cntPoints;
+        blobToPointVector(blob,cntPoints);
+        LarvaDistanceMap Distances(cntPoints);
         PointPair MAXPair;
 
         // Compute all the inner distances for the larva
