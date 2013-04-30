@@ -58,6 +58,31 @@ using namespace cv;
 /*
 *  LarvaBlobDetector
 */
+
+CV_INIT_ALGORITHM(LarvaBlobDetector, "Feature2D.LarvaBlobDetector",
+                     obj.info()->addParam(obj, "thresholdStep",
+                     obj.params.thresholdStep);
+                     obj.info()->addParam(obj, "minThreshold",
+                     obj.params.minThreshold);
+                     obj.info()->addParam(obj, "maxThreshold",
+                     obj.params.maxThreshold);
+                     obj.info()->addParam_(obj, "minRepeatability",
+                     (sizeof(size_t) == 
+                     sizeof(uint64))?Param::UINT64 : Param::UNSIGNED_INT, &obj.params.minRepeatability, false, 0, 0);
+    obj.info()->addParam(obj, "minDistBetweenBlobs", obj.params.minDistBetweenBlobs);
+    obj.info()->addParam(obj, "filterByColor",    obj.params.filterByColor);
+    obj.info()->addParam(obj, "blobColor",        obj.params.blobColor);
+    obj.info()->addParam(obj, "filterByArea",     obj.params.filterByArea);
+    obj.info()->addParam(obj, "maxArea",          obj.params.maxArea);
+    obj.info()->addParam(obj, "filterByCircularity", obj.params.filterByCircularity);
+    obj.info()->addParam(obj, "maxCircularity",   obj.params.maxCircularity);
+    obj.info()->addParam(obj, "filterByInertia",  obj.params.filterByInertia);
+    obj.info()->addParam(obj, "maxInertiaRatio",  obj.params.maxInertiaRatio);
+    obj.info()->addParam(obj, "filterByConvexity", obj.params.filterByConvexity);
+    obj.info()->addParam(obj, "maxConvexity",     obj.params.maxConvexity);
+    obj.contours.clear();
+    );
+
 LarvaBlobDetector::Params::Params()
 {
     thresholdStep = 10;
@@ -146,7 +171,14 @@ void LarvaBlobDetector::Params::write(cv::FileStorage& fs) const
     fs << "maxConvexity" << maxConvexity;
 }
 
+LarvaBlobDetector::LarvaBlobDetector(vector<vector<Point> > &cnts, const LarvaBlobDetector::Params &parameters) :
+contours(cnts),
+params(parameters)
+{
+}
+
 LarvaBlobDetector::LarvaBlobDetector(const LarvaBlobDetector::Params &parameters) :
+contours(dummy),
 params(parameters)
 {
 }

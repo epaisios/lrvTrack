@@ -87,11 +87,14 @@ public:
       void write( FileStorage& fs ) const;
   };
 
-  CV_WRAP LarvaBlobDetector(const LarvaBlobDetector::Params &parameters = LarvaBlobDetector::Params());
+
+  LarvaBlobDetector(vector<vector<Point> > &cnts, const LarvaBlobDetector::Params &parameters = LarvaBlobDetector::Params());
+  LarvaBlobDetector(const LarvaBlobDetector::Params &parameters = LarvaBlobDetector::Params());
 
   virtual void read( const FileNode& fn );
   virtual void write( FileStorage& fs ) const;
-  vector < vector<Point> > contours;
+  vector < vector<Point> > &contours;
+  vector < vector<Point> > dummy;
 
 protected:
   struct CV_EXPORTS Center
@@ -105,7 +108,7 @@ protected:
   virtual void findBlobs(const Mat &image, const Mat &binaryImage, vector<Center> &centers) const;
 
   Params params;
-  //AlgorithmInfo* info() const;
+  AlgorithmInfo* info() const;
 };
 
 
