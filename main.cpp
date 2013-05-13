@@ -17,12 +17,11 @@
 #define MIN_DISCARD_DISTANCE 30
 #define ROI_PADDING 2
 #define MAX_HORIZ_RESOLUTION 22000 //Pixels
+#define WEIGHT_STEP 0.1
 
 /*#define LARVAE_HASH(l,s,d)\
  ( Wlength*l+Wsize*s+Wdir*d)
 */
-#define LARVAE_HASH(l,s)\
- ( Wlength*l+Wsize*s)
 
 #ifndef NO_SSE
 #define ltsqrt SSESqrt_Recip_Times_X
@@ -555,6 +554,28 @@ class larvaSkel{
 
 /* Skeletonization Part ends here */
 
+double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob)
+{
+  cv::Mat larvaImg,lrvROI;
+  grey_frame.copyTo(larvaImg);
+  cv::Mat ROI=larvaImg(cv::Rect(blob.minx-ROI_PADDING,
+                                blob.miny-ROI_PADDING,
+                                blob.maxx-blob.minx+2*ROI_PADDING,
+                                blob.maxy-blob.miny+2*ROI_PADDING)
+                      );
+  ROI=ROI&larvaROI;
+  cv::normalize(ROI, ROI, 0, 255, CV_MINMAX );
+  double nz=cv::norm(ROI,cv::NORM_L1);
+  return nz;
+}
+
+double getPerimeter(cvb::CvBlob &blob)
+{
+  std::vector<cv::Point> cntPoints;
+  blobToPointVector(blob,cntPoints);
+  return arcLength(cntPoints, true); 
+}
+
 double getSurroundingSize(cv::Point &point, cvb::CvBlob &blob)
 {
   cv::Mat larvaImg,lrvROI;
@@ -593,35 +614,117 @@ class larvaObject
   public:
   unsigned int start_frame;
   unsigned int cur_frame;
+  unsigned int lifetimeWithStats;
   unsigned int larva_ID;
+  unsigned int parentBlobID;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
+  std::vector<double> area;
   double area_mean;
   double area_max;
   double area_min;
+
+  std::vector<double> grey_value;
   double grey_value_mean;
   double grey_value_max;
   double grey_value_min;
+
+  std::vector<double> length;
   double length_mean;
   double length_max;
   double length_min;
+
+  std::vector<double> perimeter;
+  double perimeter_mean;
+  double perimeter_max;
+  double perimeter_min;
+
   std::vector<cv::Point> centroids;
   std::vector<double> centroid_speed_x;
   std::vector<double> centroid_speed_y;
+  
   std::vector<bool> inBlob;
+  
   std::vector<larvaSkel> lrvskels;
+  
   std::vector<cv::Point> heads;
   std::vector<cv::Point> tails;
+  
   larvaObject(): 
     start_frame(0),
     cur_frame(0),
+    parentBlobID(0),
+    lifetimeWithStats(0),
+    larva_ID(0),
     area_mean(0),
     area_max(0),
     area_min(0),
+    length_mean(0),
+    length_max(0),
+    length_min(0),
+    perimeter_mean(0),
+    perimeter_max(0),
+    perimeter_min(0),
     grey_value_mean(0),
     grey_value_max(0),
     grey_value_min(0)
   {}
 };
+
+#define MEAN_SUM(n) \
+  weights[0]*n.area_mean + \
+  weights[1]*n.grey_value_mean + \
+  weights[2]*n.length_mean + \
+  weights[3]*n.perimeter_mean
+
+#define CUR_SUM(n) \
+  weights[0]*n.area.back() + \
+  weights[1]*n.grey_value.back() + \
+  weights[2]*n.length.back() + \
+  weights[3]*n.perimeter.back()
+
+void optimizeWeights(std::vector<double> &weights, 
+                     larvaObject &LarvaA, 
+                     larvaObject &LarvaB )
+{
+  weights = {1.0, 1.0, 1.0, 1.0};
+  double MeanSumA;
+  double MeanSumB;
+  double SumA;
+  double SumB;
+
+  MeanSumA = MEAN_SUM(LarvaA);
+  MeanSumB = MEAN_SUM(LarvaB);
+  SumA = CUR_SUM(LarvaA);
+  SumB = CUR_SUM(LarvaB);
+  double DIFF=(fabs(MeanSumB-SumA) - fabs(MeanSumA-SumA)) +
+              (fabs(MeanSumA-SumB) - fabs(MeanSumB-SumB)) ;
+
+  std::vector<double>::iterator weight=weights.begin();
+  while (weight != weights.end() )
+  {
+    while (*weight - WEIGHT_STEP >=0) 
+    {
+      double CUR_DIFF;
+      *weight-=WEIGHT_STEP;
+      MeanSumA = MEAN_SUM(LarvaA);
+      MeanSumB = MEAN_SUM(LarvaB);
+      SumA = CUR_SUM(LarvaA);
+      SumB = CUR_SUM(LarvaB);
+      CUR_DIFF=(fabs(MeanSumB-SumA) - fabs(MeanSumA-SumA)) +
+        (fabs(MeanSumA-SumB) - fabs(MeanSumB-SumB)) ;
+      if (CUR_DIFF < DIFF)
+      {
+        *weight+=WEIGHT_STEP;
+        break;
+      }
+      else
+      {
+        DIFF=CUR_DIFF;
+      }
+    }
+    weight++;
+  }
+}
 
 void flattenedClusters(std::vector<unsigned int> &inClusters)
 {
@@ -637,12 +740,12 @@ void flattenedClusters(std::vector<unsigned int> &inClusters)
     }
     cluster++;
   }
-  std::cout << "LARVAE IN CLUSTERS: ";
-  for (int i=0; i<inClusters.size() ; i++)
-  {
-    std::cout << inClusters[i] << " ";
-  }
-  std::cout << std::endl;
+  //std::cout << "LARVAE IN CLUSTERS: ";
+  //for (int i=0; i<inClusters.size() ; i++)
+  // {
+  //std::cout << inClusters[i] << " ";
+  // }
+  // std::cout << std::endl;
 }
 
 bool findInVector(std::vector<unsigned int> &flattenedCluster, unsigned int ID)
@@ -652,12 +755,12 @@ bool findInVector(std::vector<unsigned int> &flattenedCluster, unsigned int ID)
   {
     if (*i==ID)
     {
-      std::cout << "ID: " << ID << " is in a cluster. Iterator: " 
-        << *i << std::endl;
+      //std::cout << "ID: " << ID << " is in a cluster. Iterator: " 
+      //  << *i << std::endl;
       return true;
     }
   }
-  std::cout << "ID: " << ID << " is not in a cluster." << std::endl;
+  //std::cout << "ID: " << ID << " is not in a cluster." << std::endl;
   return false;
 }
 
@@ -748,6 +851,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
     cv::Mat larvaROI,cntPoints;
     createLarvaContour(larvaROI,blob);
     createLarvaContourPoints(cntPoints,blob);
+
     //cv::imshow("Current Larva",larvaROI);
     //cv::imshow("Contour Points",cntPoints);
     //cv::waitKey(1);
@@ -758,6 +862,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       // Create and allocate the new object
       larvaObject newLarva;
 
+      newLarva.lifetimeWithStats++;
       // Set the frame of it's existence
       newLarva.start_frame=CURRENT_FRAME;
 
@@ -767,18 +872,24 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       // Add the blob of the larva to its blob history
       newLarva.blobs.push_back(blob);
 
-      // Initialize the area_mean of the larva
+      //Initialize the area values
+      newLarva.area.push_back(blob.area);
       newLarva.area_mean=blob.area;
-
-      // Initialize the max and min areas as well
       newLarva.area_max=newLarva.area_min=blob.area;
       newLarva.area_min=newLarva.area_min=blob.area;
 
+      double greyVal=getGreyValue(larvaROI,blob);
+      newLarva.grey_value.push_back(greyVal);
+      newLarva.grey_value_mean = greyVal; 
+      newLarva.grey_value_max = greyVal; 
+      newLarva.grey_value_min = greyVal; 
 
-      newLarva.grey_value_mean = 0; //TODO
-      newLarva.grey_value_max = 0; //TODO
-      newLarva.grey_value_min = 0; //TODO
-      
+      double perimeter=getPerimeter(blob);
+      newLarva.perimeter.push_back(perimeter);
+      newLarva.perimeter_mean=perimeter;
+      newLarva.perimeter_max=perimeter;
+      newLarva.perimeter_min=perimeter;
+
       // Initialize the speed to 0
       newLarva.centroid_speed_x.push_back(0);
       newLarva.centroid_speed_y.push_back(0);
@@ -800,6 +911,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       blobToPointVector(blob,cntPoints);
       LarvaDistanceMap Distances(cntPoints);
       computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
+      newLarva.length.push_back(Distances.MaxDist);
       newLarva.length_mean = Distances.MaxDist;
       newLarva.length_max = Distances.MaxDist;
       newLarva.length_min = Distances.MaxDist;
@@ -821,6 +933,13 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       newLarva.tails.push_back(Tail);
 
       detected_larvae[ID]=newLarva;
+      std::cout << CURRENT_FRAME <<
+          " , " << ID << 
+          " , " << blob.area << 
+          " , " << Distances.MaxDist << 
+          " , " << greyVal << 
+          " , " << perimeter << 
+          std::endl;
     }
     // UPDATED LARVA OBJECT!
     else
@@ -849,10 +968,11 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       // Look if larva was found in a blob
       if (!findInVector(larvaeInClusters,ID))
       {
+        cur_larva.lifetimeWithStats++;
         // If not then:
         //  Update area values for larva.
+        cur_larva.area.push_back(blob.area);
         cur_larva.area_mean=((cur_larva.area_mean+blob.area)/2);
-      
         if (cur_larva.area_max < blob.area)
         {
           cur_larva.area_max=blob.area;
@@ -861,6 +981,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         {
           cur_larva.area_min=blob.area;
         }
+
         // Update centroid_speeds (in pixel per second per axis)
 	cur_larva.centroid_speed_x.push_back(
                             (blob.centroid.x - preBlob.centroid.x)/VIDEO_FPS);
@@ -878,12 +999,10 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         std::vector<cv::Point> cntPoints;
         blobToPointVector(blob,cntPoints);
         LarvaDistanceMap Distances(cntPoints);
-
         // Compute all the inner distances for the larva
         computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
-
+        cur_larva.length.push_back(Distances.MaxDist);
         cur_larva.length_mean=((cur_larva.length_mean+Distances.MaxDist)/2);
-      
         if (cur_larva.area_max < Distances.MaxDist)
         {
           cur_larva.area_max=Distances.MaxDist;
@@ -893,6 +1012,30 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
           cur_larva.area_min=Distances.MaxDist;
         }
         PointPair MAXPair=Distances.MaxDistPoints;
+
+        double greyVal=getGreyValue(larvaROI,blob);
+        cur_larva.grey_value.push_back(greyVal);
+        cur_larva.grey_value_mean=(cur_larva.grey_value_mean+greyVal)/2; 
+        if (cur_larva.area_max < greyVal)
+        {
+          cur_larva.grey_value_max=greyVal;
+        }
+        if (cur_larva.area_min > greyVal)
+        {
+          cur_larva.grey_value_min=greyVal;
+        }
+
+        double perimeter=getPerimeter(blob);
+        cur_larva.perimeter.push_back(perimeter);
+        cur_larva.perimeter_mean=(cur_larva.perimeter_mean+perimeter)/2; 
+        if (cur_larva.area_max < perimeter)
+        {
+          cur_larva.perimeter_max=perimeter;
+        }
+        if (cur_larva.area_min > perimeter)
+        {
+          cur_larva.perimeter_min=perimeter;
+        }
 
         // Construct a vector of points including both 
         // head and tail to decide which is which
@@ -922,6 +1065,14 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         //      search behaves differently if the larva was previously
         //      part of a blob.
         cur_larva.inBlob.push_back(false);
+
+      std::cout << CURRENT_FRAME <<
+          " , " << ID << 
+          " , " << blob.area << 
+          " , " << Distances.MaxDist << 
+          " , " << greyVal << 
+          " , " << perimeter << 
+          std::endl;
       }
       else
       {
@@ -950,6 +1101,9 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
   }
 }
 
+#define LARVAE_HASH(a,g,l,p)\
+ weights[0]*a+weights[1]*g+weights[2]*l+weights[3]*p
+
 
 // Matching of diverging larvae
 // TODO: Generalize for more than two
@@ -958,7 +1112,10 @@ void diverge_match(unsigned int &candidate_larva_a,
                    cvb::CvBlob  *newLarva1, 
                    cvb::CvBlob *newLarva2)
 {
-  
+  std::vector<double> weights;
+  optimizeWeights(weights,
+                  detected_larvae[candidate_larva_a],
+                  detected_larvae[candidate_larva_b]);
   cv::Point mdpLarva1, mdpLarva2;
   std::vector<cv::Point> newLarva1Points;
   std::vector<cv::Point> newLarva2Points;
@@ -990,12 +1147,6 @@ void diverge_match(unsigned int &candidate_larva_a,
       ibreak;
   }
 
-//  double dist_a=(centroid_blob.x-centroid_a.x) + (centroid_blob.y - centroid_a.y);
- // double dist_b=(centroid_blob.x-centroid_b.x) + (centroid_blob.y - centroid_b.y);
-
-//  double dist_1=(centroid_1.x-centroid_blob.x) + (centroid_1.y - centroid_blob.y);
-//  double dist_2=(centroid_2.x-centroid_blob.x) + (centroid_2.y - centroid_blob.y);
-
   computeInnerDistances(*newLarva1,dstLarva1,mdpLarva1);
   computeInnerDistances(*newLarva2,dstLarva2,mdpLarva2);
 
@@ -1004,15 +1155,28 @@ void diverge_match(unsigned int &candidate_larva_a,
   double size_1=newLarva1->area;
   double size_2=newLarva2->area;
 
+  cv::Mat larvaROI1,larvaROI2;
+  createLarvaContour(larvaROI1,*newLarva1);
+  createLarvaContour(larvaROI2,*newLarva2);
+  double grey_value_a=detected_larvae[candidate_larva_a].grey_value_mean;
+  double grey_value_b=detected_larvae[candidate_larva_b].grey_value_mean;
+  double grey_value_1=getGreyValue(larvaROI1,*newLarva1);
+  double grey_value_2=getGreyValue(larvaROI2,*newLarva2);
+
   double length_a=detected_larvae[candidate_larva_a].length_max;
   double length_b=detected_larvae[candidate_larva_b].length_max;
   double length_1=dstLarva1.MaxDist;
   double length_2=dstLarva2.MaxDist;
+
+  double perimeter_a=detected_larvae[candidate_larva_a].perimeter_max;
+  double perimeter_b=detected_larvae[candidate_larva_b].perimeter_max;
+  double perimeter_1=getPerimeter(*newLarva1);
+  double perimeter_2=getPerimeter(*newLarva2);
   
-  double lrvhash_a = LARVAE_HASH(length_a,size_a);
-  double lrvhash_b = LARVAE_HASH(length_b,size_b);
-  double lrvhash_1 = LARVAE_HASH(length_1,size_1);
-  double lrvhash_2 = LARVAE_HASH(length_2,size_2);
+  double lrvhash_a = LARVAE_HASH(size_a,grey_value_a,length_a,perimeter_a);
+  double lrvhash_b = LARVAE_HASH(size_b,grey_value_b,length_b,perimeter_b);
+  double lrvhash_1 = LARVAE_HASH(size_1,grey_value_1,length_1,perimeter_1);
+  double lrvhash_2 = LARVAE_HASH(size_2,grey_value_2,length_2,perimeter_2);
 
   if (fabs(lrvhash_a-lrvhash_1)+fabs(lrvhash_b-lrvhash_2) <
       fabs(lrvhash_a-lrvhash_2)+fabs(lrvhash_b-lrvhash_1))
@@ -1286,7 +1450,7 @@ int main(int argv, char* argc[])
                    850,  // minimum distance between two circles
                    50, // Canny high threshold
                    200, // minimum number of votes
-                   bgFrame.rows/3, bgFrame.rows/1.9); // min and max radiusV
+                   bgFrame.rows/3, bgFrame.rows/2); // min and max radiusV
 
   std::vector<cv::Vec3f>::
   const_iterator itc= circles.begin();
@@ -1338,13 +1502,14 @@ int main(int argv, char* argc[])
       cv::Mat fg_image_norm;
       
       cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
-      
+      //cv::imshow("normWin",fg_image_norm);
       cv::threshold(fg_image_norm,
           thresholded_frame,
           thresholdlow,
           thresholdhigh,
           cv::THRESH_BINARY);
-
+      //cv::blur(thresholded_frame,thresholded_frame,cv::Size(2,2));
+      //cv::imshow("normWin",thresholded_frame);
       cvb::CvBlobs blobs;
       IplImage ipl_thresholded = thresholded_frame;
       labelImg=cvCreateImage(cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
