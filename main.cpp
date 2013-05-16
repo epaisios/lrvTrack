@@ -1153,6 +1153,72 @@ inline int min(std::vector<double> vals)
   return mini;
 }
 
+void diverge_match_vote(unsigned int &candidate_larva_a, 
+                        unsigned int &candidate_larva_b,
+                        cvb::CvBlob  *newLarva1, 
+                        cvb::CvBlob *newLarva2)
+{
+
+  larvaObject &LarvaA=detected_larvae[candidate_larva_a];
+  larvaObject &LarvaB=detected_larvae[candidate_larva_b];
+
+  // Votes mean we want to switch the numbers!
+  double voteSize;
+  double voteGreyValue;
+  double voteLength;
+  double votePerimeter;
+
+  std::vector<double> weights={0.25 0.25 0.25 0.25}
+
+  double size_a=detected_larvae[candidate_larva_a].area_mean;
+  double size_b=detected_larvae[candidate_larva_b].area_mean;
+  double size_1=newLarva1->area;
+  double size_2=newLarva2->area;
+
+  cv::Mat larvaROI1,larvaROI2;
+  createLarvaContour(larvaROI1,*newLarva1);
+  createLarvaContour(larvaROI2,*newLarva2);
+  double grey_value_a=LarvaA.grey_value_mean/size_a;
+  double grey_value_b=LarvaB.grey_value_mean/size_b;
+  double grey_value_1=getGreyValue(larvaROI1,*newLarva1)/size_1;
+  double grey_value_2=getGreyValue(larvaROI2,*newLarva2)/size_2;
+
+  /*
+  double length_a=detected_larvae[candidate_larva_a].length_max;
+  double length_b=detected_larvae[candidate_larva_b].length_max;
+  double length_1=dstLarva1.MaxDist;
+  double length_2=dstLarva2.MaxDist;
+  */
+
+  double perimeter_a=detected_larvae[candidate_larva_a].perimeter_max;
+  double perimeter_b=detected_larvae[candidate_larva_b].perimeter_max;
+  double perimeter_1=getPerimeter(*newLarva1);
+  double perimeter_2=getPerimeter(*newLarva2);
+
+  if( (fabs(size_a - size_1) + fabs(size_b - size_2)) > 
+      (fabs(size_a - size_2) + fabs(size_b - size_1)) 
+    )
+  {
+    voteSize=1;
+  }
+
+  if( (fabs(grey_value_a - grey_value_1) + fabs(grey_value_b - grey_value_2)) > 
+      (fabs(grey_value_a - grey_value_2) + fabs(grey_value_b - grey_value_1)) 
+    )
+  {
+    voteGreyValue=1;
+  }
+
+  if( (fabs(perimeter_a - perimeter_1) + fabs(perimeter_b - perimeter_2)) > 
+      (fabs(perimeter_a - perimeter_2) + fabs(perimeter_b - perimeter_1)) 
+    )
+  {
+    votePerimeter=1;
+  }
+  if(
+
+}
+
 void diverge_match(unsigned int &candidate_larva_a, 
                    unsigned int &candidate_larva_b,
                    cvb::CvBlob  *newLarva1, 
@@ -1181,6 +1247,7 @@ void diverge_match(unsigned int &candidate_larva_a,
   double length_1=dstLarva1.MaxDist;
   double length_2=dstLarva2.MaxDist;
   */
+
   double perimeter_a=detected_larvae[candidate_larva_a].perimeter_max;
   double perimeter_b=detected_larvae[candidate_larva_b].perimeter_max;
   double perimeter_1=getPerimeter(*newLarva1);
@@ -1538,8 +1605,8 @@ int main(int argv, char* argc[])
   bool STEP=true;
   //cv::VideoCapture capture(CV_CAP_DC1394);
   //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302211115.mp4");
-  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
-  cv::VideoCapture capture("/Users/epaisios/Downloads/lc3-processed.mp4");
+  cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
+  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc3-processed.mp4");
   //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211115.mp4");
   //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211054.mp4");
   //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302201531.mp4");
