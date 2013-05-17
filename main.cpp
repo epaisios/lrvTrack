@@ -622,21 +622,25 @@ class larvaObject
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
   std::vector<double> area;
   double area_mean;
+  double area_sum;
   double area_max;
   double area_min;
 
   std::vector<double> grey_value;
   double grey_value_mean;
+  double grey_value_sum;
   double grey_value_max;
   double grey_value_min;
 
   std::vector<double> length;
   double length_mean;
+  double length_sum;
   double length_max;
   double length_min;
 
   std::vector<double> perimeter;
   double perimeter_mean;
+  double perimeter_sum;
   double perimeter_max;
   double perimeter_min;
 
@@ -660,15 +664,19 @@ class larvaObject
     isBlob(false),
     larva_ID(0),
     area_mean(0),
+    area_sum(0),
     area_max(0),
     area_min(0),
     length_mean(0),
+    length_sum(0),
     length_max(0),
     length_min(0),
     perimeter_mean(0),
+    perimeter_sum(0),
     perimeter_max(0),
     perimeter_min(0),
     grey_value_mean(0),
+    grey_value_sum(0),
     grey_value_max(0),
     grey_value_min(0)
   {}
@@ -907,18 +915,21 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       //Initialize the area values
       newLarva.area.push_back(blob.area);
       newLarva.area_mean=blob.area;
+      newLarva.area_sum=blob.area;
       newLarva.area_max=newLarva.area_min=blob.area;
       newLarva.area_min=newLarva.area_min=blob.area;
 
       double greyVal=getGreyValue(larvaROI,blob);
       newLarva.grey_value.push_back(greyVal);
       newLarva.grey_value_mean = greyVal; 
+      newLarva.grey_value_sum= greyVal; 
       newLarva.grey_value_max = greyVal; 
       newLarva.grey_value_min = greyVal; 
 
       double perimeter=getPerimeter(blob);
       newLarva.perimeter.push_back(perimeter);
       newLarva.perimeter_mean=perimeter;
+      newLarva.perimeter_sum=perimeter;
       newLarva.perimeter_max=perimeter;
       newLarva.perimeter_min=perimeter;
 
@@ -945,6 +956,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
       newLarva.length.push_back(Distances.MaxDist);
       newLarva.length_mean = Distances.MaxDist;
+      newLarva.length_sum= Distances.MaxDist;
       newLarva.length_max = Distances.MaxDist;
       newLarva.length_min = Distances.MaxDist;
       PointPair MAXPair=Distances.MaxDistPoints;
@@ -1004,7 +1016,9 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         // If not then:
         //  Update area values for larva.
         cur_larva.area.push_back(blob.area);
-        cur_larva.area_mean=((cur_larva.area_mean+blob.area)/2);
+        
+        cur_larva.area_mean=(cur_larva.area_mean+blob.area)/2;
+        cur_larva.area_sum = cur_larva.area_sum + blob.area;
         if (cur_larva.area_max < blob.area)
         {
           cur_larva.area_max=blob.area;
@@ -1034,7 +1048,8 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         // Compute all the inner distances for the larva
         computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
         cur_larva.length.push_back(Distances.MaxDist);
-        cur_larva.length_mean=((cur_larva.length_mean+Distances.MaxDist)/2);
+        cur_larva.length_mean=(cur_larva.length_mean+Distances.MaxDist)/2;
+        cur_larva.length_sum=cur_larva.length_sum+Distances.MaxDist;
         if (cur_larva.area_max < Distances.MaxDist)
         {
           cur_larva.area_max=Distances.MaxDist;
@@ -1048,6 +1063,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         double greyVal=getGreyValue(larvaROI,blob);
         cur_larva.grey_value.push_back(greyVal);
         cur_larva.grey_value_mean=(cur_larva.grey_value_mean+greyVal)/2; 
+        cur_larva.grey_value_sum=cur_larva.grey_value_sum+greyVal; 
         if (cur_larva.area_max < greyVal)
         {
           cur_larva.grey_value_max=greyVal;
@@ -1060,6 +1076,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
         double perimeter=getPerimeter(blob);
         cur_larva.perimeter.push_back(perimeter);
         cur_larva.perimeter_mean=(cur_larva.perimeter_mean+perimeter)/2; 
+        cur_larva.perimeter_sum=cur_larva.perimeter_sum+perimeter; 
         if (cur_larva.area_max < perimeter)
         {
           cur_larva.perimeter_max=perimeter;
@@ -1153,35 +1170,95 @@ inline int min(std::vector<double> vals)
   return mini;
 }
 
+void optimize_weights(std::vector<double> &W, larvaObject &LarvaA,larvaObject &LarvaB)
+{
+
+  double voteSize=0;
+  double voteGreyValue=0;
+  double voteLength=0;
+  double votePerimeter=0;
+  W = {0, 0, 0, 0 };
+  double size_a=LarvaA.area_sum/LarvaA.area.size();
+  double size_b=LarvaB.area_sum/LarvaB.area.size();
+
+  double grey_value_a=LarvaA.grey_value_sum/LarvaA.grey_value.size();
+  double grey_value_b=LarvaB.grey_value_sum/LarvaB.grey_value.size();
+
+  double perimeter_a=LarvaA.perimeter_sum/LarvaA.perimeter.size();
+  double perimeter_b=LarvaB.perimeter_sum/LarvaB.perimeter.size();
+  
+  for(int i=0;i<20;i++)
+  {
+    double MAXA=LarvaA.area.size()-1;
+    double MAXB=LarvaB.area.size()-1;
+    double last_size_a=LarvaA.area[MAXA-i];
+    double last_size_b=LarvaB.area[MAXB-i];
+    double last_grey_value_a=LarvaA.grey_value[MAXA-i];
+    double last_grey_value_b=LarvaB.grey_value[MAXB-i];
+    double last_perimeter_a=LarvaA.perimeter[MAXA-i];
+    double last_perimeter_b=LarvaB.perimeter[MAXB-i];
+
+    if( (fabs(size_a - last_size_a) + fabs(size_b - last_size_b)) > 
+        (fabs(size_a - last_size_b) + fabs(size_b - last_size_a)) 
+      )
+    {
+      voteSize=1;
+    }
+
+    if( (fabs(grey_value_a - last_grey_value_a) + fabs(grey_value_b - last_grey_value_b)) > 
+        (fabs(grey_value_a - last_grey_value_b) + fabs(grey_value_b - last_grey_value_a)) 
+      )
+    {
+      voteGreyValue=1;
+    }
+
+    if( (fabs(perimeter_a - last_perimeter_a) + fabs(perimeter_b - last_perimeter_b)) > 
+        (fabs(perimeter_a - last_perimeter_b) + fabs(perimeter_b - last_perimeter_a)) 
+      )
+    {
+      votePerimeter=1;
+    }
+    if (voteSize==0){
+      W[0]=W[0]+0.05;
+    }
+    if (voteGreyValue==0){
+      W[1]=W[1]+0.05;
+    }
+    if (votePerimeter==0){
+      W[3]=W[3]+0.05;
+    }
+  }
+}
+
 void diverge_match_vote(unsigned int &candidate_larva_a, 
                         unsigned int &candidate_larva_b,
                         cvb::CvBlob  *newLarva1, 
                         cvb::CvBlob *newLarva2)
 {
+  //
+  // Votes mean we want to switch the numbers!
+  double voteSize=0;
+  double voteGreyValue=0;
+  double voteLength=0;
+  double votePerimeter=0;
+
+  std::vector<double> W={0.25, 0.25, 0.25, 0.25};
 
   larvaObject &LarvaA=detected_larvae[candidate_larva_a];
   larvaObject &LarvaB=detected_larvae[candidate_larva_b];
 
-  // Votes mean we want to switch the numbers!
-  double voteSize;
-  double voteGreyValue;
-  double voteLength;
-  double votePerimeter;
-
-  std::vector<double> weights={0.25 0.25 0.25 0.25}
-
-  double size_a=detected_larvae[candidate_larva_a].area_mean;
-  double size_b=detected_larvae[candidate_larva_b].area_mean;
+  double size_a=LarvaA.area_sum/LarvaA.area.size();
+  double size_b=LarvaB.area_sum/LarvaB.area.size();
   double size_1=newLarva1->area;
   double size_2=newLarva2->area;
 
   cv::Mat larvaROI1,larvaROI2;
   createLarvaContour(larvaROI1,*newLarva1);
   createLarvaContour(larvaROI2,*newLarva2);
-  double grey_value_a=LarvaA.grey_value_mean/size_a;
-  double grey_value_b=LarvaB.grey_value_mean/size_b;
-  double grey_value_1=getGreyValue(larvaROI1,*newLarva1)/size_1;
-  double grey_value_2=getGreyValue(larvaROI2,*newLarva2)/size_2;
+  double grey_value_a=LarvaA.grey_value_sum/LarvaA.grey_value.size();
+  double grey_value_b=LarvaB.grey_value_sum/LarvaB.grey_value.size();
+  double grey_value_1=getGreyValue(larvaROI1,*newLarva1);
+  double grey_value_2=getGreyValue(larvaROI2,*newLarva2);
 
   /*
   double length_a=detected_larvae[candidate_larva_a].length_max;
@@ -1190,8 +1267,8 @@ void diverge_match_vote(unsigned int &candidate_larva_a,
   double length_2=dstLarva2.MaxDist;
   */
 
-  double perimeter_a=detected_larvae[candidate_larva_a].perimeter_max;
-  double perimeter_b=detected_larvae[candidate_larva_b].perimeter_max;
+  double perimeter_a=LarvaA.perimeter_sum/LarvaA.perimeter.size();
+  double perimeter_b=LarvaB.perimeter_sum/LarvaB.perimeter.size();
   double perimeter_1=getPerimeter(*newLarva1);
   double perimeter_2=getPerimeter(*newLarva2);
 
@@ -1215,11 +1292,129 @@ void diverge_match_vote(unsigned int &candidate_larva_a,
   {
     votePerimeter=1;
   }
-  if(
+
+  if(W[0]*voteSize + W[1]*voteGreyValue + W[3]*votePerimeter >= 0.5 )
+  {
+    candidate_larva_a=newLarva2->label;
+    candidate_larva_b=newLarva1->label;
+  }
+  else
+  {
+    candidate_larva_a=newLarva1->label;
+    candidate_larva_b=newLarva2->label;
+  }
 
 }
 
+void printVector(std::vector<double> vec)
+{
+  
+  std::cerr << "[ " ;
+  for( std::vector<double>::const_iterator i = vec.begin(); i != vec.end(); ++i)
+       std::cerr << *i << ' ';
+  std::cerr << " ]" << std::endl; 
+}
+
 void diverge_match(unsigned int &candidate_larva_a, 
+                   unsigned int &candidate_larva_b,
+                   cvb::CvBlob  *newLarva1, 
+                   cvb::CvBlob *newLarva2)
+{
+  larvaObject &LarvaA=detected_larvae[candidate_larva_a];
+  larvaObject &LarvaB=detected_larvae[candidate_larva_b];
+
+  
+  double size_a=LarvaA.area_sum/LarvaA.area.size();
+  double size_b=LarvaB.area_sum/LarvaB.area.size();;
+  double size_1=newLarva1->area;
+  double size_2=newLarva2->area;
+
+  cv::Mat larvaROI1,larvaROI2;
+  createLarvaContour(larvaROI1,*newLarva1);
+  createLarvaContour(larvaROI2,*newLarva2);
+  double grey_value_a=LarvaA.grey_value_sum/LarvaA.grey_value.size();
+  double grey_value_b=LarvaB.grey_value_sum/LarvaB.grey_value.size();
+  double grey_value_1=getGreyValue(larvaROI1,*newLarva1);
+  double grey_value_2=getGreyValue(larvaROI2,*newLarva2);
+
+  /*
+  double length_a=detected_larvae[candidate_larva_a].length_max;
+  double length_b=detected_larvae[candidate_larva_b].length_max;
+  double length_1=dstLarva1.MaxDist;
+  double length_2=dstLarva2.MaxDist;
+  */
+
+  double perimeter_a=LarvaA.perimeter_sum/LarvaA.perimeter.size();
+  double perimeter_b=LarvaB.perimeter_sum/LarvaB.perimeter.size();
+  double perimeter_1=getPerimeter(*newLarva1);
+  double perimeter_2=getPerimeter(*newLarva2);
+
+  cv::Mat InputArrayA;
+  cv::Mat InputArrayB;
+  cv::hconcat(cv::Mat(LarvaA.area),cv::Mat(LarvaA.grey_value),InputArrayA);
+  cv::hconcat(InputArrayA,cv::Mat(LarvaA.perimeter),InputArrayA);
+
+  cv::hconcat(cv::Mat(LarvaB.area),cv::Mat(LarvaB.grey_value),InputArrayB);
+  cv::hconcat(InputArrayB,cv::Mat(LarvaB.perimeter),InputArrayB);
+ 
+  std::cerr << InputArrayA << std::endl;
+  std::cerr << InputArrayB << std::endl;
+  std::cerr << "===========================================" << std::endl;
+
+  std::vector<double> meanVecA={size_a , grey_value_a , perimeter_a };
+  std::vector<double> meanVecB={size_b , grey_value_b , perimeter_b };
+  cv::Mat meanMatA(meanVecA);
+  cv::Mat meanMatB(meanVecB);
+  cv::Mat meanTMatA, meanTMatB;
+  cv::transpose(meanMatA,meanTMatA);
+  cv::transpose(meanMatB,meanTMatB);
+  cv::Mat covarMatA;
+  cv::Mat covarMatB;
+ 
+  printVector(LarvaA.area);
+  printVector(LarvaA.grey_value);
+  printVector(LarvaA.perimeter);
+
+  printVector(LarvaB.area);
+  printVector(LarvaB.grey_value);
+  printVector(LarvaB.perimeter);
+
+  cv::calcCovarMatrix(InputArrayA, covarMatA,meanTMatA,CV_COVAR_ROWS|CV_COVAR_NORMAL|CV_COVAR_USE_AVG);
+  cv::calcCovarMatrix(InputArrayB, covarMatB,meanTMatB,CV_COVAR_ROWS|CV_COVAR_NORMAL|CV_COVAR_USE_AVG);
+
+  std::cerr << "CovarMatA" << covarMatA << std::endl;
+  std::cerr << "CovarMatB" << covarMatB << std::endl;
+
+  cv::invert(covarMatA,covarMatA,cv::DECOMP_SVD);
+  cv::invert(covarMatB,covarMatB,cv::DECOMP_SVD);
+
+  std::vector<double> vec1 = { size_1, grey_value_1 , perimeter_1 };
+  std::vector<double> vec2 = { size_2, grey_value_2 , perimeter_2 };
+
+  cv::Mat mat1(vec1);
+  cv::Mat mat2(vec2);
+
+  double DistA1 = cv::Mahalanobis(mat1, meanMatA, covarMatA);
+  double DistA2 = cv::Mahalanobis(mat2, meanMatA, covarMatA);
+  double DistB1 = cv::Mahalanobis(mat1, meanMatB, covarMatB);
+  double DistB2 = cv::Mahalanobis(mat2, meanMatB, covarMatB);
+
+  std::cerr << "MH Distances: DistA1: " <<  DistA1 << " DistB2: "  << DistB2 << "Sum: " << DistA1+DistB2 << std::endl;
+  std::cerr << "MH Distances: DistA2: " <<  DistA2 << " DistB1: "  << DistB1 << "Sum: " << DistA2+DistB1 << std::endl;
+  if (DistA1+DistB2 > DistA2+DistB1)
+  {
+    candidate_larva_a=newLarva2->label;
+    candidate_larva_b=newLarva1->label;
+  }
+  else
+  {
+    candidate_larva_a=newLarva1->label;
+    candidate_larva_b=newLarva2->label;
+  }
+  
+}
+
+void diverge_match_eu(unsigned int &candidate_larva_a, 
                    unsigned int &candidate_larva_b,
                    cvb::CvBlob  *newLarva1, 
                    cvb::CvBlob *newLarva2)
@@ -1601,11 +1796,12 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 int main(int argv, char* argc[])
 {
   bool SHOWTAGS=true;
-  bool TRACK=true;
+  bool TRACK=false;
   bool STEP=true;
   //cv::VideoCapture capture(CV_CAP_DC1394);
   //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302211115.mp4");
-  cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
+  cv::VideoCapture capture("/Users/epaisios/Downloads/lc1-processed.mp4");
+  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
   //cv::VideoCapture capture("/Users/epaisios/Downloads/lc3-processed.mp4");
   //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211115.mp4");
   //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211054.mp4");
