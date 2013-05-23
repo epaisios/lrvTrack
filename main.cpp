@@ -1328,7 +1328,21 @@ void diverge_match(unsigned int &candidate_larva_a,
   larvaObject &LarvaA=detected_larvae[candidate_larva_a];
   larvaObject &LarvaB=detected_larvae[candidate_larva_b];
 
-  
+  cv::Point mdpLarva1, mdpLarva2;
+  mdpLarva1.x=newLarva1->centroid.x;
+  mdpLarva1.y=newLarva1->centroid.y;
+  mdpLarva2.x=newLarva2->centroid.x;
+  mdpLarva2.y=newLarva2->centroid.y;
+
+  std::vector<cv::Point> newLarva1Points;
+  std::vector<cv::Point> newLarva2Points;
+  blobToPointVector(*newLarva1,newLarva1Points);
+  blobToPointVector(*newLarva2,newLarva2Points);
+  LarvaDistanceMap dstLarva1(newLarva1Points), dstLarva2(newLarva2Points);
+
+  computeInnerDistances(*newLarva1,dstLarva1,mdpLarva1);
+  computeInnerDistances(*newLarva2,dstLarva2,mdpLarva2);  
+
   double size_a=LarvaA.area_sum/LarvaA.area.size();
   double size_b=LarvaB.area_sum/LarvaB.area.size();;
   double size_1=newLarva1->area;
@@ -1342,12 +1356,10 @@ void diverge_match(unsigned int &candidate_larva_a,
   double grey_value_1=getGreyValue(larvaROI1,*newLarva1);
   double grey_value_2=getGreyValue(larvaROI2,*newLarva2);
 
-  /*
-  double length_a=detected_larvae[candidate_larva_a].length_max;
-  double length_b=detected_larvae[candidate_larva_b].length_max;
+  double length_a=detected_larvae[candidate_larva_a].length_sum/LarvaA.length.size();
+  double length_b=detected_larvae[candidate_larva_b].length_sum/LarvaB.length.size();
   double length_1=dstLarva1.MaxDist;
   double length_2=dstLarva2.MaxDist;
-  */
 
   double perimeter_a=LarvaA.perimeter_sum/LarvaA.perimeter.size();
   double perimeter_b=LarvaB.perimeter_sum/LarvaB.perimeter.size();
@@ -1357,9 +1369,11 @@ void diverge_match(unsigned int &candidate_larva_a,
   cv::Mat InputArrayA;
   cv::Mat InputArrayB;
   cv::hconcat(cv::Mat(LarvaA.area),cv::Mat(LarvaA.grey_value),InputArrayA);
+  cv::hconcat(InputArrayA,cv::Mat(LarvaA.length),InputArrayA);
   cv::hconcat(InputArrayA,cv::Mat(LarvaA.perimeter),InputArrayA);
 
   cv::hconcat(cv::Mat(LarvaB.area),cv::Mat(LarvaB.grey_value),InputArrayB);
+  cv::hconcat(InputArrayB,cv::Mat(LarvaB.length),InputArrayB);
   cv::hconcat(InputArrayB,cv::Mat(LarvaB.perimeter),InputArrayB);
  
   /*
@@ -1367,8 +1381,8 @@ void diverge_match(unsigned int &candidate_larva_a,
   std::cerr << InputArrayB << std::endl;
   std::cerr << "===========================================" << std::endl;
 */
-  std::vector<double> meanVecA={size_a , grey_value_a , perimeter_a };
-  std::vector<double> meanVecB={size_b , grey_value_b , perimeter_b };
+  std::vector<double> meanVecA={size_a , grey_value_a , length_a, perimeter_a };
+  std::vector<double> meanVecB={size_b , grey_value_b , length_b, perimeter_b };
   cv::Mat meanMatA(meanVecA);
   cv::Mat meanMatB(meanVecB);
   cv::Mat meanTMatA, meanTMatB;
@@ -1395,8 +1409,8 @@ void diverge_match(unsigned int &candidate_larva_a,
   cv::invert(covarMatA,covarMatA,cv::DECOMP_SVD);
   cv::invert(covarMatB,covarMatB,cv::DECOMP_SVD);
 
-  std::vector<double> vec1 = { size_1, grey_value_1 , perimeter_1 };
-  std::vector<double> vec2 = { size_2, grey_value_2 , perimeter_2 };
+  std::vector<double> vec1 = { size_1, grey_value_1 , length_1, perimeter_1 };
+  std::vector<double> vec2 = { size_2, grey_value_2 , length_2, perimeter_2 };
 
   cv::Mat mat1(vec1);
   cv::Mat mat2(vec2);
@@ -1412,18 +1426,18 @@ void diverge_match(unsigned int &candidate_larva_a,
   {
     candidate_larva_a=newLarva2->label;
     candidate_larva_b=newLarva1->label;
-    std::cerr << "MH: Assigning " << candidate_larva_a << "[" << LarvaA.centroids.back().x << ", " 
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaA.larva_ID << "[" << LarvaA.centroids.back().x << ", " 
       << LarvaA.centroids.back().y << "] -> 2 [" << newLarva2->centroid.x << ", " << newLarva2->centroid.y << "]" << std::endl;
-    std::cerr << "MH: Assigning " << candidate_larva_b << "[" << LarvaB.centroids.back().x << ", " 
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaB.larva_ID << "[" << LarvaB.centroids.back().x << ", " 
       << LarvaB.centroids.back().y << "] -> 1 [" << newLarva1->centroid.x << ", " << newLarva1->centroid.y << "]" << std::endl;
   }
   else
   {
     candidate_larva_a=newLarva1->label;
     candidate_larva_b=newLarva2->label;
-    std::cerr << "MH: Assigning " << candidate_larva_a << "[" << LarvaA.centroids.back().x << ", " 
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaA.larva_ID << "[" << LarvaA.centroids.back().x << ", " 
       << LarvaA.centroids.back().y << "] -> 1 [" << newLarva1->centroid.x << ", " << newLarva1->centroid.y << "]" << std::endl;
-    std::cerr << "MH: Assigning " << candidate_larva_b << "[" << LarvaB.centroids.back().x << ", " 
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaB.larva_ID << "[" << LarvaB.centroids.back().x << ", " 
       << LarvaB.centroids.back().y << "] -> 2 [" << newLarva2->centroid.x << ", " << newLarva2->centroid.y << "]" << std::endl;
   }
   
@@ -1818,9 +1832,9 @@ int main(int argv, char* argc[])
   bool showimg=true;
   //cv::VideoCapture capture(CV_CAP_DC1394);
   //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302211115.mp4");
-  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc1-processed.mp4");
+  cv::VideoCapture capture("/Users/epaisios/Downloads/lc1-processed.mp4");
   //cv::VideoCapture capture("/Users/epaisios/Downloads/journal.pone.0053963.s005.avi");
-  cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
+  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
   //cv::VideoCapture capture("/Users/epaisios/Downloads/lc3-processed.mp4");
   //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211115.mp4");
   //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211054.mp4");
@@ -2011,6 +2025,9 @@ int main(int argv, char* argc[])
     }
     //if (showimg)
     //{
+    //cv::Mat flipframe;
+     //cv::flip(frame,flipframe,0);
+     //cv::imshow("Extracted Frame",flipframe);
      cv::imshow("Extracted Frame",frame);
     // showimg=false;
     //}
