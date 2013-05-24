@@ -25,8 +25,21 @@
 
 #ifndef NO_SSE
 #define ltsqrt SSESqrt_Recip_Times_X
+
+// SSE Optimized reciprocal sqrt and mutliplies it by pIn to get the sqrt
+// Optimized sqrt from http://stackoverflow.com/questions/1528727/why-is-sse-scalar-sqrtx-slower-than-rsqrtx-x
+inline void SSESqrt_Recip_Times_X( float * pOut, float * pIn )
+{
+  __m128 in = _mm_load_ss( pIn );
+  _mm_store_ss( pOut, _mm_mul_ss( in, _mm_rsqrt_ss( in ) ) );
+  // compiles to movss, movaps, rsqrtss, mulss, movss
+}
 #else
-#define ltsqrt sqrt
+#define ltsqrt mysqrt
+inline void mysqrt(float * pOut, float * pIn)
+{
+  *pOut=sqrt(*pIn);
+}
 #endif
 
 static double VIDEO_FPS=24.0;
@@ -46,14 +59,6 @@ double Wsize=0.2;
 typedef std::pair<cv::Point_<int>,cv::Point_<int> > PointPair;
 typedef std::unordered_map<PointPair, double> DistanceMap;
 
-// SSE Optimized reciprocal sqrt and mutliplies it by pIn to get the sqrt
-// Optimized sqrt from http://stackoverflow.com/questions/1528727/why-is-sse-scalar-sqrtx-slower-than-rsqrtx-x
-inline void SSESqrt_Recip_Times_X( float * pOut, float * pIn )
-{
-  __m128 in = _mm_load_ss( pIn );
-  _mm_store_ss( pOut, _mm_mul_ss( in, _mm_rsqrt_ss( in ) ) );
-  // compiles to movss, movaps, rsqrtss, mulss, movss
-}
 
 namespace std{
 template <typename T >
@@ -1311,13 +1316,22 @@ void diverge_match_vote(unsigned int &candidate_larva_a,
 
 }
 
-void printVector(std::vector<double> vec)
+namespace std{
+template <typename number >
+std::string printVector(std::vector<number> vec)
 {
-  
-  std::cerr << "[ " ;
-  for( std::vector<double>::const_iterator i = vec.begin(); i != vec.end(); ++i)
-       std::cerr << *i << ' ';
-  std::cerr << " ]" << std::endl; 
+  std::stringstream sstm;
+  bool const is_number= std::is_arithmetic<number>::value;
+  static_assert( is_number, "Provided type is not an arithmetic type");
+  sstm << "[" ;
+  typename std::vector<number>::const_iterator i=vec.begin();
+  sstm << *i ;
+  i++;
+  for( ; i != vec.end(); ++i)
+       sstm << ","<< *i;
+  sstm << "]"; 
+  return sstm.str();
+}
 }
 
 void diverge_match(unsigned int &candidate_larva_a, 
@@ -1830,9 +1844,10 @@ int main(int argv, char* argc[])
   bool TRACK=false;
   bool STEP=true;
   bool showimg=true;
+  cv::VideoCapture capture(argc[1]);
   //cv::VideoCapture capture(CV_CAP_DC1394);
   //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302211115.mp4");
-  cv::VideoCapture capture("/Users/epaisios/Downloads/lc1-processed.mp4");
+  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc1-processed.mp4");
   //cv::VideoCapture capture("/Users/epaisios/Downloads/journal.pone.0053963.s005.avi");
   //cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
   //cv::VideoCapture capture("/Users/epaisios/Downloads/lc3-processed.mp4");
@@ -1974,26 +1989,49 @@ int main(int argv, char* argc[])
         while (it!=tracked_blobs.end())
         {
           std::stringstream sstm;
-          sstm << (*it).first;
           cvb::CvBlob *blob=(*it).second;
-          cv::putText(frame,
-              sstm.str(),
-              cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
-              cv::FONT_HERSHEY_PLAIN,
-              0.8,
-              cv::Scalar(255,255,255),
-              1,
-              CV_AA);
+          try{
+            std::vector<unsigned int> &clusterMBs=detected_clusters.at((*it).first);
+            sstm << printVector(clusterMBs);
+            cv::putText(frame,
+                sstm.str(),
+                cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
+                cv::FONT_HERSHEY_PLAIN,
+                0.7,
+                cv::Scalar(255,255,255),
+                1,
+                CV_AA);
+          }
+          catch (const std::out_of_range& oor)
+          {
+            //out of range. i.e. it's not there :)
+            sstm << (*it).first;
+            cv::putText(frame,
+                sstm.str(),
+                cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
+                cv::FONT_HERSHEY_PLAIN,
+                0.8,
+                cv::Scalar(255,255,255),
+                1,
+                CV_AA);
+          }
         
-          cv::Mat larvaROI(frame, cv::Rect(blob->minx-ROI_PADDING,blob->miny-ROI_PADDING,blob->maxx-blob->minx+2*ROI_PADDING,blob->maxy-blob->miny+2*ROI_PADDING));
-          //detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,cv::Scalar(0,0,255));
+          cv::Mat larvaROI(frame, 
+                           cv::Rect(blob->minx-ROI_PADDING,
+                                    blob->miny-ROI_PADDING,
+                                    blob->maxx-blob->minx+2*ROI_PADDING,
+                                    blob->maxy-blob->miny+2*ROI_PADDING)
+                           );
+          //detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,
+          //                                            cv::Scalar(0,0,255));
           cv::circle(frame,
               cv::Point2d(blob->centroid.x,blob->centroid.y), // circle centre
               1,       // circle radius
               cv::Scalar(255,0,0), // color
               -1);              // thickness
           /*
-          detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,cv::Scalar(0,0,255));
+          detected_larvae[it->first].lrvskels.back().drawSkeleton(larvaROI,
+                                                      cv::Scalar(0,0,255));
           cv::circle(frame,
               cv::Point2d(blob->contour.startingPoint.x,blob->contour.startingPoint.y), // circle centre
               1,       // circle radius
