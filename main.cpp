@@ -6,6 +6,8 @@
 #include <opencv2/nonfree/features2d.hpp>
 #include <opencv2/video/background_segm.hpp>
 #include <opencv2/video/tracking.hpp>
+#include <opencv2/ocl/ocl.hpp>
+#include <opencv2/ocl/matrix_operations.hpp>
 #include <math.h>
 #include "cvblob.h"
 #include <iostream>
@@ -58,6 +60,37 @@ double Wsize=0.2;
 typedef std::pair<cv::Point_<int>,cv::Point_<int> > PointPair;
 typedef std::unordered_map<PointPair, double> DistanceMap;
 
+void CLnormalize(cv::Mat &_src , cv::Mat &_dst, double a, double b,
+                    int norm_type)
+{
+    cv::ocl::oclMat src(_src);
+    int rtype;
+    double scale = 1, shift = 0;
+    if( norm_type == CV_MINMAX )
+    {
+        double smin = 0, smax = 0;
+        double dmin = MIN( a, b ), dmax = MAX( a, b );
+        cv::ocl::minMaxLoc( src, &smin, &smax, 0, 0);
+        scale = (dmax - dmin)*(smax - smin > DBL_EPSILON ? 1./(smax - smin) : 0);
+        shift = dmin - smin*scale;
+    }
+    else if( norm_type == CV_L2 || norm_type == CV_L1 || norm_type == CV_C )
+    {
+        scale = cv::ocl::norm( src, norm_type );
+        scale = scale > DBL_EPSILON ? a/scale : 0.;
+        shift = 0;
+    }
+    else
+        CV_Error( CV_StsBadArg, "Unknown/unsupported norm type" );
+
+        rtype =  src.depth();
+
+    _dst.create(_src.dims , _src.size, CV_MAKETYPE(rtype, _src.channels()));
+    cv::ocl::oclMat dst(_dst);
+
+    src.convertTo( dst, rtype, scale, shift );
+    dst.upload(_dst);
+}
 
 namespace std{
 template <typename T >
@@ -1782,6 +1815,9 @@ int main(int argv, char* argc[])
   bool TRACK=false;
   bool STEP=true;
   bool showimg=true;
+  std::vector<cv::ocl::Info> info;
+  cv::ocl::getDevice(info);
+  //CV_Assert(cv::ocl::getDevice(info));
   cv::VideoCapture capture(argc[1]);
   //cv::VideoCapture capture(CV_CAP_DC1394);
   //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302211115.mp4");
@@ -1881,7 +1917,9 @@ int main(int argv, char* argc[])
       
       cv::Mat fg_image_norm;
       
-      cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
+      //cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
+      CLnormalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
+      cv::imshow("normalized",fg_image_norm);
       cv::threshold(fg_image,
           thresholded_frame,
           thresholdlow,
