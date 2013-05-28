@@ -1003,8 +1003,8 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
       newLarva.width_max = Distances.WidthDist;
       newLarva.width_min = Distances.WidthDist;
 
-      /*
       detected_larvae[ID]=newLarva;
+      /*
       std::cout << CURRENT_FRAME <<
           " , " << newLarva.larva_ID << 
           " , " << blob.area << 
@@ -1310,40 +1310,39 @@ void diverge_match(unsigned int &candidate_larva_a,
   mdpLarva2.x=newLarva2->centroid.x;
   mdpLarva2.y=newLarva2->centroid.y;
 
-  std::vector<cv::Point> newLarva1Points;
-  std::vector<cv::Point> newLarva2Points;
-  blobToPointVector(*newLarva1,newLarva1Points);
-  blobToPointVector(*newLarva2,newLarva2Points);
-  LarvaDistanceMap dstLarva1(newLarva1Points), dstLarva2(newLarva2Points);
-
-  cv::Point centroid1=cv::Point(
-		  static_cast<int>(centroid1.x-newLarva1->minx+ROI_PADDING+0.5),
-		  static_cast<int>(centroid1.y-newLarva1->miny+ROI_PADDING+0.5)
-		  );
-  cv::Point centroid2=cv::Point(
-		  static_cast<int>(centroid2.x-newLarva2->minx+ROI_PADDING+0.5),
-		  static_cast<int>(centroid2.y-newLarva2->miny+ROI_PADDING+0.5)
-		  );
-  cv::Mat larvaROI1,larvaROI2;
-  createLarvaContour(larvaROI1,*newLarva1);
-  larvaSkel newLarvaSkel1(larvaROI1,centroid1);
-  createLarvaContour(larvaROI2,*newLarva2);
-  larvaSkel newLarvaSkel2(larvaROI2,centroid2);
-
-  computeInnerDistances(*newLarva1,dstLarva1,newLarvaSkel1.MidPoint);
-  computeInnerDistances(*newLarva2,dstLarva2,newLarvaSkel2.MidPoint);
-
   double size_a=LarvaA.area_sum/LarvaA.area.size();
   double size_b=LarvaB.area_sum/LarvaB.area.size();;
   double size_1=newLarva1->area;
   double size_2=newLarva2->area;
 
+  cv::Mat larvaROI1,larvaROI2;
   createLarvaContour(larvaROI1,*newLarva1);
   createLarvaContour(larvaROI2,*newLarva2);
   double grey_value_a=LarvaA.grey_value_sum/LarvaA.grey_value.size();
   double grey_value_b=LarvaB.grey_value_sum/LarvaB.grey_value.size();
   double grey_value_1=getGreyValue(larvaROI1,*newLarva1);
   double grey_value_2=getGreyValue(larvaROI2,*newLarva2);
+
+  // Length
+  std::vector<cv::Point> newLarva1Points;
+  std::vector<cv::Point> newLarva2Points;
+  blobToPointVector(*newLarva1,newLarva1Points);
+  blobToPointVector(*newLarva2,newLarva2Points);
+  LarvaDistanceMap dstLarva1(newLarva1Points), dstLarva2(newLarva2Points);
+
+  cv::Point centroid1;
+  centroid1.x=newLarva1->centroid.x;
+  centroid1.y=newLarva1->centroid.y;
+  cv::Point centroid2;
+  centroid2.x=newLarva2->centroid.x;
+  centroid2.y=newLarva2->centroid.y;
+
+  larvaSkel newLarvaSkel1(larvaROI1,centroid1);
+  larvaSkel newLarvaSkel2(larvaROI2,centroid2);
+
+  computeInnerDistances(*newLarva1,dstLarva1,newLarvaSkel1.MidPoint);
+  computeInnerDistances(*newLarva2,dstLarva2,newLarvaSkel2.MidPoint);
+
 
   double length_a=LarvaA.length_sum/LarvaA.length.size();
   double length_b=LarvaB.length_sum/LarvaB.length.size();
