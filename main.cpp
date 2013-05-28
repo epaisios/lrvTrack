@@ -17,7 +17,6 @@
 #define MIN_DISCARD_DISTANCE 30
 #define ROI_PADDING 0
 #define MAX_HORIZ_RESOLUTION 22000 //Pixels
-#define WEIGHT_STEP 0.1
 
 /*#define LARVAE_HASH(l,s,d)\
  ( Wlength*l+Wsize*s+Wdir*d)
@@ -145,7 +144,7 @@ class LarvaDistanceMap{
     friend class my2ndPoint;
 
     LarvaDistanceMap(std::vector<cv::Point> &ps):points(ps){
-      distances.reserve(points.size()*points.size());
+      distances.reserve((points.size()+1)*(points.size()+1));
       /*
       for (int i=0;i<=ps.size();i++)
       {
@@ -241,14 +240,11 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 
 inline void lBFS(int p1, 
           std::vector<cv::Point> &Points ,
-          LarvaDistanceMap &Distances,
-          cv::Point MidPoint
+          LarvaDistanceMap &Distances
           )
 {
   std::queue<int> Q;
   Q.push(p1);
-  double dst_p1_MP = (Points[p1].x-MidPoint.x)*(Points[p1].x-MidPoint.x)+
-                     (Points[p1].y-MidPoint.y)*(Points[p1].y-MidPoint.y);
   double MAX=Distances.MaxDist;
   while (!Q.empty())
   {
@@ -259,20 +255,15 @@ inline void lBFS(int p1,
       PointPair cur_pi = PointPair(Points[cur],Points[i]);
       PointPair p1_pi= PointPair(Points[p1],Points[i]);
       PointPair p1_cur= PointPair(Points[p1],Points[cur]);
-      double dst_pi_MP=(Points[i].x-MidPoint.x)*(Points[i].x-MidPoint.x)+
-                       (Points[i].y-MidPoint.y)*(Points[i].y-MidPoint.y);
       if (Distances[cur][i]>0)
       {
         if (Distances[p1][i]<0)
           Q.push(i);
-        double newDst = Distances[cur][i]+Distances[p1][cur] + 
-                        2*(Distances[cur][i]*Distances[p1][cur]);
-        float multres=dst_pi_MP * dst_p1_MP;
+        float multres=Distances[cur][i]*Distances[p1][cur];
         float sqrtres[1];
         ltsqrt(sqrtres,&multres);
-        double MPDst = dst_pi_MP+dst_p1_MP + 2*sqrtres[0];
-        if (newDst < MPDst)
-          newDst=MPDst;
+        double newDst = Distances[cur][i]+Distances[p1][cur] + 
+                        2*sqrtres[0];
         if (Distances[p1][i]>newDst)
         {
           Distances[p1][i]=newDst;
@@ -293,12 +284,15 @@ inline void computeInnerDistances(cvb::CvBlob &blob,
                            LarvaDistanceMap &Distances,
                            cv::Point &MidPoint)
 {
-  std::vector<cv::Point> Points;
   cv::Mat contour;
   createLarvaContour(contour,blob);
   cv::Mat workingContour;
   contour.copyTo(workingContour);
   std::vector<cv::Point> &points=Distances.points;
+  std::vector<cv::Point> SimplePoints;
+  cv::approxPolyDP(points,SimplePoints,0.8,true);
+  points=SimplePoints;
+  //points.push_back(cv::Point(MidPoint.x,MidPoint.y));
   int origNZ=countNonZero(contour);
   double MAX=0;
   for (int i=0;i<points.size();i++)
@@ -340,7 +334,7 @@ inline void computeInnerDistances(cvb::CvBlob &blob,
   for (int i=0;i<points.size();i++)
   {
     cv::Point p1(points[i].x,points[i].y);
-    lBFS(i,points,Distances,MidPoint);
+    lBFS(i,points,Distances);
   }
 }
 
@@ -1165,19 +1159,21 @@ inline double SQUARE(double n){
   return n*n;
 }
 
-inline int min(std::vector<double> vals)
+//Currently only for the 4 sized vector
+inline int vmin(std::vector<double>& vals, std::vector<int>& seq)
 {
-  double min=9999999999;
-  int mini;
-  for(int i=0;i<vals.size();i++)
+  for (int i=0 ; i<vals.size() ; i++ )
   {
-    if(vals[i]<min)
+    int sum=0;
+    for (int j=0; j<vals.size() ; j++)
     {
-      min=vals[i];
-      mini=i;
+      if (vals[i]>vals[j])
+      {
+        ++sum;
+      }
     }
+    seq[sum]=i;
   }
-  return mini;
 }
 
 void optimize_weights(std::vector<double> &W, larvaObject &LarvaA,larvaObject &LarvaB)
@@ -1238,82 +1234,6 @@ void optimize_weights(std::vector<double> &W, larvaObject &LarvaA,larvaObject &L
       W[3]=W[3]+0.05;
     }
   }
-}
-
-void diverge_match_vote(unsigned int &candidate_larva_a, 
-                        unsigned int &candidate_larva_b,
-                        cvb::CvBlob  *newLarva1, 
-                        cvb::CvBlob *newLarva2)
-{
-  //
-  // Votes mean we want to switch the numbers!
-  double voteSize=0;
-  double voteGreyValue=0;
-  double voteLength=0;
-  double votePerimeter=0;
-
-  std::vector<double> W={0.25, 0.25, 0.25, 0.25};
-
-  larvaObject &LarvaA=detected_larvae[candidate_larva_a];
-  larvaObject &LarvaB=detected_larvae[candidate_larva_b];
-
-  double size_a=LarvaA.area_sum/LarvaA.area.size();
-  double size_b=LarvaB.area_sum/LarvaB.area.size();
-  double size_1=newLarva1->area;
-  double size_2=newLarva2->area;
-
-  cv::Mat larvaROI1,larvaROI2;
-  createLarvaContour(larvaROI1,*newLarva1);
-  createLarvaContour(larvaROI2,*newLarva2);
-  double grey_value_a=LarvaA.grey_value_sum/LarvaA.grey_value.size();
-  double grey_value_b=LarvaB.grey_value_sum/LarvaB.grey_value.size();
-  double grey_value_1=getGreyValue(larvaROI1,*newLarva1);
-  double grey_value_2=getGreyValue(larvaROI2,*newLarva2);
-
-  /*
-  double length_a=detected_larvae[candidate_larva_a].length_max;
-  double length_b=detected_larvae[candidate_larva_b].length_max;
-  double length_1=dstLarva1.MaxDist;
-  double length_2=dstLarva2.MaxDist;
-  */
-
-  double perimeter_a=LarvaA.perimeter_sum/LarvaA.perimeter.size();
-  double perimeter_b=LarvaB.perimeter_sum/LarvaB.perimeter.size();
-  double perimeter_1=getPerimeter(*newLarva1);
-  double perimeter_2=getPerimeter(*newLarva2);
-
-  if( (fabs(size_a - size_1) + fabs(size_b - size_2)) > 
-      (fabs(size_a - size_2) + fabs(size_b - size_1)) 
-    )
-  {
-    voteSize=1;
-  }
-
-  if( (fabs(grey_value_a - grey_value_1) + fabs(grey_value_b - grey_value_2)) > 
-      (fabs(grey_value_a - grey_value_2) + fabs(grey_value_b - grey_value_1)) 
-    )
-  {
-    voteGreyValue=1;
-  }
-
-  if( (fabs(perimeter_a - perimeter_1) + fabs(perimeter_b - perimeter_2)) > 
-      (fabs(perimeter_a - perimeter_2) + fabs(perimeter_b - perimeter_1)) 
-    )
-  {
-    votePerimeter=1;
-  }
-
-  if(W[0]*voteSize + W[1]*voteGreyValue + W[3]*votePerimeter >= 0.5 )
-  {
-    candidate_larva_a=newLarva2->label;
-    candidate_larva_b=newLarva1->label;
-  }
-  else
-  {
-    candidate_larva_a=newLarva1->label;
-    candidate_larva_b=newLarva2->label;
-  }
-
 }
 
 namespace std{
@@ -1433,28 +1353,46 @@ void diverge_match(unsigned int &candidate_larva_a,
   double DistA2 = cv::Mahalanobis(mat2, meanMatA, covarMatA);
   double DistB1 = cv::Mahalanobis(mat1, meanMatB, covarMatB);
   double DistB2 = cv::Mahalanobis(mat2, meanMatB, covarMatB);
-
-  std::cerr << "MH: Distances: DistA1: " <<  DistA1 << " DistB2: "  << DistB2 << "Sum: " << DistA1+DistB2 << std::endl;
-  std::cerr << "MH: Distances: DistA2: " <<  DistA2 << " DistB1: "  << DistB1 << "Sum: " << DistA2+DistB1 << std::endl;
+  
+  double MHDiff = (DistA1+DistB2) - (DistA2+DistB1);
+  std::vector<double> vals = { DistA1, DistB2, DistA2, DistB1 };
+  std::vector<int> minv;
+  minv.reserve(4);
+  vmin(vals,minv);
+  int mini=minv[0];
   if (DistA1+DistB2 > DistA2+DistB1)
+  /*
+  double miniDiff = fabs(vals[minv[0]] - vals[minv[1]]);
+  if (mini >=2 && MHDiff < 0 )
+  {
+    if (fabs(MHDiff) > miniDiff)
+    {
+      mini=0;
+    }
+  }
+  else if (mini < 2 && MHDiff > 0 )
+  {
+    if (fabs(MHDiff) > miniDiff)
+    {
+      mini=2;
+    }
+  }
+
+  if (mini >=2 )
+  */
   {
     candidate_larva_a=newLarva2->label;
     candidate_larva_b=newLarva1->label;
-    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaA.larva_ID << "[" << LarvaA.centroids.back().x << ", " 
-      << LarvaA.centroids.back().y << "] -> 2 [" << newLarva2->centroid.x << ", " << newLarva2->centroid.y << "]" << std::endl;
-    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaB.larva_ID << "[" << LarvaB.centroids.back().x << ", " 
-      << LarvaB.centroids.back().y << "] -> 1 [" << newLarva1->centroid.x << ", " << newLarva1->centroid.y << "]" << std::endl;
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaA.larva_ID << " -> 2 [" << newLarva2->centroid.x << ", " << newLarva2->centroid.y << "] MHDiff: " << MHDiff << " min i: " << mini <<  std::endl;
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaB.larva_ID << " -> 1 [" << newLarva1->centroid.x << ", " << newLarva1->centroid.y << "] Dists: A1: " << DistA1 << " B2: " << DistB2 << ", A2: " << DistA2 << " B1: " << DistB1 << std::endl;
   }
   else
   {
     candidate_larva_a=newLarva1->label;
     candidate_larva_b=newLarva2->label;
-    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaA.larva_ID << "[" << LarvaA.centroids.back().x << ", " 
-      << LarvaA.centroids.back().y << "] -> 1 [" << newLarva1->centroid.x << ", " << newLarva1->centroid.y << "]" << std::endl;
-    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaB.larva_ID << "[" << LarvaB.centroids.back().x << ", " 
-      << LarvaB.centroids.back().y << "] -> 2 [" << newLarva2->centroid.x << ", " << newLarva2->centroid.y << "]" << std::endl;
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaA.larva_ID << " -> 1 [" << newLarva1->centroid.x << ", " << newLarva1->centroid.y << "] MHDiff: " << MHDiff << " min i: " << mini << std::endl;
+    std::cerr << "MH<" << CURRENT_FRAME << "> : Assigning " << LarvaB.larva_ID << " -> 2 [" << newLarva2->centroid.x << ", " << newLarva2->centroid.y << "] Dists: A1: " << DistA1 << " B2: " << DistB2 << ", A2: " << DistA2 << " B1: " << DistB1 << std::endl;
   }
-  
 }
 
 void diverge_match_eu(unsigned int &candidate_larva_a, 
@@ -1507,10 +1445,10 @@ void diverge_match_eu(unsigned int &candidate_larva_a,
              SQUARE(grey_value_b-grey_value_2) +
              SQUARE(perimeter_b-perimeter_2);
 
-  //if (EUDistA1+EUDistB2 > EUDistA2 + EUDistB1 )
-  std::vector<double> vals={EUDistA1, EUDistB2 , EUDistA2 , EUDistB1};
-  int mini=min(vals);
-  if(mini==2 || mini==3)
+  if (EUDistA1+EUDistB2 > EUDistA2 + EUDistB1 )
+  //std::vector<double> vals={EUDistA1, EUDistB2 , EUDistA2 , EUDistB1};
+  //int mini=min(vals);
+  //if(mini==2 || mini==3)
   {
     candidate_larva_a=newLarva2->label;
     candidate_larva_b=newLarva1->label;
@@ -1944,7 +1882,7 @@ int main(int argv, char* argc[])
       cv::Mat fg_image_norm;
       
       cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
-      cv::threshold(fg_image_norm,
+      cv::threshold(fg_image,
           thresholded_frame,
           thresholdlow,
           thresholdhigh,
