@@ -833,19 +833,14 @@ int main(int argv, char* argc[])
   if(!strncmp(argc[1],cam,2))
   {
     capture.open(CV_CAP_DC1394);
+    capture.set(CV_CAP_PROP_FPS,24);
+    capture.set(CV_CAP_PROP_FRAME_WIDTH,1280);
+    capture.set(CV_CAP_PROP_FRAME_HEIGHT,1024);
   }
   else
   {
     capture.open(argc[1]);
   }
-  //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302211115.mp4");
-  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc1-processed.mp4");
-  //cv::VideoCapture capture("/Users/epaisios/Downloads/journal.pone.0053963.s005.avi");
-  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc2-processed.mp4");
-  //cv::VideoCapture capture("/Users/epaisios/Downloads/lc3-processed.mp4");
-  //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211115.mp4");
-  //cv::VideoCapture capture("/Users/alasondro/Desktop/LarvaeCapture201302211054.mp4");
-  //cv::VideoCapture capture("/Users/epaisios/Desktop/LarvaeCapture201302201531.mp4");
 
   if (capture.get(CV_CAP_PROP_FPS)==0)
   {
@@ -853,13 +848,15 @@ int main(int argv, char* argc[])
   }
   else
   {
-    if ( capture.get(CV_CAP_PROP_FPS) > 26 )
+    if ( capture.get(CV_CAP_PROP_FPS) > 30 )
     {
       VIDEO_FPS=capture.get(CV_CAP_PROP_FPS)/2;
+      std::cout << VIDEO_FPS << std::endl;
     }
     else
     {
       VIDEO_FPS=capture.get(CV_CAP_PROP_FPS);
+      std::cout << VIDEO_FPS << std::endl;
     }
   }
   cv::Mat grey_bgFrame;
@@ -875,7 +872,7 @@ int main(int argv, char* argc[])
   cv::namedWindow("Extracted Frame");
 
   capture.read(bgFrame);
-
+  cvtColor(bgFrame,bgFrame,CV_BGR2GRAY);
   if(bgFrame.channels()>1)
   {
     cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
@@ -885,16 +882,18 @@ int main(int argv, char* argc[])
     bgFrame.copyTo(grey_bgFrame);
   }
 
+  std::cout << bgFrame.rows << "," << bgFrame.cols << std::endl;
   std::vector<cv::Vec3f> circles;
   cv::HoughCircles(grey_bgFrame, circles, CV_HOUGH_GRADIENT,
                    1,   // accumulator resolution (size of the image / 2)
                    850,  // minimum distance between two circles
                    50, // Canny high threshold
-                   200, // minimum number of votes
+                   180, // minimum number of votes
                    bgFrame.rows/3, bgFrame.rows/2); // min and max radiusV
 
   std::vector<cv::Vec3f>::
   const_iterator itc= circles.begin();
+  std::cout << circles.size() << std::endl;
   if(circles.size()>0)
   {
   while (itc!=circles.end())
@@ -918,6 +917,7 @@ int main(int argv, char* argc[])
     if(TRACK)
     {
 
+      cvtColor(frame,frame,CV_BGR2GRAY);
       CURRENT_FRAME=capture.get(CV_CAP_PROP_POS_FRAMES);
       cv::Mat fg_frame;
       cv::Mat image;
@@ -935,6 +935,7 @@ int main(int argv, char* argc[])
       else
       {
         frame.copyTo(grey_frame);
+        cvtColor(grey_frame,frame,CV_GRAY2BGR);
       }
       
       //Background subtraction is done by eliminating areas outside of the
