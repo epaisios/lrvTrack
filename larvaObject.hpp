@@ -16,7 +16,7 @@ class larvaObject
   unsigned int lastIdxWithStats;
   unsigned int larva_ID;
   unsigned int parentBlobID;
-  bool isBlob;
+  bool isCluster;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
   std::vector<double> area;
   double area_mean;
@@ -54,7 +54,7 @@ class larvaObject
   std::vector<double> centroid_speed_x;
   std::vector<double> centroid_speed_y;
   
-  std::vector<bool> inBlob;
+  std::vector<unsigned int> inCluster;
   
   std::vector<larvaSkel> lrvskels;
   
@@ -67,7 +67,7 @@ class larvaObject
     parentBlobID(0),
     lifetimeWithStats(0),
     lastIdxWithStats(0),
-    isBlob(false),
+    isCluster(false),
     larva_ID(0),
     area_mean(0),
     area_sum(0),
@@ -90,5 +90,10 @@ class larvaObject
     width_max(0),
     width_min(0)
   {}
+
+int switchFaultyAssignment(
+	std::map<unsigned int,std::vector<unsigned int> > &detected_clusters,
+	std::map<unsigned int,larvaObject> &detected_larvae
+	);
 };
 #endif

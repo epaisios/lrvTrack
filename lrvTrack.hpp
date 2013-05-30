@@ -16,7 +16,9 @@ cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;
 cv::Mat bgFrame;
+cv::Mat previousFrame;
 IplImage *labelImg;
+int DEBUG_INFO=0;
 
 double Wlength=1.0;
 double Wsize=0.2;
