@@ -1,6 +1,7 @@
 #include <lrvTrack.hpp>
 #include <fstream>
 #include <sys/time.h>
+#include <iomanip>
 #include "cvblob.h"
 #include "lrvTrackBase.hpp"
 #include "blobUtils.hpp"
@@ -310,9 +311,9 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 
 			// Update centroid_speeds (in pixel per second per axis)
 			cur_larva.centroid_speed_x.push_back(
-					(blob.centroid.x - preBlob.centroid.x)/VIDEO_FPS);
+					(blob.centroid.x - preBlob.centroid.x)*VIDEO_FPS);
 			cur_larva.centroid_speed_y.push_back(
-					(blob.centroid.y - preBlob.centroid.y)/VIDEO_FPS
+					(blob.centroid.y - preBlob.centroid.y)*VIDEO_FPS
 					);
 
 			// Look if larva is a blob
@@ -1101,7 +1102,7 @@ int main(int argv, char* argc[])
 					 break;
 
 					larvaeToConsider++;
-					lifespanSUM+=CURRENT_FRAME-cl.start_frame/VIDEO_FPS;
+					lifespanSUM+=(CURRENT_FRAME-cl.start_frame)/VIDEO_FPS;
 					// avg speed
 					float xvel,yvel;
 					if(cl.centroid_speed_x.size()>0)
@@ -1126,8 +1127,13 @@ int main(int argv, char* argc[])
 					//TODO
 					
 					//average length
-					lengthSUM+=cl.length.back();
-					lengthRelSUM+=cl.length.back()/cl.length_mean;
+					float length=cl.length.back();
+					if(length!=0)
+					{
+						ltsqrt(vel,&length);
+					}
+					lengthSUM+=vel[0];
+					lengthRelSUM+=vel[0]/cl.length_mean;
 					
 					//average width
 					widthSUM+=cl.width.back();
@@ -1146,31 +1152,25 @@ int main(int argv, char* argc[])
 					avgSizeSUM+=cl.area.back();
 				}
 
-				std::fixed;
+				std::setiosflags(std::ios::fixed);
+
 				summary << CURRENT_FRAME-START_FRAME << " " ;
-				summary << std::setprecision(4) << elapsed << "  ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << elapsed << "  ";
 				summary << detected_larvae.size() << " ";
 				summary << detected_larvae.size() << " ";
-				summary << std::setprecision(2) << lifespanSUM/larvaeToConsider << "  ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(1) << lifespanSUM/larvaeToConsider << "  ";
 				//TODO angular speed
-				summary << std::setprecision(2) << speedSUM/larvaeToConsider << " ";
-				summary << std::setprecision(4) << speedSUM/larvaeToConsider << "  ";
-				summary << std::setprecision(2)<< lengthSUM/larvaeToConsider << " ";
-				std::setprecision (3);
-				summary << lengthRelSUM/larvaeToConsider << "  ";
-				std::setprecision (1);
-				summary << widthSUM/larvaeToConsider << " ";
-				std::setprecision (3);
-				summary << widthRelSUM/larvaeToConsider << "  ";
-				std::setprecision (3);
-				summary << aspectRatioSUM/larvaeToConsider << " ";
-				std::setprecision (3);
-				summary << relAspectRatioSUM/larvaeToConsider << "  ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(2) << speedSUM/larvaeToConsider << " ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << speedSUM/larvaeToConsider << "  ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(1) << lengthSUM/larvaeToConsider << " ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << lengthRelSUM/larvaeToConsider << "  ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(1) << widthSUM/larvaeToConsider << " ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << widthRelSUM/larvaeToConsider << "  ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << aspectRatioSUM/larvaeToConsider << " ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << relAspectRatioSUM/larvaeToConsider << "  ";
 				//TODO wiggle
-				std::setprecision (3);
-				summary << relAspectRatioSUM/larvaeToConsider << " ";
-				std::setprecision (3);
-				summary << avgSizeSUM/larvaeToConsider << " ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << relAspectRatioSUM/larvaeToConsider << " ";
+				summary << std::left << std::fixed << std::setfill('0') << std::setprecision(3) << avgSizeSUM/larvaeToConsider << " ";
 				summary << std::endl;
 			}
 			else
@@ -1278,6 +1278,7 @@ int main(int argv, char* argc[])
 		//cv::flip(frame,flipframe,0);
 		//cv::imshow("Extracted Frame",flipframe);
 		cv::imshow("Extracted Frame",frame);
+		cv::displayStatusBar("Extracted Frame","FOO",0);
 		// showimg=false;
 		//}
 		//else
