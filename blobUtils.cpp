@@ -94,6 +94,15 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 	delete(cntPoly);
 }
 
+double angle( cv::Point &pt1, cv::Point &pt0, cv::Point &pt2 )
+{
+  double dx1 = pt1.x - pt0.x;
+  double dy1 = pt1.y - pt0.y;
+  double dx2 = pt2.x - pt0.x;
+  double dy2 = pt2.y - pt0.y;
+  return acos((dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10));
+}
+
 double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD)
 {
 	double angle = cvb::cvAngle(blob);

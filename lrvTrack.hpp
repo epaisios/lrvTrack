@@ -11,7 +11,14 @@ unsigned int LARVAE_COUNT;
 
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
 std::map<unsigned int,larvaObject> detected_larvae;
+std::map<unsigned int, std::vector<unsigned int> > current_clusters;
+std::map<unsigned int, std::vector<unsigned int> > current_diverged;
+std::vector<unsigned int> current_new;
 
+struct timeval tS;
+struct timeval tP;
+struct timeval tC;
+double FrameEllapsedTime;
 cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;

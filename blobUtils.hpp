@@ -21,4 +21,5 @@ double getPerimeter(cvb::CvBlob &blob);
 
 double getSurroundingSize(cv::Point &point, cvb::CvBlob &blob,cv::Mat &grey_frame);
 double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD=0);
+double angle( cv::Point &pt1, cv::Point &pt0, cv::Point &pt2 );
 //#endif

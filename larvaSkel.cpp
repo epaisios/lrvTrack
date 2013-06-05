@@ -161,7 +161,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
       }
     }
   }
-
+  
   int mini;
   double min=65535;
   for (int i=0; i<skelPoints.size(); i++)
@@ -176,6 +176,8 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
     }
   }
   MidPoint=skelPoints[mini];
+  Point20=skelPoints[skelPoints.size()*0.2];
+  Point80=skelPoints[skelPoints.size()*0.8];
 }  
 
 void larvaSkel::drawSkeleton(cv::Mat &img,cv::Scalar col)

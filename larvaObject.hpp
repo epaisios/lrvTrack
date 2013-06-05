@@ -49,6 +49,7 @@ class larvaObject
   double width_min;
 
   std::vector<double> roundness;
+  std::vector<double> angular_speed;
 
   std::vector<cv::Point> centroids;
   std::vector<double> centroid_speed_x;
