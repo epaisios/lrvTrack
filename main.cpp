@@ -674,6 +674,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
   current_clusters.clear();
   current_diverged.clear();
   current_new.clear();
+  current_gone.clear();
   
 	cvb::CvBlobs::iterator prevIt=Prev.begin();
 	while (prevIt!=Prev.end())
@@ -777,8 +778,6 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 					detected_clusters[blob->label].push_back(used_map[minLabel][1]);
 					current_clusters[blob->label].push_back(used_map[minLabel][0]);
 					current_clusters[blob->label].push_back(used_map[minLabel][1]);
-					// Create a second "instance" of the blob to represent both larvae
-					//out[(*prevIt).first]=In[minLabel];
 				}
 				else
 				{
@@ -856,8 +855,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 				// Here we have the following cases:
 				// 1) First Larva Spotted belonging to a too large cluster 
 				//    -- Not the case since we have no unseen clusters
-				// 1) Divergence of larvae that were clustered from the start <TODO>
-				// 2) A small jump. Perhaps framerate related... <TODO>
+				// 2) Divergence of larvae that were clustered from the start <TODO>
 				//used_map[minLabel].push_back((*prevIt).first);
 				//out[(*prevIt).first]=In[minLabel];
 				//out[(*prevIt).first]->label=(*prevIt).first;
@@ -883,6 +881,17 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 		{
 			out[++LARVAE_COUNT]=(*it).second;
 			out[LARVAE_COUNT]->label=LARVAE_COUNT;
+      current_new.push_back(LARVAE_COUNT);
+		}
+		it++;
+  }
+	it=Prev.begin();
+	while (it!=Prev.end())
+	{
+		int ID=(*it).first;
+		if (out.find(ID)==out.end())
+		{
+      current_gone.push_back(ID);
 		}
 		it++;
 	}
@@ -1146,7 +1155,7 @@ int main(int argv, char* argc[])
 
 				std::setiosflags(std::ios::fixed);
 
-				summary << CURRENT_FRAME-START_FRAME << " " ;
+				summary << CURRENT_FRAME-START_FRAME+1 << " " ;
 				summary << std::left 
                 << std::fixed 
                 << std::setfill('0') 
@@ -1235,17 +1244,26 @@ int main(int argv, char* argc[])
                 << std::setprecision(3) 
                 << avgSizeSUM/larvaeToConsider 
                 << " ";
+
         if(current_new.size()>0 || 
+           current_gone.size()>0 ||
            current_clusters.size()>0 ||
            current_diverged.size()>0)
         {
-          std::cout << " %% ";
+          summary << " %% ";
         }
         if(current_new.size()>0)
         {
           for (int i=0; i<current_new.size();i++)
           {
-            std::cout << "0 " << current_new[i] << " ";
+            summary << "0 " << current_new[i] << " ";
+          }
+        }
+        if(current_gone.size()>0)
+        {
+          for (int i=0; i<current_gone.size();i++)
+          {
+            summary << current_gone[i] << " 0 ";
           }
         }
         if(current_clusters.size()>0)
@@ -1253,8 +1271,17 @@ int main(int argv, char* argc[])
           std::map<unsigned int,std::vector<unsigned int> >::iterator ci;
           for (ci=current_clusters.begin(); ci!=current_clusters.end();ci++)
           {
-            std::cout << ci->second[0] << " " << ci->first << " " ;
-            std::cout << ci->second[1] << " " << ci->first << " " ;
+            summary << ci->second[0] << " " << ci->first << " " ;
+            summary << ci->second[1] << " " << ci->first << " " ;
+          }
+        }
+        if(current_diverged.size()>0)
+        {
+          std::map<unsigned int,std::vector<unsigned int> >::iterator ci;
+          for (ci=current_diverged.begin(); ci!=current_diverged.end();ci++)
+          {
+            summary << ci->first << " " << ci->second[0] << " " ;
+            summary << ci->first << " " << ci->second[1] << " " ;
           }
         }
 				summary << std::endl;
@@ -1264,14 +1291,44 @@ int main(int argv, char* argc[])
 				preBlobs.clear();
 				//normalize blobs for next use
 				cvb::CvBlobs::iterator it=blobs.begin();
-				int i=1;
+
+				gettimeofday(&tC,0);
+				double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
+        summary << "1 ";
+
+				summary << std::left 
+                << std::fixed 
+                << std::setfill('0') 
+                << std::setprecision(3) 
+                << elapsed 
+                << "  ";
+
+				summary << blobs.size() << " ";
+
+				summary << blobs.size() << " ";
+        
+        summary << "0.0" << "  ";
+        summary << "0.00" << " ";
+        summary << "0.000" << "  ";
+        summary << "0.0" << " ";
+        summary << "0.000" << "  ";
+        summary << "0.0" << " ";
+        summary << "0.000" << "  ";
+        summary << "0.000" << " ";
+        summary << "0.000" << "  ";
+        summary << "0.000" << " ";
+        summary << "0.000" << "  ";
+				summary << "%% " ;
+        int i=1;
 				while (it!=blobs.end())
 				{
 					preBlobs[i]=(*it).second;
 					preBlobs[i]->label=i;
+          summary << "0 " << i << " ";
 					it++;
 					i++;
 				}
+        summary << std::endl;
 				LARVAE_COUNT=preBlobs.size();
 			}
 

@@ -14,6 +14,7 @@ std::map<unsigned int,larvaObject> detected_larvae;
 std::map<unsigned int, std::vector<unsigned int> > current_clusters;
 std::map<unsigned int, std::vector<unsigned int> > current_diverged;
 std::vector<unsigned int> current_new;
+std::vector<unsigned int> current_gone;
 
 struct timeval tS;
 struct timeval tP;
