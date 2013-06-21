@@ -1,11 +1,18 @@
 #include <lrvTrack.hpp>
 #include <fstream>
 #include <sys/time.h>
+#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <iomanip>
+#include <string>
 #include "cvblob.h"
 #include "lrvTrackBase.hpp"
 #include "blobUtils.hpp"
 #include "larvaDistanceMap.hpp"
+
+namespace po = boost::program_options;
+namespace fs = boost::filesystem;          // for ease of tutorial presentation;
 
 void findHeadTail(std::vector<cv::Point> &startPoints, 
 		larvaObject &lrv,
@@ -31,7 +38,7 @@ void findHeadTail(std::vector<cv::Point> &startPoints,
 			 lrv.tails.back().x == 0 && lrv.tails.back().y==0)
 		)
 	{
-		for (i=0; i<startPoints.size(); i++)
+		for (i=0; i<startPoints.size(); ++i)
 		{
 			cv::Point p=startPoints[i];
 			cvb::CvBlob blob=lrv.blobs.back();
@@ -58,7 +65,7 @@ void findHeadTail(std::vector<cv::Point> &startPoints,
 	{
 		double hmin=65535;
 		double tmin=65535;
-		for (i=0; i<startPoints.size(); i++)
+		for (i=0; i<startPoints.size(); ++i)
 		{
 			double hdiff=diff(lrv.heads.back(),startPoints[i]);
 			double tdiff=diff(lrv.tails.back(),startPoints[i]);
@@ -112,7 +119,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 					static_cast<int>(blob.centroid.y-blob.miny+ROI_PADDING+0.5)
 					);
 			newLarva.centroids.push_back(centroid);
-			newLarva.lifetimeWithStats++;
+			++newLarva.lifetimeWithStats;
 			newLarva.lastIdxWithStats=CURRENT_FRAME;
 			// Set the frame of it's existence
 			newLarva.start_frame=CURRENT_FRAME;
@@ -229,7 +236,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 				//
 				newLarva.isCluster=true;
 				std::vector<unsigned int>::iterator cl;
-				for ( cl=detected_clusters[ID].begin() ;cl!=detected_clusters[ID].end() ; cl++)
+				for ( cl=detected_clusters[ID].begin() ;cl!=detected_clusters[ID].end() ; ++cl)
 				{
 					larvaObject &clusterLarva=detected_larvae[*cl];
 					clusterLarva.inCluster.push_back(ID);
@@ -291,7 +298,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 					(detected_clusters.find(ID)==detected_clusters.end()))
 			{
 
-				cur_larva.lifetimeWithStats++;
+				++cur_larva.lifetimeWithStats;
 				cur_larva.lastIdxWithStats=cur_larva.area.size();
 
 				larvaSkel newLarvaSkel(larvaROI,centroid);
@@ -439,7 +446,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 				//
 				cur_larva.isCluster=true;
 				std::vector<unsigned int>::iterator cl;
-				for ( cl=detected_clusters[ID].begin() ;cl!=detected_clusters[ID].end() ; cl++)
+				for ( cl=detected_clusters[ID].begin() ;cl!=detected_clusters[ID].end() ; ++cl)
 				{
 					larvaObject &clusterLarva=detected_larvae[*cl];
 					clusterLarva.inCluster.push_back(ID);
@@ -460,7 +467,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 				}
 			}
 		}
-		it++;
+		++it;
 	}
 }
 
@@ -471,10 +478,10 @@ inline double SQUARE(double n){
 //Currently only for the 4 sized vector
 inline int vmin(std::vector<double>& vals, std::vector<int>& seq)
 {
-	for (int i=0 ; i<vals.size() ; i++ )
+	for (int i=0 ; i<vals.size() ; ++i )
 	{
 		int sum=0;
-		for (int j=0; j<vals.size() ; j++)
+		for (int j=0; j<vals.size() ; ++j)
 		{
 			if (vals[i]>vals[j])
 			{
@@ -490,12 +497,12 @@ namespace std{
 		std::string printVector(std::vector<number> vec)
 		{
 			std::stringstream sstm;
-			bool const is_number= std::is_arithmetic<number>::value;
-			static_assert( is_number, "Provided type is not an arithmetic type");
+			//bool const is_number= std::is_arithmetic<number>::value;
+			//static_assert( is_number, "Provided type is not an arithmetic type");
 			sstm << "[" ;
 			typename std::vector<number>::const_iterator i=vec.begin();
 			sstm << *i ;
-			i++;
+			++i;
 			for( ; i != vec.end(); ++i)
 				sstm << ","<< *i;
 			sstm << "]"; 
@@ -503,14 +510,47 @@ namespace std{
 		}
 }
 
-void diverge_match(unsigned int &candidate_larva_a, 
+void diverge_match(
+    unsigned int &candidate_larva_a, 
 		unsigned int &candidate_larva_b,
 		cvb::CvBlob  *newLarva1, 
 		cvb::CvBlob *newLarva2)
 {
 	larvaObject &LarvaA=detected_larvae[candidate_larva_a];
 	larvaObject &LarvaB=detected_larvae[candidate_larva_b];
-
+  /*
+  std::vector<unsigned int> candidates;
+  std::map<unsigned int,double> candidates_size;
+  std::map<unsigned int,double> candidates_grey_val;
+  std::map<unsigned int,double> candidates_length;
+  std::map<unsigned int,double> candidates_perimeter;
+  std::map<unsigned int,double> candidates_width;
+  if (LarvaA.isCluster)
+  {
+    candidates.insert(
+        candidates.end(),
+        detected_clusters[candidate_larva_a].begin(),
+        detected_clusters[candidate_larva_a].end()
+        )
+  }
+  else
+  {
+    candidates.push_back(candidate_larva_a);
+  }
+  if (LarvaB.isCluster)
+  {
+    candidates.insert(
+        candidates.end(),
+        detected_clusters[candidate_larva_b].begin(),
+        detected_clusters[candidate_larva_b].end()
+        );
+  }
+  else
+  {
+    candidates.push_back(candidate_larva_b);
+  }
+  // TODO get larvae information for all cluster members.
+  */
 	cv::Point mdpLarva1, mdpLarva2;
 	mdpLarva1.x=newLarva1->centroid.x;
 	mdpLarva1.y=newLarva1->centroid.y;
@@ -583,8 +623,20 @@ void diverge_match(unsigned int &candidate_larva_a,
 		 std::cerr << InputArrayB << std::endl;
 		 std::cerr << "===========================================" << std::endl;
 		 */
-	std::vector<double> meanVecA={size_a , grey_value_a , length_a, perimeter_a, width_a };
-	std::vector<double> meanVecB={size_b , grey_value_b , length_b, perimeter_b ,width_b };
+	std::vector<double> meanVecA;
+  meanVecA.push_back(size_a);
+  meanVecA.push_back(grey_value_a);
+  meanVecA.push_back(length_a);
+  meanVecA.push_back(perimeter_a);
+  meanVecA.push_back(width_a);
+
+	std::vector<double> meanVecB;
+  meanVecB.push_back(size_b);
+  meanVecB.push_back(grey_value_b);
+  meanVecB.push_back(length_b);
+  meanVecB.push_back(perimeter_b);
+  meanVecB.push_back(width_b);
+
 	cv::Mat meanMatA(meanVecA);
 	cv::Mat meanMatB(meanVecB);
 	cv::Mat meanTMatA, meanTMatB;
@@ -611,8 +663,19 @@ void diverge_match(unsigned int &candidate_larva_a,
 	cv::invert(covarMatA,covarMatA,cv::DECOMP_SVD);
 	cv::invert(covarMatB,covarMatB,cv::DECOMP_SVD);
 
-	std::vector<double> vec1 = { size_1, grey_value_1 , length_1, perimeter_1, width_1 };
-	std::vector<double> vec2 = { size_2, grey_value_2 , length_2, perimeter_2, width_2 };
+	std::vector<double> vec1;
+  vec1.push_back(size_1);
+  vec1.push_back(grey_value_1);
+  vec1.push_back(length_1);
+  vec1.push_back(perimeter_1);
+  vec1.push_back(width_1);
+
+	std::vector<double> vec2;
+  vec2.push_back(size_2);
+  vec2.push_back(grey_value_2);
+  vec2.push_back(length_2);
+  vec2.push_back(perimeter_2);
+  vec2.push_back(width_2);
 
 	cv::Mat mat1(vec1);
 	cv::Mat mat2(vec2);
@@ -623,7 +686,12 @@ void diverge_match(unsigned int &candidate_larva_a,
 	double DistB2 = cv::Mahalanobis(mat2, meanMatB, covarMatB);
 
 	double MHDiff = (DistA1+DistB2) - (DistA2+DistB1);
-	std::vector<double> vals = { DistA1, DistB2, DistA2, DistB1 };
+	std::vector<double> vals;
+  vals.push_back(DistA1);
+  vals.push_back(DistB2);
+  vals.push_back(DistA2);
+  vals.push_back(DistB1);
+
 	std::vector<int> minv;
 	minv.reserve(4);
 	vmin(vals,minv);
@@ -663,7 +731,224 @@ void diverge_match(unsigned int &candidate_larva_a,
 			 }
 }
 
+void findCombination(cvb::CvBlobs &In, cvb::CvBlobs &Prev, std::vector<unsigned int> &matching, std::vector<unsigned int> &withinDIST)
+{
+}
 
+void findClosest(cvb::CvBlobs &In, cvb::CvBlob *BLOB, unsigned int &closestBLOB, double &dist)
+{
+}
+
+void findInDistance(cvb::CvBlobs &In, cvb::CvBlob *BLOB, double dist, std::map <unsigned int, double> neighbours)
+{
+}
+
+void verbosePrint(std::stringstream &toPrint)
+{
+  if(LRVTRACK_VERBOSE_LEVEL>0)
+  {
+    std::cout << "LrvTrack DEBUG: " << toPrint.str() << std::endl;;
+    toPrint.clear();
+  }
+}
+
+void verbosePrint(const char * toPrint)
+{
+  if(LRVTRACK_VERBOSE_LEVEL>0)
+  {
+    std::cout << "LrvTrack DEBUG: " << toPrint << std::endl;;
+  }
+}
+void verbosePrint(std::string &toPrint)
+{
+  if(LRVTRACK_VERBOSE_LEVEL>0)
+  {
+    std::cout << "LrvTrack DEBUG: " << toPrint << std::endl;;
+  }
+}
+
+double getManhattanDistance(cvb::CvBlob *blob1, cvb::CvBlob *blob2)
+{
+  return (fabs(blob1->centroid.x - blob2->centroid.x) + 
+    fabs(blob1->centroid.y - blob2->centroid.y));
+}
+
+// Is blob1 closer to blob than blob2
+// 0 equal
+// 1 yes
+// -1 no
+int closerTo(cvb::CvBlob *blob1, cvb::CvBlob *blob2,cvb::CvBlob* blob)
+{
+  double diff = getManhattanDistance(blob1,blob) - 
+                getManhattanDistance(blob2,blob);
+  if(diff > 0)
+    return -1;
+  else if (diff < 0)
+    return 1;
+  else
+    return 0;
+}
+void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
+{
+
+  std::stringstream DEBUG;
+  // map of assignments of the blobs in the previous frame.
+  // Assignments are such that:
+  //    [ IDP of Previous Frame, [ IDN1, ..., IDNN]] IDs of 
+  //    new Frame assigned to IDP
+  //    When a larva is lost assignment 
+  std::map<unsigned int, std::vector<unsigned int> > assignedPrevious;
+
+  // map of assignments of the blobs in the current frame.
+  // Assignments are such that:
+  //    [ IDP of Current Frame, [ IDN1, ..., IDNN]] IDs of 
+  //    Previous Frame assigned to IDP
+  std::map<unsigned int, std::vector<unsigned int> > assignedNew;
+
+  cvb::CvBlobs::iterator prevIt=Prev.begin();
+  
+  verbosePrint("Starting Tracking loop");
+
+  while (prevIt!=Prev.end())
+  {
+    //nearestNew and nearestDist store the ID and distance  of the 
+    //closest blob found in the new frame as returned by the 
+    //findClosest funtion.
+    unsigned int nearestNew=0;
+    double nearestDist=0.0;
+    // ID and Blob pointer of larva of the previous frame we are investigating
+    unsigned int prevID = prevIt->first;
+    cvb::CvBlob *prevBlob = prevIt->second;
+    
+    DEBUG << "Currently Processing Larva with PrevID: " << prevID;
+    verbosePrint(DEBUG);
+    // Find closest blob
+    findClosest(In,prevBlob, nearestNew, nearestDist);
+
+    DEBUG << "    Found closest larva with ID: " << nearestNew << " and distance: " << nearestDist;
+    verbosePrint(DEBUG);
+    // Very close... Quick assign
+    if (nearestDist <2)
+    {
+        assignedPrevious[prevID].push_back(nearestNew);
+        assignedNew[nearestNew].push_back(prevID);
+    }
+
+    if (nearestDist<30)
+    {
+      if(assignedNew.find(nearestNew)!=assignedNew.end())
+      {
+        //Larva closest to larva prevID has already been assigned.
+        //that is, two larva have been matched to one new one.
+
+        DEBUG << "    Larva " << prevID << " has been previously assigned to " << assignedNew[nearestNew].size() << " larvae"   ;
+        verbosePrint(DEBUG);
+        
+        //                CHECK AREA OF NEW BLOB FOR CONVERGING
+        // Quick area check to decide whether we should consider converging.
+        // For a single larva the change from one frame to the other
+        // should not be large
+        if (LARVA_SIZE_COMPARISON_FACTOR*prevBlob->area < In[nearestNew]->area)
+        {
+          //Size shows that converging is likely. We add the larvae to the
+          //group.
+        }
+        else
+        {
+          //Size shows converging is unlikely. Possibilities:
+          //1) Larva disappeared from the previous frame to the current
+          //   one.
+          //2) Larva converged with another one and centroid moved
+          //
+          //3) The nearestNew was falsely matched to another one.
+
+          if (assignedNew[nearestNew].size() == 1)
+          {
+            //There's only one assignment already (i.e. no cluster was considered)
+            //Check which one is closer
+            if (closerTo(prevBlob,Prev[assignedNew[nearestNew][0]],In[nearestNew])==1)
+            {
+              //PrevBlob is closer! We should exchange assuming the sizes are
+              //comparable:
+              if (fabs(prevBlob->area-In[nearestNew]->area)<
+                  (LARVA_SIZE_COMPARISON_FACTOR -1 ) * prevBlob->area )
+              {
+                //Area matches reasonably perform the exchange
+                assignedPrevious.erase(assignedNew[nearestNew][0]);
+                assignedNew[nearestNew][0]=prevID;
+                assignedPrevious[prevID].push_back(nearestNew);
+              }
+              else
+              {
+                //Area too different. Do nothing
+              }
+            }
+          }
+          else
+          {
+            // Seems the new larva is already a cluster.
+          }
+        }
+
+      }
+      else
+      {
+        assignedPrevious[prevID].push_back(nearestNew);
+        assignedNew[nearestNew].push_back(prevID);
+      }
+    }
+    // for each current larva with min < 4 assign as successor
+    // if CUR was assigned
+    //find all pre that are within 50 of the current
+    //find combination of those that match new cetnre
+    // Add those to the cluster
+
+    // for each larva with min < 50
+    // if only 1 current there (and distance less than 10)  assign as successor
+    // if CUR was assigned
+    //find all pre that are within 50 of the current
+    //find combination of those that match new cetnre
+    // Add those to the cluster
+
+    // if only 1 and distance more than 10 add previous to lost and assign current as new/match
+
+    // if more
+    // find combination matching centres
+    // those that fit the combination belong to the diverging case:
+    // try to match them if cluster is known
+    // assign new if cluster is unknown
+    // those that do not fit the combination are left
+  }
+}
+
+void findLarvaeInDistance(cvb::CvBlob *centerBlob, std::vector<unsigned int> &out, double distance, cvb::CvBlobs &set, unsigned int &minLabel, double &min)
+{
+    
+		cvb::CvBlobs::iterator it=set.begin();
+    double XVAL,YVAL,cur=0.0;
+		while (it!=set.end())
+		{
+			cvb::CvBlob *blob;
+			blob=((*it).second);
+			// MIN_DISCARD_DISTANCE is used to quickly exclude larvae that are
+			// too far to be considered
+			if (((XVAL=fabs(blob->centroid.x - centerBlob->centroid.x)) < MIN_DISCARD_DISTANCE ) &&
+					((YVAL=fabs(blob->centroid.y - centerBlob->centroid.y)) < MIN_DISCARD_DISTANCE ))
+			{
+        cur=XVAL+YVAL;
+        if (cur < distance)
+        {
+          out.push_back((*it).first);
+        }
+        if (cur < min)
+        {
+          min=cur;
+          minLabel=(*it).first;
+        }
+      }
+      ++it;
+		}
+}
 
 void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 {
@@ -689,7 +974,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 		// Helper variables to store and compute distances
 		double XVAL,YVAL,cur=0;
 		// Stores the minimal distance found (actually the manhattan distance).
-		double min=200;
+		double min=65535;
 
 		// Here we check if the *prevIt was already assigned a match.
 		// This can occur when diverging where the two diverging worms are
@@ -697,33 +982,27 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 
 		if(out.find((*prevIt).first)!=out.end())
 		{
-			prevIt++;
+			++prevIt;
 			continue;
 		}
 		// Here we start looking for the blob in "In" (i.e. the latest larvae set)
 		// that is closest to the preBlob. Typically (in 15fps and up ) distances
 		// of matching larvae should be quite small (0.0X for the centroids).
-		cvb::CvBlobs::iterator it=In.begin();
-		while (it!=In.end())
-		{
-			cvb::CvBlob *blob;
-			blob=((*it).second);
-			// MIN_DISCARD_DISTANCE is used to quickly exclude larvae that are
-			// too far to be considered
-			if (((XVAL=fabs(blob->centroid.x - preBlob->centroid.x)) < MIN_DISCARD_DISTANCE ) &&
-					((YVAL=fabs(blob->centroid.y - preBlob->centroid.y)) < MIN_DISCARD_DISTANCE ))
-			{
-				// we only use the manhattan distance which in this case should be sufficient
-				cur=XVAL+YVAL;
-				if (cur < min)
-				{
-					min=cur;
-					minLabel=(*it).first;
-				}
-			}
-			it++;
-		}
 
+    std::vector<unsigned int> nearbyBlobs;
+    findLarvaeInDistance(preBlob,nearbyBlobs,5.0,In,minLabel,min);
+/*    if(nearbyBlobs.size()==0)
+    {
+
+      findLarvaeInDistance(preBlob,nearbyBlobs,10.0,In,minLabel,min);
+      if(nearbyBlobs.size()==1)
+      {
+        //Even for long jumps we have only one candidate so trick the
+        //program to think it's closer.
+        min=5;
+      }
+    }
+*/
 		// We went through all the current batch of larvae and found minimum distance min
 		// for the larva with label minLabel
 		if (min<=5)
@@ -742,11 +1021,13 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 			// Rather large jump. Indicates:
 			// 1) larvae converged
 			// 2) larvae diverged
-			// 3) TODO: Larva dissapeared and matched wrongly with another...
+      // 3) Big jump due to capture problems.
+			// 4) TODO: Larva dissapeared and matched wrongly with another...
 
 			// Check for converging
 			// We check if more than one larvae match the new centroid and
-			//  whether the middle of their centroids matches the centroid we have.
+			//  whether the middle of their centroids in the previous frame 
+      //  matches the centroid we have.
 
 			// This is used only in the diverging case to point to the matching cluster.
 			std::map< unsigned int, std::vector<unsigned int> >::iterator cluster;
@@ -774,10 +1055,39 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 					// We're in luck! The center's match :) We have a cluster.
 					used_map[minLabel].push_back((*prevIt).first);
 					// Add both larvae to the detected clusters
-					detected_clusters[blob->label].push_back(used_map[minLabel][0]);
-					detected_clusters[blob->label].push_back(used_map[minLabel][1]);
-					current_clusters[blob->label].push_back(used_map[minLabel][0]);
-					current_clusters[blob->label].push_back(used_map[minLabel][1]);
+          // if any of the two larvae is already a cluster unite them in a new cluster
+          if(detected_larvae[used_map[minLabel][0]].isCluster)
+          {
+            if(detected_larvae[used_map[minLabel][1]].isCluster)
+            {
+              //if both larvae are clusters then:
+              //construct a composite cluster
+              detected_clusters[blob->label]=detected_clusters[used_map[minLabel][0]];
+              detected_clusters[blob->label].insert(
+                  detected_clusters[blob->label].end(),
+                  detected_clusters[used_map[minLabel][1]].begin(),
+                  detected_clusters[used_map[minLabel][1]].end());
+              //delete the previous clusters
+              detected_clusters.erase(used_map[minLabel][0]);
+              detected_clusters.erase(used_map[minLabel][1]);
+            }
+            else
+            {
+              detected_clusters[blob->label]=detected_clusters[used_map[minLabel][0]];
+              detected_clusters[blob->label].push_back(used_map[minLabel][1]);
+            }
+          }
+          else if (detected_larvae[used_map[minLabel][1]].isCluster)
+          {
+              detected_clusters[blob->label]=detected_clusters[used_map[minLabel][1]];
+              detected_clusters[blob->label].push_back(used_map[minLabel][0]);
+          }
+          else
+          {
+            detected_clusters[blob->label].push_back(used_map[minLabel][0]);
+            detected_clusters[blob->label].push_back(used_map[minLabel][1]);
+          }
+          current_clusters[blob->label]=detected_clusters[blob->label];
 				}
 				else
 				{
@@ -794,6 +1104,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 			// TODO: nested clusters would also be nice...
 			else if ((cluster=detected_clusters.find((*prevIt).first))!=detected_clusters.end())
 			{
+		    cvb::CvBlobs::iterator it;
 				it=In.begin();
 				unsigned int secondDivergent=0;
 				double XVAL,YVAL,cur=0;
@@ -815,7 +1126,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 							}
 						}
 					}
-					it++;
+					++it;
 				}
 				if(secondDivergent==0)
 				{
@@ -856,6 +1167,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 				// 1) First Larva Spotted belonging to a too large cluster 
 				//    -- Not the case since we have no unseen clusters
 				// 2) Divergence of larvae that were clustered from the start <TODO>
+				// 3) Big Jump due to dropped frame rate <TODO>
 				//used_map[minLabel].push_back((*prevIt).first);
 				//out[(*prevIt).first]=In[minLabel];
 				//out[(*prevIt).first]->label=(*prevIt).first;
@@ -870,7 +1182,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 			//used_map[minLabel]++;
 			//detected_clusters[minLabel].push_back((*prevIt).first);
 		}
-		prevIt++;
+		++prevIt;
 	}
 
 	cvb::CvBlobs::iterator it=In.begin();
@@ -883,7 +1195,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 			out[LARVAE_COUNT]->label=LARVAE_COUNT;
       current_new.push_back(LARVAE_COUNT);
 		}
-		it++;
+		++it;
   }
 	it=Prev.begin();
 	while (it!=Prev.end())
@@ -893,596 +1205,1008 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 		{
       current_gone.push_back(ID);
 		}
-		it++;
+		++it;
 	}
 	updateLarvae(out,Prev);
 
 }
 
-
-int main(int argv, char* argc[])
+int handleArgs(int argc, char* argv[])
 {
-	bool SHOWTAGS=true;
-	bool TRACK=false;
-	bool STEP=true;
-	bool showimg=true;
-	int START_FRAME=0;
-	cv::VideoCapture capture;
-	char cam[3]="-c";
-	std::ofstream summary;
-	summary.open("lalala.summary");
-	if(!strncmp(argc[1],cam,2))
-	{
-		capture.open(CV_CAP_DC1394);
-		capture.set(CV_CAP_PROP_FPS,24);
-		capture.set(CV_CAP_PROP_FRAME_WIDTH,1280);
-		capture.set(CV_CAP_PROP_FRAME_HEIGHT,1024);
-	}
-	else
-	{
-		capture.open(argc[1]);
-	}
+  char cDate[16];
+  time_t curtime;
+  struct tm *loctime;
 
-	if (capture.get(CV_CAP_PROP_FPS)==0)
-	{
-		VIDEO_FPS=24.1;
-	}
-	else
-	{
-		if ( capture.get(CV_CAP_PROP_FPS) > 30 )
-		{
-			VIDEO_FPS=capture.get(CV_CAP_PROP_FPS)/2;
-			//std::cout << VIDEO_FPS << std::endl;
-		}
-		else
-		{
-			VIDEO_FPS=capture.get(CV_CAP_PROP_FPS);
-			//std::cout << VIDEO_FPS << std::endl;
-		}
-	}
-	cv::Mat grey_bgFrame;
-	unsigned int fg_threshold=10;
-	unsigned int thresholdlow=90;
-	unsigned int thresholdhigh=255;
-	LARVAE_COUNT=0;
+  /* Get the current time. */
+  curtime = time (NULL);
 
-	if (!capture.isOpened())
-		return 1;
+  /* Convert it to local time representation. */
+  loctime = localtime (&curtime);
 
-	bool stop(false);
-	cv::namedWindow("Extracted Frame");
+  strftime(cDate,16,"%Y%m%d_%H%M%S",loctime);
 
-	capture.read(bgFrame);
-	cvtColor(bgFrame,bgFrame,CV_BGR2GRAY);
-	if(bgFrame.channels()>1)
-	{
-		cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
-	}
-	else
-	{
-		bgFrame.copyTo(grey_bgFrame);
-	}
+  std::string DATE=std::string(cDate);
+  LRVTRACK_DATE=DATE;
+  std::string VIDEO_NAME=DATE + VIDEO_TYPE;
+  std::string PROCESSED_VIDEO_NAME=DATE + "_PROC"+VIDEO_TYPE;
 
-	//std::cout << bgFrame.rows << "," << bgFrame.cols << std::endl;
-	std::vector<cv::Vec3f> circles;
-	cv::HoughCircles(grey_bgFrame, circles, CV_HOUGH_GRADIENT,
-			1,   // accumulator resolution (size of the image / 2)
-			850,  // minimum distance between two circles
-			50, // Canny high threshold
-			180, // minimum number of votes
-			bgFrame.rows/3, bgFrame.rows/2); // min and max radiusV
+  try {
 
-	std::vector<cv::Vec3f>::
-		const_iterator itc= circles.begin();
-	//std::cout << circles.size() << std::endl;
-	if(circles.size()>0)
-	{
-		while (itc!=circles.end())
-		{
-			cv::circle(grey_bgFrame,
-					cv::Point((*itc)[0], (*itc)[1]), // circle centre
-					(*itc)[2]/2,       // circle radius
-					cv::Scalar(), // color
-					-1);              // thickness
-			++itc;
-		}
-	}
+    // allowed only on command line
+    po::options_description generic("Generic options");
+    generic.add_options()
+      ("version,V", "Print version string")
+      ("help,h", "Produce help message")    
+      ("list-cameras,l","List available cameras.")
+      ("verbose,v", 
+       po::value<int>(&LRVTRACK_VERBOSE_LEVEL),
+       "Verbosity (0-3).")    
+      ;
 
-	cvb::CvBlobs preBlobs;
-	while (!stop)
-	{
-		// read next frame if any
-		if (!capture.read(frame))
-			break;
+    po::options_description IOopts("Input Output Options");
 
-		if(TRACK)
-		{
-			if(START_FRAME==0)
-			{
-				gettimeofday(&tS,0);
-				gettimeofday(&tP,0);
-				START_FRAME=CURRENT_FRAME;
-			}
-			cvtColor(frame,frame,CV_BGR2GRAY);
-			CURRENT_FRAME=capture.get(CV_CAP_PROP_POS_FRAMES);
-			cv::Mat fg_frame;
-			cv::Mat image;
-			cv::Mat processed_frame;
-			cv::Mat working_frame;
-			cv::Mat fgROI;
-			cv::Mat fg_image;
-			cv::Mat mask;
+    IOopts.add_options()
 
-			// Captured frame to BW (necessary for various filters and speed)
-			if(frame.channels()>1)
-			{
-				cvtColor(frame,grey_frame,CV_BGR2GRAY);
-			}
-			else
-			{
-				frame.copyTo(grey_frame);
-				cvtColor(grey_frame,frame,CV_GRAY2BGR);
-			}
+      ("results-folder,r",
+       po::value<std::string>(&LRVTRACK_RESULTS_FOLDER)->implicit_value("."),
+       "Main folder where the results will be recorded. The experiment folder for each experiment (DATE-SUFFIX) will be created under this folder.(Default: Current folder)"
+      )
 
-			//Background subtraction is done by eliminating areas outside of the
-			//detected petri-dish
-			// Here we subtract from the BW captured frame the background frame.
-			//cv::addWeighted(grey_frame, 1.0, grey_bgFrame, -3.0, 0.0, fg_frame);
-			cv::absdiff(grey_frame,grey_bgFrame,fg_frame);
-			//cv::imshow("normWin",fg_frame);
-			//fg_frame=grey_frame;
-			fgROI=cv::Mat::zeros(fg_frame.rows , fg_frame.cols,fg_frame.depth());
+      ("file-suffix,f",
+       po::value<std::string>(&LRVTRACK_NAME)->implicit_value(""),
+       "Suffix to use for the experiment output folder and files. The experiment folder name will be DATE-<file-suffix>.(Default: "")"
+      )
 
-			if(circles.size()>0)
-			{
-				cv::circle(fgROI, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/1.0),cv::Scalar(255),-1);
-				cv::circle(frame, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/1.0),cv::Scalar(0,255,0),1);
-			}
+      ("save-video,s", 
+       po::value<std::string>
+       (&LRVTRACK_SAVE_VIDEO)->implicit_value(DATE+VIDEO_TYPE),
+       "Save original input as video. \
+       The option is disabled when the input is from a video \
+       source.(Default: <date-filesuffix>)"
+      )
 
-			fg_image=fg_frame&fgROI;
+      ("save-tracked-video,p",
+       po::value<std::string>
+       (&LRVTRACK_SAVE_PROCESSED_VIDEO)->implicit_value(
+          DATE+"_PROC"+VIDEO_TYPE),
+       "Save resulting output as video with the filename \
+       specified.(Default: <date-filesuffix>_PROC)"
+      )
+      ("file-input,i",
+       po::value<std::string>(&LRVTRACK_FILE_INPUT)->implicit_value(""),
+       "Filename of video to be used as input for tracker."
+      )
 
-			cv::Mat fg_image_norm;
+      ("camera-input,c",
+       po::value<int>(&LRVTRACK_CAMERA_INPUT)->implicit_value(0),
+       "Camera feed to be used as input for tracker. For now unfortunately \
+one can only use numbers and no listing is possible."
+      );
 
-			cv::normalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
-			cv::threshold(fg_image,
-					thresholded_frame,
-					thresholdlow,
-					thresholdhigh,
-					cv::THRESH_BINARY|cv::THRESH_OTSU);
-			//cv::blur(thresholded_frame,thresholded_frame,cv::Size(2,2));
-			//cv::imshow("normWin",thresholded_frame);
-			cvb::CvBlobs blobs;
-			IplImage ipl_thresholded = thresholded_frame;
-			labelImg=cvCreateImage(cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
+    po::options_description setupOpts("Setup Options");
+    setupOpts.add_options()
 
-			unsigned int result=cvLabel(&ipl_thresholded, labelImg, blobs);
-			cvb::cvFilterByArea(blobs, 45, 900);
+      ("odour-cups,o",
+       po::value<int> (&LRVTRACK_ODOUR_CUPS)->implicit_value(10),
+       "When the flag is specified lrvTrack will look for odour cups. If specified\
+with no arguments (e.g. -o) lrvTrack will look for as many as it can find.\
+The number of odour cups can be specified as a value for this option."
+      );
 
-			cvb::CvBlobs tracked_blobs;
-			cvb::CvBlobs blob1;
-			cvb::CvBlobs::iterator it=blobs.begin();
+    po::options_description procOpts("Processing Options");
+    procOpts.add_options()
 
-			if(preBlobs.size()>0)
-			{
-			  gettimeofday(&tC,0);
-        FrameEllapsedTime = (tC.tv_sec - tP.tv_sec) + 
-                            ((tC.tv_usec - tP.tv_usec)/1000000.0);
-				larvae_track(blobs,preBlobs,tracked_blobs);
+      ("normalize-image,n",
+       po::value<bool> (&LRVTRACK_NORMALIZE),
+       "Set to true (default) we normalize the brightness values of \
+       each frame. This improves the accuracy of results but causes \
+       higher cpu utilization. (Default: True)"
+      );
+
+    po::options_description displayOpts("Display Options");
+    displayOpts.add_options()
+
+      ("show-skeleton,S",
+       po::value<bool> (&LRVTRACK_SHOW_SKELETON),
+       "Show skeleton for detected larvae (Default: False)"
+      )
+
+      ("show-contour,C",
+       po::value<bool> (&LRVTRACK_SHOW_CONTOUR),
+       "Show contour for detected larvae (Default: False)"
+      )
+
+      ("show-orientation,O",
+       po::value<bool> (&LRVTRACK_SHOW_ORIENTATION),
+       "Show orientation for detected larvae (Default: False)"
+      )
+
+      ("show-centroid,Z",
+       po::value<bool> (&LRVTRACK_SHOW_CENTROID),
+       "Show centroid for detected larvae (Default: True)"
+      )
+
+      ("show-head-tail,H",
+       po::value<bool> (&LRVTRACK_SHOW_HEAD_TAIL),
+       "Show head and tail for detected larvae (Default: True)"
+      )
+
+      ("show-tags,T",
+       po::value<bool> (&LRVTRACK_SHOW_TAGS),
+       "Show larvae tags (Default: True)"
+      );
+
+    po::options_description cmdline_options;
+    cmdline_options.add(generic).add(IOopts).add(setupOpts).add(procOpts).add(displayOpts);
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, cmdline_options), vm);
+    po::notify(vm);    
+
+    if (vm.count("help")) {
+      std::cout << cmdline_options << "\n";
+      exit(1);
+    }
+    if (vm.count("results-folder")){
+      LRVTRACK_RESULTS_FOLDER=vm["results-folder"].as<std::string>();
+    }
+    else
+    {
+      LRVTRACK_RESULTS_FOLDER=".";
+    }
+
+    if(vm.count("odour-cups")){
+      LRVTRACK_ODOUR_CUPS=vm["odour-cups"].as<int>();
+    }
+    
+    if (vm.count("file-suffix")) {
+      LRVTRACK_NAME=DATE + "@" + LRVTRACK_NAME;
+    }
+    else
+    {
+      LRVTRACK_NAME=DATE;
+    }
+
+    if (vm.count("save-video")) {
+      LRVTRACK_SAVE_VIDEO=LRVTRACK_NAME+VIDEO_TYPE;
+    }
+    else
+    {
+      LRVTRACK_SAVE_VIDEO="";
+    }
+
+    if (vm.count("save-tracked-video")) {
+      LRVTRACK_SAVE_PROCESSED_VIDEO=LRVTRACK_NAME+"_PROC"+VIDEO_TYPE;
+    }
+    else
+    {
+      LRVTRACK_SAVE_PROCESSED_VIDEO="";
+    }
+
+    if (vm.count("list-cameras")){
+
+    }
+
+    if (vm.count("file-input")<=0 && vm.count("camera-input")<=0)
+    {
+      std::cerr << "Error: No Input Specified. Exiting..." <<  std::endl;
+      exit(2);
+    }
+    else if (vm.count("file-input")>0 && vm.count("camera-input")>0)
+    {
+      std::cerr << "Error: Ambiguous Input Specified. Exiting..." <<  std::endl;
+      exit(2);
+    }
+
+    if (vm.count("file-input")>0)
+    {
+      LRVTRACK_FILE_INPUT=vm["file-input"].as<std::string>();
+      if (LRVTRACK_FILE_INPUT=="")
+      {
+        std::cerr << "Error: Input file flag given but no file specified. Exiting..." << std::endl;
+          exit(3);
+      }
+    }
+
+    if (vm.count("camera-input")>0)
+    {
+      LRVTRACK_CAMERA_INPUT=vm["camera-input"].as<int>();
+    }
+    else
+    {
+      LRVTRACK_CAMERA_INPUT=-2;
+    }
+  }
+  catch(...) 
+  {
+    std::cerr << "Problem parsing options" << std::endl;
+    exit(1);
+  }
+
+}
+
+int setupTracker()
+{
+    if(!fs::is_directory(LRVTRACK_RESULTS_FOLDER))
+    {
+      try{
+        fs::create_directory( LRVTRACK_RESULTS_FOLDER );
+      }
+      catch ( const std::exception & ex )
+      {
+        std::cerr << "LrvTrack warning: Could not create folder <" 
+          << LRVTRACK_RESULTS_FOLDER 
+          << ">. Got: " 
+          << LRVTRACK_RESULTS_FOLDER 
+          << " " << ex.what() << std::endl;
+        exit(4);
+      }
+    }
+
+
+    fs::path experimentFolder(LRVTRACK_RESULTS_FOLDER);
+    experimentFolder=experimentFolder / LRVTRACK_DATE;
+    if(!fs::is_directory(experimentFolder))
+    {
+      try{
+        fs::create_directory(experimentFolder);
+      }
+      catch ( const std::exception & ex )
+      {
+        std::cerr << "LrvTrack warning: Could not create folder <" 
+          << experimentFolder.string() 
+          << ">. Got: " 
+          << experimentFolder
+          << " " 
+          << ex.what() << std::endl;
+        exit(4);
+      }
+    }
+  
+}
+
+int printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
+{
+
+  if(first==true)
+  {
+    double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
+    summary << "1 ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << elapsed 
+      << "  ";
+
+    summary << blobs.size() << " ";
+
+    summary << blobs.size() << " ";
+
+    summary << "0.0" << "  ";
+    summary << "0.00" << " ";
+    summary << "0.000" << "  ";
+    summary << "0.0" << " ";
+    summary << "0.000" << "  ";
+    summary << "0.0" << " ";
+    summary << "0.000" << "  ";
+    summary << "0.000" << " ";
+    summary << "0.000" << "  ";
+    summary << "0.000" << " ";
+    summary << "0.000" << "  ";
+    summary << "%% " ;
+    cvb::CvBlobs::iterator it=blobs.begin();
+    int i=1;
+    while (it!=blobs.end())
+    {
+      summary << "0 " << i << " ";
+      ++it;
+      ++i;
+    }
+    summary << std::endl;
+  }
+  else
+  {
+    // output summary
+    // Collect info
+    gettimeofday(&tC,0);
+    double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
+    double lifespanSUM=0;
+    double speedSUM=0;
+    double angularSpeedSUM=0;
+    double lengthSUM=0;
+    double lengthRelSUM=0;
+    double widthSUM=0;
+    double widthRelSUM=0;
+    double aspectRatioSUM=0;
+    double relAspectRatioSUM=0;
+    double avgSizeSUM=0;
+    double avgWiggleSUM=0;
+    int larvaeToConsider=0;
+    std::map<unsigned int,larvaObject>::iterator i=detected_larvae.begin();
+    for (; i!=detected_larvae.end();++i)
+    {
+      larvaObject &cl=(*i).second;
+      // avg duration
+      if (cl.isCluster==true)
+        break;
+
+      ++larvaeToConsider;
+      lifespanSUM+=(CURRENT_FRAME-cl.start_frame)/VIDEO_FPS;
+      // avg speed
+      float xvel,yvel;
+      if(cl.centroid_speed_x.size()>0)
+        xvel=cl.centroid_speed_x.back();
+      else
+        xvel=0.0;
+      if(cl.centroid_speed_y.size()>0)
+        yvel=cl.centroid_speed_y.back();
+      else
+        yvel=0.0;
+      float sqvel=xvel*xvel+yvel*yvel;
+      float vel[1];
+      if(sqvel==0)
+        vel[0]=0;
+      else
+      {
+        ltsqrt(vel,&sqvel);
+      }
+      speedSUM+=vel[0];
+
+      //avg angular speed
+      angularSpeedSUM+=cl.angular_speed.back();
+
+      //average length
+      float length=cl.length.back();
+      if(length!=0)
+      {
+        ltsqrt(vel,&length);
+      }
+      double realLength=vel[0];
+      lengthSUM+=vel[0];
+      lengthRelSUM+=cl.length.back()*cl.length.size()/cl.length_sum;
+
+      //average width
+      widthSUM+=cl.width.back();
+      widthRelSUM+=cl.width.back()*cl.width.size()/cl.width_sum;
+
+      //average aspect ratio
+      aspectRatioSUM+=cl.width.back()/realLength;
+
+      //average relative aspect ratio
+      relAspectRatioSUM+=(cl.width.back()*cl.length_mean) /
+        (cl.width_mean*cl.length.back());
+      //average wiggle
+      double a1,a2;
+      a1=angle(cl.heads.back(),
+          cl.lrvskels.back().Point20,
+          cl.tails.back());
+      a2=angle(cl.heads.back(),
+          cl.lrvskels.back().Point80,
+          cl.tails.back());
+
+      avgWiggleSUM += MAX(a1,a2);
+      //average size
+      avgSizeSUM+=cl.area.back();
+    }
+
+    std::setiosflags(std::ios::fixed);
+
+    summary << CURRENT_FRAME-START_FRAME+1 << " " ;
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << elapsed 
+      << "  ";
+
+    summary << detected_larvae.size() << " ";
+
+    summary << detected_larvae.size() << " ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(1) 
+      << lifespanSUM/larvaeToConsider 
+      << "  ";
+
+    //TODO angular speed
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(2) 
+      << speedSUM/larvaeToConsider 
+      << " ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << angularSpeedSUM/larvaeToConsider 
+      << "  ";
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(1) 
+      << lengthSUM/larvaeToConsider 
+      << " ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << lengthRelSUM/larvaeToConsider 
+      << "  ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(1) 
+      << widthSUM/larvaeToConsider 
+      << " ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << widthRelSUM/larvaeToConsider 
+      << "  ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << aspectRatioSUM/larvaeToConsider 
+      << " ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << relAspectRatioSUM/larvaeToConsider 
+      << "  ";
+
+    //TODO wiggle
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << avgWiggleSUM/larvaeToConsider 
+      << " ";
+
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << avgSizeSUM/larvaeToConsider 
+      << " ";
+
+    if(current_new.size()>0 || 
+        current_gone.size()>0 ||
+        current_clusters.size()>0 ||
+        current_diverged.size()>0)
+    {
+      summary << " %% ";
+    }
+    if(current_new.size()>0)
+    {
+      for (int i=0; i<current_new.size();++i)
+      {
+        summary << "0 " << current_new[i] << " ";
+      }
+    }
+    if(current_gone.size()>0)
+    {
+      for (int i=0; i<current_gone.size();++i)
+      {
+        summary << current_gone[i] << " 0 ";
+      }
+    }
+    if(current_clusters.size()>0)
+    {
+      std::map<unsigned int,std::vector<unsigned int> >::iterator ci;
+      for (ci=current_clusters.begin(); ci!=current_clusters.end();++ci)
+      {
+        summary << ci->second[0] << " " << ci->first << " " ;
+        summary << ci->second[1] << " " << ci->first << " " ;
+      }
+    }
+    if(current_diverged.size()>0)
+    {
+      std::map<unsigned int,std::vector<unsigned int> >::iterator ci;
+      for (ci=current_diverged.begin(); ci!=current_diverged.end();++ci)
+      {
+        summary << ci->first << " " << ci->second[0] << " " ;
+        summary << ci->first << " " << ci->second[1] << " " ;
+      }
+    }
+    summary << std::endl;
+  }
+}
+
+int printBlobFile(larvaObject lrv)
+{
+  
+  std::ostringstream BLOBFILENAME;
+  std::ofstream blobFile;
+
+  double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
+
+  BLOBFILENAME <<
+    LRVTRACK_NAME << 
+    "." << 
+    std::fixed << 
+    std::setfill('0') << 
+    std::setw(5) <<
+    lrv.larva_ID <<
+    ".dat";
+
+    fs::path experimentFolderPath(LRVTRACK_RESULTS_FOLDER);
+    experimentFolderPath = experimentFolderPath / LRVTRACK_DATE;
+
+    fs::path blobFilePath(
+      experimentFolderPath / BLOBFILENAME.str()
+      );
+    
+    blobFile.open(blobFilePath.c_str());
+
+    blobFile << CURRENT_FRAME-START_FRAME+1 << " " ;
+    summary << std::left 
+      << std::fixed 
+      << std::setfill('0') 
+      << std::setprecision(3) 
+      << elapsed 
+      << "  ";
+
+    summary << detected_larvae.size() << " ";
+}
+
+int main(int argc, char* argv[])
+{
+  bool SHOWTAGS=true;
+  bool TRACK=false;
+  bool STEP=true;
+  bool showimg=true;
+
+#ifdef LRVTRACK_WITH_CUDA
+  cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());
+#endif
+  cv::VideoCapture capture;
+  handleArgs(argc,argv);
+
+  if(LRVTRACK_CAMERA_INPUT != -2)
+  {
+    //capture.open(CV_CAP_DC1394);
+    capture.open(300);
+    capture.set(CV_CAP_PROP_FRAME_WIDTH,1280);
+    capture.set(CV_CAP_PROP_FRAME_HEIGHT,1024);
+    capture.set(CV_CAP_PROP_FPS,24);
+  }
+  else if (LRVTRACK_FILE_INPUT != "")
+  {
+    capture.open(LRVTRACK_FILE_INPUT);
+  }
+  capture.set(CV_CAP_PROP_FORMAT,CV_8U);
+
+  if (capture.get(CV_CAP_PROP_FPS)==0)
+  {
+    VIDEO_FPS=24.1;
+  }
+  else
+  {
+    if ( capture.get(CV_CAP_PROP_FPS) > 30 )
+    {
+      VIDEO_FPS=capture.get(CV_CAP_PROP_FPS)/2;
+      std::cout << VIDEO_FPS << std::endl;
+    }
+    else
+    {
+      VIDEO_FPS=capture.get(CV_CAP_PROP_FPS);
+      std::cout << VIDEO_FPS << std::endl;
+    }
+  }
+
+  cv::Mat grey_bgFrame;
+  unsigned int fg_threshold=10;
+  unsigned int thresholdlow=90;
+  unsigned int thresholdhigh=255;
+  LARVAE_COUNT=0;
+
+  if (!capture.isOpened())
+    return 1;
+
+  bool stop(false);
+  cv::namedWindow("Extracted Frame");
+
+  capture.read(bgFrame);
+
+  cv::VideoWriter vidOut,vidPOut;
+
+  if(bgFrame.channels()>1)
+  {
+    cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
+  }
+  else
+  {
+    bgFrame.copyTo(grey_bgFrame);
+  }
+
+  //std::cout << bgFrame.rows << "," << bgFrame.cols << std::endl;
+  std::vector<cv::Vec3f> circles;
+  cv::HoughCircles(grey_bgFrame, circles, CV_HOUGH_GRADIENT,
+      1,   // accumulator resolution (size of the image / 2)
+      850,  // minimum distance between two circles
+      50, // Canny high threshold
+      180, // minimum number of votes
+      bgFrame.rows/3, bgFrame.rows/2); // min and max radiusV
+
+  std::vector<cv::Vec3f> cups;
+  if (LRVTRACK_ODOUR_CUPS>0 || LRVTRACK_ODOUR_CUPS==-1)
+  {
+    cv::Mat fgROI;
+    fgROI=cv::Mat::zeros(grey_bgFrame.rows , grey_bgFrame.cols,grey_bgFrame.depth());
+    if(circles.size()>0)
+    {
+      cv::circle(fgROI, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/1.1),cv::Scalar(255),-1);
+    }
+
+    cv::Mat thr;
+
+    thr=grey_bgFrame&fgROI;
+
+    cv::morphologyEx(thr,thr,cv::MORPH_OPEN,cv::Mat(),cv::Point(-1,-1),5);
+      cv::threshold(thr,
+          thr,
+          thresholdlow,
+          thresholdhigh,
+          cv::THRESH_BINARY|cv::THRESH_OTSU);
+
+    cv::HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
+        2,   // accumulator resolution (size of the image / 2)
+        1,  // minimum distance between two circles
+        240, // Canny high threshold
+        30, // minimum number of votes
+        3, 40); // min and max radiusV
+  }
+
+  std::vector<cv::Vec3f>::
+    const_iterator itc= circles.begin();
+  //std::cout << circles.size() << std::endl;
+  if(circles.size()>0)
+  {
+    while (itc!=circles.end())
+    {
+      cv::circle(grey_bgFrame,
+          cv::Point((*itc)[0], (*itc)[1]), // circle centre
+          (*itc)[2]/1.1,       // circle radius
+          cv::Scalar(), // color
+          -1);              // thickness
+      ++itc;
+      break;
+    }
+  }
+
+
+  cvb::CvBlobs preBlobs;
+  while (!stop)
+  {
+    // read next frame if any
+    if (!capture.read(frame))
+      break;
+
+
+    if(TRACK)
+    {
+      setupTracker();
+
+      fs::path experimentFolderPath(LRVTRACK_RESULTS_FOLDER);
+      experimentFolderPath=experimentFolderPath / LRVTRACK_DATE;
+      fs::path summaryFilePath(
+          experimentFolderPath / (LRVTRACK_NAME + ".summary")
+          );
+
+      summary.open(summaryFilePath.c_str());
+      if(START_FRAME==0)
+      {
+        gettimeofday(&tS,0);
         gettimeofday(&tP,0);
-				preBlobs=tracked_blobs;
-				// output summary
-				// Collect info
-				gettimeofday(&tC,0);
-				double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
-				double lifespanSUM=0;
-				double speedSUM=0;
-				double angularSpeedSUM=0;
-				double lengthSUM=0;
-				double lengthRelSUM=0;
-				double widthSUM=0;
-				double widthRelSUM=0;
-				double aspectRatioSUM=0;
-				double relAspectRatioSUM=0;
-				double avgSizeSUM=0;
-				double avgWiggleSUM=0;
-				int larvaeToConsider=0;
-				std::map<unsigned int,larvaObject>::iterator i=detected_larvae.begin();
-				for (; i!=detected_larvae.end();i++)
-				{
-					larvaObject &cl=(*i).second;
-					// avg duration
-					if (cl.isCluster==true)
-					 break;
+        START_FRAME=CURRENT_FRAME;
+      }
 
-					larvaeToConsider++;
-					lifespanSUM+=(CURRENT_FRAME-cl.start_frame)/VIDEO_FPS;
-					// avg speed
-					float xvel,yvel;
-					if(cl.centroid_speed_x.size()>0)
-						xvel=cl.centroid_speed_x.back();
-					else
-						xvel=0.0;
-					if(cl.centroid_speed_y.size()>0)
-						yvel=cl.centroid_speed_y.back();
-					else
-						yvel=0.0;
-					float sqvel=xvel*xvel+yvel*yvel;
-					float vel[1];
-					if(sqvel==0)
-						vel[0]=0;
-					else
-					{
-						ltsqrt(vel,&sqvel);
-					}
-					speedSUM+=vel[0];
-
-					//avg angular speed
-					angularSpeedSUM+=cl.angular_speed.back();
-					
-					//average length
-					float length=cl.length.back();
-					if(length!=0)
-					{
-						ltsqrt(vel,&length);
-					}
-          double realLength=vel[0];
-					lengthSUM+=vel[0];
-					lengthRelSUM+=cl.length.back()*cl.length.size()/cl.length_sum;
-					
-					//average width
-					widthSUM+=cl.width.back();
-					widthRelSUM+=cl.width.back()*cl.width.size()/cl.width_sum;
-					
-					//average aspect ratio
-					aspectRatioSUM+=cl.width.back()/realLength;
-					
-					//average relative aspect ratio
-					relAspectRatioSUM+=(cl.width.back()*cl.length_mean) /
-					                (cl.width_mean*cl.length.back());
-					//average wiggle
-          double a1,a2;
-          a1=angle(cl.heads.back(),
-                   cl.lrvskels.back().Point20,
-                   cl.tails.back());
-          a2=angle(cl.heads.back(),
-                   cl.lrvskels.back().Point80,
-                   cl.tails.back());
-
-					avgWiggleSUM += MAX(a1,a2);
-					//average size
-					avgSizeSUM+=cl.area.back();
-				}
-
-				std::setiosflags(std::ios::fixed);
-
-				summary << CURRENT_FRAME-START_FRAME+1 << " " ;
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << elapsed 
-                << "  ";
-
-				summary << detected_larvae.size() << " ";
-
-				summary << detected_larvae.size() << " ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(1) 
-                << lifespanSUM/larvaeToConsider 
-                << "  ";
-
-				//TODO angular speed
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(2) 
-                << speedSUM/larvaeToConsider 
-                << " ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << angularSpeedSUM/larvaeToConsider 
-                << "  ";
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(1) 
-                << lengthSUM/larvaeToConsider 
-                << " ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << lengthRelSUM/larvaeToConsider 
-                << "  ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(1) 
-                << widthSUM/larvaeToConsider 
-                << " ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << widthRelSUM/larvaeToConsider 
-                << "  ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << aspectRatioSUM/larvaeToConsider 
-                << " ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << relAspectRatioSUM/larvaeToConsider 
-                << "  ";
-        
-				//TODO wiggle
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << avgWiggleSUM/larvaeToConsider 
-                << " ";
-
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << avgSizeSUM/larvaeToConsider 
-                << " ";
-
-        if(current_new.size()>0 || 
-           current_gone.size()>0 ||
-           current_clusters.size()>0 ||
-           current_diverged.size()>0)
+      if (LRVTRACK_SAVE_VIDEO!="" && !vidOut.isOpened())
+      {
+        vidOut.open((experimentFolderPath / LRVTRACK_SAVE_VIDEO).string(),
+            VIDEO_CODEC,
+            VIDEO_FPS,
+            bgFrame.size());
+        if (!vidOut.isOpened())
         {
-          summary << " %% ";
+          std::cerr << "Error opening video output file. Problems with video codec. Exiting..." << std::endl;
+          exit(5);
         }
-        if(current_new.size()>0)
-        {
-          for (int i=0; i<current_new.size();i++)
-          {
-            summary << "0 " << current_new[i] << " ";
-          }
-        }
-        if(current_gone.size()>0)
-        {
-          for (int i=0; i<current_gone.size();i++)
-          {
-            summary << current_gone[i] << " 0 ";
-          }
-        }
-        if(current_clusters.size()>0)
-        {
-          std::map<unsigned int,std::vector<unsigned int> >::iterator ci;
-          for (ci=current_clusters.begin(); ci!=current_clusters.end();ci++)
-          {
-            summary << ci->second[0] << " " << ci->first << " " ;
-            summary << ci->second[1] << " " << ci->first << " " ;
-          }
-        }
-        if(current_diverged.size()>0)
-        {
-          std::map<unsigned int,std::vector<unsigned int> >::iterator ci;
-          for (ci=current_diverged.begin(); ci!=current_diverged.end();ci++)
-          {
-            summary << ci->first << " " << ci->second[0] << " " ;
-            summary << ci->first << " " << ci->second[1] << " " ;
-          }
-        }
-				summary << std::endl;
-			}
-			else
-			{
-				preBlobs.clear();
-				//normalize blobs for next use
-				cvb::CvBlobs::iterator it=blobs.begin();
+      }
 
-				gettimeofday(&tC,0);
-				double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
-        summary << "1 ";
+      if (LRVTRACK_SAVE_VIDEO!="")
+      {
+        vidOut << frame;
+      }
 
-				summary << std::left 
-                << std::fixed 
-                << std::setfill('0') 
-                << std::setprecision(3) 
-                << elapsed 
-                << "  ";
+      if (LRVTRACK_SAVE_PROCESSED_VIDEO!="" && !vidPOut.isOpened())
+      {
+        vidPOut.open((experimentFolderPath / LRVTRACK_SAVE_PROCESSED_VIDEO).string(),
+            VIDEO_CODEC,
+            VIDEO_FPS,
+            frame.size());
+        if (!vidPOut.isOpened())
+        {
+          std::cerr << "Error opening video output file. Problems with video codec. Exiting..." << std::endl;
+          exit(5);
+        }
+      }
 
-				summary << blobs.size() << " ";
+      CURRENT_FRAME=capture.get(CV_CAP_PROP_POS_FRAMES);
+      cv::Mat fg_frame;
+      cv::Mat image;
+      cv::Mat processed_frame;
+      cv::Mat working_frame;
+      cv::Mat fgROI;
+      cv::Mat fg_image;
+      cv::Mat mask;
 
-				summary << blobs.size() << " ";
-        
-        summary << "0.0" << "  ";
-        summary << "0.00" << " ";
-        summary << "0.000" << "  ";
-        summary << "0.0" << " ";
-        summary << "0.000" << "  ";
-        summary << "0.0" << " ";
-        summary << "0.000" << "  ";
-        summary << "0.000" << " ";
-        summary << "0.000" << "  ";
-        summary << "0.000" << " ";
-        summary << "0.000" << "  ";
-				summary << "%% " ;
+      // Captured frame to BW (necessary for various filters and speed)
+      if(frame.channels()>1)
+      {
+        cvtColor(frame,grey_frame,CV_BGR2GRAY);
+      }
+      else
+      {
+        frame.copyTo(grey_frame);
+        cvtColor(grey_frame,frame,CV_GRAY2BGR);
+      }
+
+      //Background subtraction is done by eliminating areas outside of the
+      //detected petri-dish
+      // Here we subtract from the BW captured frame the background frame.
+      //cv::addWeighted(grey_frame, 1.0, grey_bgFrame, -3.0, 0.0, fg_frame);
+      cv::absdiff(grey_frame,grey_bgFrame,fg_frame);
+      //cv::imshow("normWin",fg_frame);
+      //fg_frame=grey_frame;
+      fgROI=cv::Mat::zeros(fg_frame.rows , fg_frame.cols,fg_frame.depth());
+
+      if(circles.size()>0)
+      {
+        cv::circle(fgROI, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/0.99),cv::Scalar(255),-1);
+        cv::circle(frame, cv::Point(circles[0][0],circles[0][1]),int(circles[0][2]/0.99),cv::Scalar(0,255,0),1);
+      }
+
+      if(cups.size()>0)
+      {
+        for( int i=0; i<cups.size(); ++i)
+        {
+          cv::circle(fgROI, cv::Point(cups[i][0],cups[i][1]),int(cups[i][2]),cv::Scalar(0),-1);
+          cv::circle(frame, cv::Point(cups[i][0],cups[i][1]),int(cups[i][2]),cv::Scalar(0,0,255),1);
+        }
+      }
+
+      fg_image=fg_frame&fgROI;
+
+      cv::Mat fg_image_norm;
+
+      lrvTrackNormalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
+      cv::threshold(fg_image,
+          thresholded_frame,
+          thresholdlow,
+          thresholdhigh,
+          cv::THRESH_BINARY|cv::THRESH_OTSU);
+      //cv::blur(thresholded_frame,thresholded_frame,cv::Size(2,2));
+      //cv::imshow("normWin",thresholded_frame);
+      cvb::CvBlobs blobs;
+      IplImage ipl_thresholded = thresholded_frame;
+      labelImg=cvCreateImage(cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
+
+      unsigned int result=cvLabel(&ipl_thresholded, labelImg, blobs);
+      cvb::cvFilterByArea(blobs, 32, 900);
+
+      cvb::CvBlobs tracked_blobs;
+      cvb::CvBlobs blob1;
+      cvb::CvBlobs::iterator it=blobs.begin();
+
+      if(preBlobs.size()>0)
+      {
+        gettimeofday(&tC,0);
+        FrameEllapsedTime = (tC.tv_sec - tP.tv_sec) + 
+          ((tC.tv_usec - tP.tv_usec)/1000000.0);
+        larvae_track(blobs,preBlobs,tracked_blobs);
+        gettimeofday(&tP,0);
+
+        printSummary(preBlobs,blobs,false);
+
+        printBlobFile(detected_larvae[1]);
+
+        preBlobs=tracked_blobs;
+      }
+      else
+      {
+        preBlobs.clear();
+        //normalize blobs for next use
+        cvb::CvBlobs::iterator it=blobs.begin();
         int i=1;
-				while (it!=blobs.end())
-				{
-					preBlobs[i]=(*it).second;
-					preBlobs[i]->label=i;
-          summary << "0 " << i << " ";
-					it++;
-					i++;
-				}
-        summary << std::endl;
-				LARVAE_COUNT=preBlobs.size();
-			}
+        while (it!=blobs.end())
+        {
+          preBlobs[i]=(*it).second;
+          preBlobs[i]->label=i;
+          it++;
+          i++;
+        }
 
-			if (SHOWTAGS!=0)
-			{
-				it=tracked_blobs.begin();
-				while (it!=tracked_blobs.end())
-				{
-					std::stringstream sstm;
-					cvb::CvBlob *blob=(*it).second;
-					try{
-						std::vector<unsigned int> &clusterMBs=detected_clusters.at((*it).first);
-						sstm << printVector(clusterMBs);
-						cv::putText(frame,
-								sstm.str(),
-								cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
-								cv::FONT_HERSHEY_PLAIN,
-								0.7,
-								cv::Scalar(255,255,255),
-								1,
-								CV_AA);
-					}
-					catch (const std::out_of_range& oor)
-					{
-						//out of range. i.e. it's not there :)
-						sstm << (*it).first;
-						cv::putText(frame,
-								sstm.str(),
-								cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
-								cv::FONT_HERSHEY_PLAIN,
-								0.8,
-								cv::Scalar(255,255,255),
-								1,
-								CV_AA);
-					}
+        gettimeofday(&tC,0);
 
-					// Here we define an extra PADDING
-					int PAD=2;
-					cv::Mat larvaROI(frame, 
-							cv::Rect(blob->minx-ROI_PADDING-PAD,
-								blob->miny-ROI_PADDING-PAD,
-								blob->maxx-blob->minx+2*(ROI_PADDING+PAD),
-								blob->maxy-blob->miny+2*(ROI_PADDING+PAD))
-							);
+        printSummary(preBlobs,blobs,true);
 
-					cv::circle(frame,
-							cv::Point2d(blob->centroid.x,blob->centroid.y),
-							1,
-							cv::Scalar(255,0,0),
-							-1);
+        LARVAE_COUNT=preBlobs.size();
+      }
 
-					if(detected_larvae[it->first].isCluster==false)
-					{
-						cv::circle(larvaROI,
-								cv::Point2d(
-									detected_larvae[it->first].lrvskels.back().Point20.x+PAD,
-									detected_larvae[it->first].lrvskels.back().Point20.y+PAD),
-								1,
-								cv::Scalar(255,255,0),
-								-1);
+      if (SHOWTAGS!=0)
+      {
+        it=tracked_blobs.begin();
+        while (it!=tracked_blobs.end())
+        {
+          std::stringstream sstm;
+          cvb::CvBlob *blob=(*it).second;
+          try{
+            std::vector<unsigned int> &clusterMBs=detected_clusters.at((*it).first);
+            sstm << printVector(clusterMBs);
+            cv::putText(frame,
+                sstm.str(),
+                cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
+                cv::FONT_HERSHEY_PLAIN,
+                0.7,
+                cv::Scalar(255,255,255),
+                1,
+                CV_AA);
+          }
+          catch (const std::out_of_range& oor)
+          {
+            //out of range. i.e. it's not there :)
+            sstm << (*it).first;
+            cv::putText(frame,
+                sstm.str(),
+                cv::Point2d(blob->centroid.x+12,blob->centroid.y+12),
+                cv::FONT_HERSHEY_PLAIN,
+                0.8,
+                cv::Scalar(255,255,255),
+                1,
+                CV_AA);
+          }
 
-						cv::circle(larvaROI,
-								cv::Point2d(
-									detected_larvae[it->first].heads.back().x+PAD,
-									detected_larvae[it->first].heads.back().y+PAD),
-								1,
-								cv::Scalar(0,255,0),
-								-1);
+          // Here we define an extra PADDING
+          int PAD=2;
+          cv::Mat larvaROI(frame, 
+              cv::Rect(blob->minx-ROI_PADDING-PAD,
+                blob->miny-ROI_PADDING-PAD,
+                blob->maxx-blob->minx+2*(ROI_PADDING+PAD),
+                blob->maxy-blob->miny+2*(ROI_PADDING+PAD))
+              );
 
-						cv::circle(larvaROI,
-								cv::Point2d(
-									detected_larvae[it->first].tails.back().x+PAD,
-									detected_larvae[it->first].tails.back().y+PAD),
-								1,
-								cv::Scalar(0,0,255),
-								-1);
+          cv::circle(frame,
+              cv::Point2d(blob->centroid.x,blob->centroid.y),
+              1,
+              cv::Scalar(255,0,0),
+              -1);
 
-						plotAngle(blob,larvaROI,PAD);
-					}
-					it++;
-				}
-			}
+          if(detected_larvae[it->first].isCluster==false)
+          {
+            cv::circle(larvaROI,
+                cv::Point2d(
+                  detected_larvae[it->first].lrvskels.back().Point20.x+PAD,
+                  detected_larvae[it->first].lrvskels.back().Point20.y+PAD),
+                1,
+                cv::Scalar(255,255,0),
+                -1);
 
-			cvReleaseImage(&labelImg);
+            cv::circle(larvaROI,
+                cv::Point2d(
+                  detected_larvae[it->first].heads.back().x+PAD,
+                  detected_larvae[it->first].heads.back().y+PAD),
+                1,
+                cv::Scalar(0,255,0),
+                -1);
 
-		}
-		//if (showimg)
-		//{
-		//cv::Mat flipframe;
-		//cv::flip(frame,flipframe,0);
-		//cv::imshow("Extracted Frame",flipframe);
-		cv::imshow("Extracted Frame",frame);
-		//cv::displayStatusBar("Extracted Frame","FOO",0);
-		// showimg=false;
-		//}
-		//else
-		//  showimg=true;
+            cv::circle(larvaROI,
+                cv::Point2d(
+                  detected_larvae[it->first].tails.back().x+PAD,
+                  detected_larvae[it->first].tails.back().y+PAD),
+                1,
+                cv::Scalar(0,0,255),
+                -1);
 
-		int k;
+            plotAngle(blob,larvaROI,PAD);
+          }
+          it++;
+        }
+      }
 
-		if (STEP==true)
-			k=46;
-		else
-			k=cv::waitKey(1);
-		if (k>=0)
-		{
-			if (k==32)
-			{
-				while (cv::waitKey(1)!=32){
-					//No OP
-				}
-			}
-			if (k==46)
-			{
-				STEP=true;
-				while ((k=cv::waitKey(1))>=127 || k<0){
-				}
-				if (k!=46)
-					STEP=false;
-			}
-			if (k==63234)
-			{
-				thresholdlow-=10;
-				std::cerr << (int) thresholdlow << std::endl;
-			}
-			if (k==63235)
-			{
-				thresholdlow+=10;
-				std::cerr << (int) thresholdlow << std::endl;
-			}
-			if (k==63232)
-			{
-				thresholdhigh+=10;
-				std::cerr << (int) thresholdhigh << std::endl;
-			}
-			if (k==63233)
-			{
-				thresholdhigh-=10;
-				std::cerr << (int) thresholdhigh << std::endl;
-			}
-			if (k==115)
-			{
-				SHOWTAGS=!SHOWTAGS;
-			}
-			if (k==116)
-			{
-				TRACK=!TRACK;
-			}
-			if (k==120)
-			{
-				exit(0);
-			}
-		}
-	}
 
-				summary.close();
+
+      cvReleaseImage(&labelImg);
+
+    }
+    //if (showimg)
+    //{
+    //cv::Mat flipframe;
+    //cv::flip(frame,flipframe,0);
+    //cv::imshow("Extracted Frame",flipframe);
+    cv::imshow("Extracted Frame",frame);
+    if (LRVTRACK_SAVE_PROCESSED_VIDEO!="")
+    {
+      vidPOut << frame;
+    }
+
+    //cv::displayStatusBar("Extracted Frame","FOO",0);
+    // showimg=false;
+    //}
+    //else
+    //  showimg=true;
+
+    int k;
+
+    if (STEP==true)
+      k=46;
+    else
+      k=cv::waitKey(1);
+    if (k>=0)
+    {
+      if (k==32)
+      {
+        while (cv::waitKey(1)!=32){
+          //No OP
+        }
+      }
+      if (k==46)
+      {
+        STEP=true;
+        while ((k=cv::waitKey(1))>=127 || k<0){
+        }
+        if (k!=46)
+          STEP=false;
+      }
+      if (k==63234)
+      {
+        thresholdlow-=10;
+        std::cerr << (int) thresholdlow << std::endl;
+      }
+      if (k==63235)
+      {
+        thresholdlow+=10;
+        std::cerr << (int) thresholdlow << std::endl;
+      }
+      if (k==63232)
+      {
+        thresholdhigh+=10;
+        std::cerr << (int) thresholdhigh << std::endl;
+      }
+      if (k==63233)
+      {
+        thresholdhigh-=10;
+        std::cerr << (int) thresholdhigh << std::endl;
+      }
+      if (k==115)
+      {
+        SHOWTAGS=!SHOWTAGS;
+      }
+      if (k==116)
+      {
+        TRACK=!TRACK;
+      }
+      if (k==120)
+      {
+        exit(0);
+      }
+    }
+  }
+
+  summary.close();
+  return 0;
 }

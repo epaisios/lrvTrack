@@ -5,7 +5,7 @@
 #include "lrvTrackBase.hpp"
 #include "cvblob.h"
 
-typedef std::unordered_map<PointPair, double> DistanceMap;
+//typedef std::unordered_map<PointPair, double> DistanceMap;
 
 class larvaDistanceMap{
   private:

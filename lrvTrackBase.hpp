@@ -3,6 +3,11 @@
 #include <utility>
 #include <opencv2/core/core.hpp>
 
+#ifdef LRVTRACK_WITH_CUDA
+#include "opencv2/opencv.hpp"
+#include "opencv2/gpu/gpu.hpp"
+#endif
+
 #define MIN_DISCARD_DISTANCE 30
 #define ROI_PADDING 0
 #define MAX_HORIZ_RESOLUTION 22000 //Pixels
@@ -28,4 +33,30 @@ inline void mysqrt(float * pOut, float * pIn)
   *pOut=sqrt(*pIn);
 }
 #endif
+
+#ifdef LRVTRACK_WITH_CUDA
+inline void lrvTrackNormalize(cv::Mat &src, 
+                  cv::Mat &dst, 
+                  double alpha, 
+                  double beta,
+                  int norm_type)
+{
+  cv::gpu::GpuMat dst_host, src_host;
+  src_host.upload(src);
+  cv::gpu::normalize(src_host,dst_host,alpha,beta,norm_type);
+  dst_host.download(dst);
+}
+
+#else
+inline void lrvTrackNormalize(cv::InputArray src, 
+                  cv::OutputArray dst, 
+                  double alpha, 
+                  double beta,
+                  int norm_type)
+{
+  cv::normalize(src,dst,alpha,beta,norm_type);
+}
 #endif
+
+#endif
+

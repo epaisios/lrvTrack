@@ -44,7 +44,7 @@ int larvaObject::switchFaultyAssignment(
 // Find the other larva involved
 	unsigned int otherLarvaID=0;
 	std::vector<unsigned int>::iterator otherLarvaIT=detected_clusters[blob].begin();
-	for (;otherLarvaIT!=detected_clusters[blob].begin();otherLarvaIT++)
+	for (;otherLarvaIT!=detected_clusters[blob].begin();++otherLarvaIT)
 	{
 		if (*otherLarvaIT!=larva_ID)
 		{

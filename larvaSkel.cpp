@@ -6,8 +6,8 @@ void larvaSkel::ThinSubiteration1(cv::Mat & pSrc, cv::Mat & pDst) {
   int rows = pSrc.rows;
   int cols = pSrc.cols;
   pSrc.copyTo(pDst);
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < rows; ++i) {
+    for(int j = 0; j < cols; ++j) {
       if(pSrc.at<float>(i, j) == 1.0f) {
         /// get 8 neighbors
         /// calculate C(p)
@@ -52,8 +52,8 @@ void larvaSkel::ThinSubiteration2(cv::Mat & pSrc, cv::Mat & pDst) {
   int rows = pSrc.rows;
   int cols = pSrc.cols;
   pSrc.copyTo( pDst);
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < rows; ++i) {
+    for(int j = 0; j < cols; ++j) {
       if (pSrc.at<float>( i, j) == 1.0f) {
         /// get 8 neighbors
         /// calculate C(p)
@@ -108,16 +108,16 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
 
   /// pad source
   cv::Mat p_enlarged_src = cv::Mat(rows + 2, cols + 2, CV_32FC1);
-  for(int i = 0; i < (rows+2); i++) {
+  for(int i = 0; i < (rows+2); ++i) {
     p_enlarged_src.at<float>(i, 0) = 0.0f;
     p_enlarged_src.at<float>( i, cols+1) = 0.0f;
   }
-  for(int j = 0; j < (cols+2); j++) {
+  for(int j = 0; j < (cols+2); ++j) {
     p_enlarged_src.at<float>(0, j) = 0.0f;
     p_enlarged_src.at<float>(rows+1, j) = 0.0f;
   }
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < rows; ++i) {
+    for(int j = 0; j < cols; ++j) {
       if (img_thr.at<float>(i, j) >= 20.0f) {
         p_enlarged_src.at<float>( i+1, j+1) = 1.0f;
       }
@@ -150,8 +150,8 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
   //cv::GaussianBlur(p_enlarged_src,p_enlarged_src,cv::Size(2,2),0,0);
   // copy result
   int cPoints=0;
-  for(int i = 0; i < rows; i++) {
-    for(int j = 0; j < cols; j++) {
+  for(int i = 0; i < rows; ++i) {
+    for(int j = 0; j < cols; ++j) {
       skelImg.at<float>( i, j) = p_enlarged_src.at<float>( i+1, j+1);
       if (skelImg.at<float>( i, j) > 0)
       {
@@ -164,7 +164,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
   
   int mini;
   double min=65535;
-  for (int i=0; i<skelPoints.size(); i++)
+  for (int i=0; i<skelPoints.size(); ++i)
   {
     double xdiff=fabs(skelPoints[i].x-centroid.x);
     double ydiff=fabs(skelPoints[i].y-centroid.y);
@@ -182,7 +182,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
 
 void larvaSkel::drawSkeleton(cv::Mat &img,cv::Scalar col)
 {
-  for (int i=0;i<skelPoints.size();i++)
+  for (int i=0;i<skelPoints.size();++i)
   {
     cv::circle(img,
         skelPoints[i], // circle centre

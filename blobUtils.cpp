@@ -48,7 +48,7 @@ void createLarvaContour(cv::Mat &lrvROI,
 			blob.contour.chainCode.size()*sizeof(cv::Point)
 			);
 	sizes[0]=cntPoly->size();
-	for (int i=0;i<cntPoly->size();i++)
+	for (int i=0;i<cntPoly->size();++i)
 	{
 		ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING;
 		ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING;
@@ -80,7 +80,7 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 			);
 
 	sizes[0]=cntPoly->size();
-	for (int i=0;i<cntPoly->size();i++)
+	for (int i=0;i<cntPoly->size();++i)
 	{
 		ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING;
 		ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING;
@@ -136,7 +136,7 @@ double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
 			);
 	ROIcopy.copyTo(ROI);
 	ROI=ROI&larvaROI;
-	cv::normalize(ROI, ROI, 0, 255, CV_MINMAX );
+	lrvTrackNormalize(ROI, ROI, 0, 255, CV_MINMAX );
 	double nz=cv::norm(ROI,cv::NORM_L1);
 	return nz;
 }
