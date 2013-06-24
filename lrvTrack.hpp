@@ -5,6 +5,14 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <fstream>
 #include "larvaObject.hpp"
+#include <boost/timer/timer.hpp>
+#ifdef _WIN32
+#include <winsock.h>
+#endif
+
+using boost::timer::cpu_timer;
+using boost::timer::cpu_times;
+using boost::timer::nanosecond_type;
 
 std::string VIDEO_TYPE=".avi";
 //int VIDEO_CODEC=CV_FOURCC('X','2','6','4');
@@ -53,10 +61,11 @@ std::vector<unsigned int> lost_larvae;
 std::vector<unsigned int> current_new;
 std::vector<unsigned int> current_gone;
 
-struct timeval tS;
-struct timeval tP;
-struct timeval tC;
-double FrameEllapsedTime;
+cpu_timer tS,tP;
+cpu_times FrameEllapsedTime;
+//struct timeval tP;
+//struct timeval tC;
+//double FrameEllapsedTime;
 cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;

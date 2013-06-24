@@ -3,3 +3,4 @@
 -I/opt/opencv/2.4.5-gpu/include
 -I/usr/local/include
 -I.
+-DLRVTRACK_WITH_OPENCL
