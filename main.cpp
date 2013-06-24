@@ -286,16 +286,16 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 			cur_larva.centroids.push_back(centroid);
 
 			// Update centroid_speeds (in pixel per second per axis)
+      double FrameEllapsedSeconds=FrameEllapsedTime.wall/1000000000.0;
 			cur_larva.centroid_speed_x.push_back(
-				(blob.centroid.x - preBlob.centroid.x)/FrameEllapsedTime.wall);
+				(blob.centroid.x - preBlob.centroid.x)/FrameEllapsedSeconds);
 			cur_larva.centroid_speed_y.push_back(
-				(blob.centroid.y - preBlob.centroid.y)/FrameEllapsedTime.wall
-					);
+				(blob.centroid.y - preBlob.centroid.y)/FrameEllapsedSeconds);
       
       double curAngle=cvb::cvAngle(&blob);
       double preAngle=cvb::cvAngle(&preBlob);
 
-      cur_larva.angular_speed.push_back(fabs(curAngle-preAngle)/FrameEllapsedTime.wall);
+      cur_larva.angular_speed.push_back(fabs(curAngle-preAngle)/FrameEllapsedSeconds);
 
 			// Look if larva is a blob
 			if ( (!cur_larva.isCluster) &&
@@ -1474,7 +1474,6 @@ void printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
 
   if(first==true)
   {
-    //double elapsed=(tC.tv_sec - tS.tv_sec) + ((tC.tv_usec - tS.tv_usec)/1000000.0);
 	  cpu_times elapsed(tS.elapsed());
 	  summary << "1 ";
 
@@ -1482,7 +1481,7 @@ void printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
       << std::fixed 
       << std::setfill('0') 
       << std::setprecision(3) 
-	  << elapsed.wall 
+	  << (double) elapsed.wall/1000000000.0
       << "  ";
 
     summary << blobs.size() << " ";
@@ -1606,7 +1605,7 @@ void printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
       << std::fixed 
       << std::setfill('0') 
       << std::setprecision(3) 
-	  << elapsed.wall 
+	  << (double) elapsed.wall/1000000000.0
       << "  ";
 
     summary << detected_larvae.size() << " ";
@@ -1761,14 +1760,14 @@ void printBlobFile(larvaObject lrv)
     blobFile.open(blobFilePath.c_str());
 
     blobFile << CURRENT_FRAME-START_FRAME+1 << " " ;
-    summary << std::left 
+    BLOBFILENAME << std::left 
       << std::fixed 
       << std::setfill('0') 
       << std::setprecision(3) 
-	  << elapsed.wall
+	  << elapsed.wall/1000000000LL
       << "  ";
 
-    summary << detected_larvae.size() << " ";
+    BLOBFILENAME << detected_larvae.size() << " ";
 }
 
 int main(int argc, char* argv[])
@@ -1900,6 +1899,11 @@ int main(int argc, char* argv[])
     }
   }
 
+  fs::path experimentFolderPath(LRVTRACK_RESULTS_FOLDER);
+  experimentFolderPath=experimentFolderPath / LRVTRACK_DATE;
+  fs::path summaryFilePath(
+      experimentFolderPath / (LRVTRACK_NAME + ".summary")
+      );
 
   cvb::CvBlobs preBlobs;
   while (!stop)
@@ -1908,22 +1912,16 @@ int main(int argc, char* argv[])
     if (!capture.read(frame))
       break;
 
-
     if(TRACK)
     {
-      setupTracker();
-
-      fs::path experimentFolderPath(LRVTRACK_RESULTS_FOLDER);
-      experimentFolderPath=experimentFolderPath / LRVTRACK_DATE;
-      fs::path summaryFilePath(
-          experimentFolderPath / (LRVTRACK_NAME + ".summary")
-          );
-
-      summary.open(summaryFilePath.c_str());
       if(START_FRAME==0)
       {
-        //gettimeofday(&tS,0);
-		tS.start();
+        setupTracker();
+        if(!summary.is_open())
+        { 
+          summary.open(summaryFilePath.c_str());
+        }
+        tS.start();
         START_FRAME=CURRENT_FRAME;
       }
 
@@ -2027,13 +2025,13 @@ int main(int argc, char* argv[])
 
       if(preBlobs.size()>0)
       {
-		FrameEllapsedTime = tP.elapsed();
+		    FrameEllapsedTime = tP.elapsed();
         larvae_track(blobs,preBlobs,tracked_blobs);
         tP.start();
 
         printSummary(preBlobs,blobs,false);
 
-        printBlobFile(detected_larvae[1]);
+        //printBlobFile(detected_larvae[1]);
 
         preBlobs=tracked_blobs;
       }
