@@ -3,7 +3,7 @@
 
 double diff(cv::Point &a, cv::Point &b)
 {
-	return (fabs(a.x-b.x)+fabs(a.y-b.y));
+	return (fabs((double) a.x-b.x)+fabs((double)a.y-b.y));
 }
 
 void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point> &points)
@@ -47,7 +47,7 @@ void createLarvaContour(cv::Mat &lrvROI,
 	ContourPoints[0]=(cv::Point*) malloc(
 			blob.contour.chainCode.size()*sizeof(cv::Point)
 			);
-	sizes[0]=cntPoly->size();
+	sizes[0]=static_cast<int> (cntPoly->size());
 	for (int i=0;i<cntPoly->size();++i)
 	{
 		ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING;
@@ -79,7 +79,7 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 			blob.contour.chainCode.size()*sizeof(cv::Point)
 			);
 
-	sizes[0]=cntPoly->size();
+	sizes[0]=static_cast<int> (cntPoly->size());
 	for (int i=0;i<cntPoly->size();++i)
 	{
 		ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING;
@@ -122,7 +122,7 @@ double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD)
 					 cv::Point(int(x1),int(y1)),
 					 cv::Point(int(x2),int(y2)),
 					 cv::Scalar(0,255,0));
-
+	return angle;
 }
 
 double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
