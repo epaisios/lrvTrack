@@ -788,6 +788,36 @@ int closerTo(cvb::CvBlob *blob1, cvb::CvBlob *blob2,cvb::CvBlob* blob)
   else
     return 0;
 }
+
+bool centresMatch(cvb::CvBlobs &In, std::vector<unsigned int> larvae, cvb::CvBlob *blob,double factor=1-LARVA_SIZE_COMPARISON_FACTOR)
+{
+	double xcomb, ycomb;
+	std::vector<unsigned int>::iterator it=larvae.begin();
+	while(it!=larvae.end())
+	{
+		xcomb+=In[*it]->centroid.x;
+		ycomb+=In[*it]->centroid.y;
+		++it;
+	}
+	xcomb=xcomb/larvae.size();
+	ycomb=ycomb/larvae.size();
+
+	if ((blob->centroid.x - xcomb)< factor*xcomb &&
+									(blob->centroid.y - ycomb)< factor*ycomb )
+	{
+					return true;
+	}
+	else
+	{
+					return false;
+	}
+}
+
+void findBestCentroidMatch(cvb::CvBlobs &In, cvb::CvBlob *blob, std::vector<unsigned int> IDs)
+{
+
+}
+
 void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
 {
 
@@ -839,7 +869,7 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
       if(assignedNew.find(nearestNew)!=assignedNew.end())
       {
         //Larva closest to larva prevID has already been assigned.
-        //that is, two larva have been matched to one new one.
+        //that is, two larvae have been matched to one new one.
 
         DEBUG << "    Larva " << prevID << " has been previously assigned to " << assignedNew[nearestNew].size() << " larvae"   ;
         verbosePrint(DEBUG);
@@ -851,7 +881,9 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
         if (LARVA_SIZE_COMPARISON_FACTOR*prevBlob->area < In[nearestNew]->area)
         {
           //Size shows that converging is likely. We add the larvae to the
-          //group.
+          //group if the centres make sense.
+					std::vector<unsigned int> candidates
+					
         }
         else
         {
@@ -1016,7 +1048,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
 			used_map[minLabel].push_back((*prevIt).first);
 			//inactive[(*prevIt).first]=0;
 		}
-		else if (min<150)
+		else if (min<30)
 		{
 			// Rather large jump. Indicates:
 			// 1) larvae converged
