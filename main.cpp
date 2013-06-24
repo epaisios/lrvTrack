@@ -886,7 +886,7 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
         {
           //Size shows that converging is likely. We add the larvae to the
           //group if the centres make sense.
-					std::vector<unsigned int> candidates
+	  //std::vector<unsigned int> candidates
 					
         }
         else
