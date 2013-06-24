@@ -9,6 +9,7 @@
 #include <boost/timer/timer.hpp>
 #include <iomanip>
 #include <string>
+
 #include "cvblob.h"
 #include "lrvTrackBase.hpp"
 #include "blobUtils.hpp"
@@ -1779,10 +1780,14 @@ int main(int argc, char* argv[])
 
 #ifdef LRVTRACK_WITH_CUDA
   cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());
+#elif defined(LRVTRACK_WITH_OPENCL)
+  std::vector<cv::ocl::Info> oclinfo;
+  cv::ocl::getDevice(oclinfo);
+  std::cout << "Found " << oclinfo.size() << " OpenCL devices. Using: ";
+  std::cout << oclinfo[0].DeviceName[0] << std::endl;
 #endif
   cv::VideoCapture capture;
   handleArgs(argc,argv);
-
   if(LRVTRACK_CAMERA_INPUT != -2)
   {
     //capture.open(CV_CAP_DC1394);
