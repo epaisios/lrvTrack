@@ -9,7 +9,7 @@
  */
 class larvaObject
 {
-  public:
+public:
   unsigned int start_frame;
   unsigned int cur_frame;
   unsigned int lifetimeWithStats;
@@ -54,15 +54,15 @@ class larvaObject
   std::vector<cv::Point> centroids;
   std::vector<double> centroid_speed_x;
   std::vector<double> centroid_speed_y;
-  
+
   std::vector<unsigned int> inCluster;
-  
+
   std::vector<larvaSkel> lrvskels;
-  
+
   std::vector<cv::Point> heads;
   std::vector<cv::Point> tails;
-  
-  larvaObject(): 
+
+  larvaObject():
     start_frame(0),
     cur_frame(0),
     parentBlobID(0),
@@ -92,9 +92,9 @@ class larvaObject
     width_min(0)
   {}
 
-int switchFaultyAssignment(
-	std::map<unsigned int,std::vector<unsigned int> > &detected_clusters,
-	std::map<unsigned int,larvaObject> &detected_larvae
-	);
+  int switchFaultyAssignment(
+    std::map<unsigned int,std::vector<unsigned int> > &detected_clusters,
+    std::map<unsigned int,larvaObject> &detected_larvae
+  );
 };
 #endif
