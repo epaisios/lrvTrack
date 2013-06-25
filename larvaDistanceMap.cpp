@@ -23,7 +23,7 @@ void lBFS(int p1,
       {
         if (Distances[p1][i]<0)
           Q.push(i);
-        float multres=Distances[cur][i]*Distances[p1][cur];
+        float multres=(float) Distances[cur][i]*Distances[p1][cur];
         float sqrtres[1];
         ltsqrt(sqrtres,&multres);
         double newDst = Distances[cur][i]+Distances[p1][cur] + 

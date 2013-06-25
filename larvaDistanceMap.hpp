@@ -32,7 +32,7 @@ class larvaDistanceMap{
       }
       double &operator[](cv::Point p2)
       {
-        int index_p2=std::distance(parent.points.begin(),
+        int index_p2=(int) std::distance(parent.points.begin(),
                                std::find(parent.points.begin(),
                                          parent.points.end(),
                                          p2)
@@ -48,7 +48,7 @@ class larvaDistanceMap{
     }
     my2ndPoint operator[](cv::Point p1)
     {
-      int index_p1=std::distance(points.begin(),
+      int index_p1=(int) std::distance(points.begin(),
           std::find(points.begin(),
             points.end(),
             p1)

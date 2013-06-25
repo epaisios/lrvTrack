@@ -28,10 +28,10 @@ void findHeadTail(std::vector<cv::Point> &startPoints,
 	int i=0;
 	if (startPoints.size()<2)
 	{
-		Head.x=0.0;
-		Head.y=0.0;
-		Tail.x=0.0;
-		Tail.y=0.0;
+		Head.x=0;
+		Head.y=0;
+		Tail.x=0;
+		Tail.y=0;
 	}
 
 	if( lrv.start_frame==CURRENT_FRAME || 
@@ -46,7 +46,7 @@ void findHeadTail(std::vector<cv::Point> &startPoints,
 		{
 			cv::Point p=startPoints[i];
 			cvb::CvBlob blob=lrv.blobs.back();
-			double tmpsz=getSurroundingSize(p,blob,grey_frame);
+			int tmpsz=(int) getSurroundingSize(p,blob,grey_frame);
 			if (tmpsz>max)
 			{
 				Tail=startPoints[i];
@@ -303,7 +303,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 			{
 
 				++cur_larva.lifetimeWithStats;
-				cur_larva.lastIdxWithStats=cur_larva.area.size();
+				cur_larva.lastIdxWithStats=(int) cur_larva.area.size();
 
 				larvaSkel newLarvaSkel(larvaROI,centroid);
 				cur_larva.lrvskels.push_back(newLarvaSkel);
@@ -556,10 +556,10 @@ void diverge_match(
   // TODO get larvae information for all cluster members.
   */
 	cv::Point mdpLarva1, mdpLarva2;
-	mdpLarva1.x=newLarva1->centroid.x;
-	mdpLarva1.y=newLarva1->centroid.y;
-	mdpLarva2.x=newLarva2->centroid.x;
-	mdpLarva2.y=newLarva2->centroid.y;
+	mdpLarva1.x=(int) newLarva1->centroid.x;
+	mdpLarva1.y=(int) newLarva1->centroid.y;
+	mdpLarva2.x=(int) newLarva2->centroid.x;
+	mdpLarva2.y=(int) newLarva2->centroid.y;
 
 	double size_a=LarvaA.area_sum/LarvaA.area.size();
 	double size_b=LarvaB.area_sum/LarvaB.area.size();;
@@ -582,11 +582,11 @@ void diverge_match(
 	larvaDistanceMap dstLarva1(newLarva1Points), dstLarva2(newLarva2Points);
 
 	cv::Point centroid1;
-	centroid1.x=newLarva1->centroid.x;
-	centroid1.y=newLarva1->centroid.y;
+	centroid1.x=(int) newLarva1->centroid.x;
+	centroid1.y=(int) newLarva1->centroid.y;
 	cv::Point centroid2;
-	centroid2.x=newLarva2->centroid.x;
-	centroid2.y=newLarva2->centroid.y;
+	centroid2.x=(int)newLarva2->centroid.x;
+	centroid2.y=(int)newLarva2->centroid.y;
 
 	larvaSkel newLarvaSkel1(larvaROI1,centroid1);
 	larvaSkel newLarvaSkel2(larvaROI2,centroid2);
@@ -1429,7 +1429,7 @@ The number of odour cups can be specified as a value for this option."
 
 }
 
-int setupTracker()
+void setupTracker()
 {
     if(!fs::is_directory(LRVTRACK_RESULTS_FOLDER))
     {
@@ -1790,7 +1790,8 @@ int main(int argc, char* argv[])
   if(LRVTRACK_CAMERA_INPUT != -2)
   {
     //capture.open(CV_CAP_DC1394);
-    capture.open(300);
+    //capture.open(300);
+	capture.open(0);
     capture.set(CV_CAP_PROP_FRAME_WIDTH,1280);
     capture.set(CV_CAP_PROP_FRAME_HEIGHT,1024);
     capture.set(CV_CAP_PROP_FPS,24);
