@@ -295,7 +295,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
           double curAngle=cvb::cvAngle(&blob);
           double preAngle=cvb::cvAngle(&preBlob);
 
-          cur_larva.angular_speed.push_back(fabs(curAngle-preAngle)/FrameEllapsedSeconds);
+          cur_larva.angular_speed.push_back(cv::fast_abs(curAngle-preAngle)/FrameEllapsedSeconds);
 
           // Look if larva is a blob
           if ( (!cur_larva.isCluster) &&
@@ -704,17 +704,17 @@ void diverge_match(
   int mini=minv[0];
   if (DistA1+DistB2 > DistA2+DistB1)
     /*
-       double miniDiff = fabs(vals[minv[0]] - vals[minv[1]]);
+       double miniDiff = cv::fast_abs(vals[minv[0]] - vals[minv[1]]);
        if (mini >=2 && MHDiff < 0 )
        {
-       if (fabs(MHDiff) > miniDiff)
+       if (cv::fast_abs(MHDiff) > miniDiff)
        {
        mini=0;
        }
        }
        else if (mini < 2 && MHDiff > 0 )
        {
-       if (fabs(MHDiff) > miniDiff)
+       if (cv::fast_abs(MHDiff) > miniDiff)
        {
        mini=2;
        }
@@ -737,12 +737,103 @@ void diverge_match(
     }
 }
 
+//Returns all the larvae in the set Blobs within an area around "Blob".
+// The area is determined by the size of the Blob (the longest side 
+// of the bounding box multiplied by PADRatio).
+//
+// The vector nearbyLarvae is filled by those found sorted from closest
+// to furthest.
+void getNearbyLarvae(cvb::CvBlobs &Blobs, cvb::CvBlob *Blob, 
+		            std::vector<unsigned int> &nearbyLarvae,double PADRatio=2)
+{
+  std::vector<double> distances;
+	double MaxDist = std::max(Blob->maxx-Blob->minx,Blob->maxy-Blob->miny);
+	MaxDist=PADRatio*MaxDist;
+
+  cvb::CvBlobs::iterator It=Blobs.begin();
+  while (It!=Blobs.end())
+	{
+		cvb::CvBlob *cBlob=It->second;
+    if (cBlob->centroid.x < (Blob->maxx + MaxDist/2) &&
+        cBlob->centroid.x > (Blob->minx - MaxDist/2) &&
+        cBlob->centroid.y < (Blob->maxy + MaxDist/2) &&
+        cBlob->centroid.y > (Blob->miny - MaxDist/2))
+    {
+      double DIST=cv::fast_abs(Blob->centroid.x - cBlob->centroid.x) +
+        cv::fast_abs(Blob->centroid.y - cBlob->centroid.y);
+      std::vector<double>::iterator dIt=distances.begin();
+      std::vector<unsigned int>::iterator nIt=nearbyLarvae.begin();
+      if(nearbyLarvae.size()>0)
+      {
+        while(dIt!=distances.end())
+        {
+          if(DIST < *dIt)
+          {
+            distances.insert(dIt,DIST);
+            nearbyLarvae.insert(nIt,It->first);
+          }
+        }
+        nearbyLarvae.push_back(It->first);
+        distances.push_back(DIST);
+        ++nIt;
+        ++dIt;
+      }
+      else
+      {
+        distances.push_back(DIST);
+        nearbyLarvae.push_back(It->first);
+      }
+    }
+		++It;
+	}
+}
+
 void findCombination(cvb::CvBlobs &In, cvb::CvBlobs &Prev, std::vector<unsigned int> &matching, std::vector<unsigned int> &withinDIST)
 {
 }
 
 void findClosest(cvb::CvBlobs &In, cvb::CvBlob *BLOB, unsigned int &closestBLOB, double &dist)
 {
+  cvb::CvBlobs::iterator It=In.begin();
+  double MIN=65000;
+  unsigned int MINID=0;
+  while (It!=In.end())
+  {
+    cvb::CvBlob *cBlob=It->second;
+    double DIST=cv::fast_abs(BLOB->centroid.x - cBlob->centroid.x) +
+      cv::fast_abs(BLOB->centroid.y - cBlob->centroid.y);
+    if(DIST < MIN)
+    {
+      dist=DIST;
+      closestBLOB=It->first;
+    }
+    ++It;
+  }
+}
+
+bool blobSizeIsRelevant(
+    cvb::CvBlob *BLOB1,
+    cvb::CvBlob *BLOB2,
+    double ratio=LARVA_SIZE_COMPARISON_FACTOR)
+{
+		return (ratio*BLOB1->area > BLOB2->area &&
+						((2-ratio)*BLOB1->area < BLOB2->area));
+}
+
+bool blobSizeIsRelevant(
+    cvb::CvBlobs &In,
+    cvb::CvBlob *BLOB,
+    std::vector<unsigned int> &larvae,
+    double ratio=LARVA_SIZE_COMPARISON_FACTOR)
+{
+  std::vector<unsigned int>::iterator IT=larvae.begin();
+  double areaSUM=0;
+  while (IT!=larvae.end())
+  {
+    areaSUM+=In[*IT]->area;
+  }
+		return (ratio*BLOB->area > areaSUM &&
+						((2-ratio)*BLOB->area < areaSUM ));
 }
 
 void findInDistance(cvb::CvBlobs &In, cvb::CvBlob *BLOB, double dist, std::map <unsigned int, double> neighbours)
@@ -775,8 +866,8 @@ void verbosePrint(std::string &toPrint)
 
 double getManhattanDistance(cvb::CvBlob *blob1, cvb::CvBlob *blob2)
 {
-  return (fabs(blob1->centroid.x - blob2->centroid.x) +
-          fabs(blob1->centroid.y - blob2->centroid.y));
+  return (cv::fast_abs(blob1->centroid.x - blob2->centroid.x) +
+          cv::fast_abs(blob1->centroid.y - blob2->centroid.y));
 }
 
 // Is blob1 closer to blob than blob2
@@ -795,21 +886,15 @@ int closerTo(cvb::CvBlob *blob1, cvb::CvBlob *blob2,cvb::CvBlob* blob)
     return 0;
 }
 
-bool centresMatch(cvb::CvBlobs &In, std::vector<unsigned int> larvae, cvb::CvBlob *blob,double factor=1-LARVA_SIZE_COMPARISON_FACTOR)
+bool centresMatch(
+    cvb::CvBlob *blob1,
+    cvb::CvBlob *blob2,
+    double factor=1-LARVA_SIZE_COMPARISON_FACTOR)
 {
-  double xcomb, ycomb;
-  std::vector<unsigned int>::iterator it=larvae.begin();
-  while(it!=larvae.end())
-    {
-      xcomb+=In[*it]->centroid.x;
-      ycomb+=In[*it]->centroid.y;
-      ++it;
-    }
-  xcomb=xcomb/larvae.size();
-  ycomb=ycomb/larvae.size();
-
-  if ((blob->centroid.x - xcomb)< factor*xcomb &&
-      (blob->centroid.y - ycomb)< factor*ycomb )
+  double objectLength=
+      std::max(blob1->maxx-blob1->minx,blob1->maxy-blob1->miny);
+  if ((blob1->centroid.x - blob2->centroid.x)< factor*objectLength &&
+      (blob1->centroid.y - blob2->centroid.y)< factor*objectLength )
     {
       return true;
     }
@@ -819,144 +904,372 @@ bool centresMatch(cvb::CvBlobs &In, std::vector<unsigned int> larvae, cvb::CvBlo
     }
 }
 
-void findBestCentroidMatch(cvb::CvBlobs &In, cvb::CvBlob *blob, std::vector<unsigned int> IDs)
+void assign_one(unsigned int preID,unsigned int postID)
 {
+  assignedPrevious[preID].push_back(postID);
+  assignedNew[postID].push_back(preID);
+  assignedPreMap[preID]=1;
+}
 
+void assign_one(unsigned int preID,
+                std::vector<unsigned int> postID)
+{
+  std::vector<unsigned int>::iterator postIT=postID.begin();
+  while(postIT!=postID.end())
+  {
+    assignedPrevious[preID].push_back(*postIT);
+    assignedNew[*postIT].push_back(preID);
+  }
+  assignedPreMap[preID]=postID.size();
+}
+
+void assign_one(std::vector<unsigned int> preID,
+                unsigned int postID)
+{
+  std::vector<unsigned int>::iterator preIT=preID.begin();
+  while(preIT!=preID.end())
+  {
+    assignedNew[postID].push_back(*preIT);
+    assignedNew[*preIT].push_back(postID);
+    assignedPreMap[*preIT]=1;
+  }
+}
+
+void assign_diverging(cvb::CvBlobs &New,
+                      unsigned int CLUSTER_ID,
+                      std::vector<unsigned int> &IDs
+                      )
+{
+  // We have the following cases here:
+  //  1) CLUSTER_ID Corresponds to no cluster: This means
+  //     the cluster is newly found (it started as a cluster)
+  //  2) CLUSTER_ID Corresponds to an existing cluster:
+  //      - We need to understand how it split.
+  //        M -> M?
+  //        M -> N<M?
+  //        This will give us a clue about which ones are left.
+  if(detected_clusters.find(CLUSTER_ID)==detected_clusters.end())
+  {
+    //Not found new cluster NEW IDs to be given to the vector
+    //elements
+  }
+  else
+  {
+
+  }
+}
+
+void assign_clustering(bool NEW,
+                      unsigned int CLUSTER_ID,
+                      std::vector<unsigned int> &IDs
+                      )
+{
+  std::vector<unsigned int>::iterator IT=IDs.begin();
+  detected_clusters[CLUSTER_ID][0]=IDs.size();
+  current_clusters[CLUSTER_ID][0]=IDs.size();
+  std::map<unsigned int,std::vector<unsigned int> >::iterator dcIT;
+  assign_one(IDs,CLUSTER_ID);
+  while (IT!=IDs.end())
+  {
+    if((dcIT=detected_clusters.find(*IT))!=detected_clusters.end())
+    {
+      detected_clusters[CLUSTER_ID].insert(
+          detected_clusters[CLUSTER_ID].end(),
+          dcIT->second.begin(),
+          dcIT->second.end());
+      // -2 because the cluster ID should be removed and replaced
+      // by it's elements (-1) and another -1 because the 
+      // detected_clusters contains as first element the size 
+      // estimate of the cluster (the candidates can be more than that)
+      detected_clusters[CLUSTER_ID][0]+=dcIT->second.size()-2;
+      detected_clusters.erase(dcIT);
+    }
+    else
+    {
+      detected_clusters[CLUSTER_ID].push_back(*IT);
+      current_clusters[CLUSTER_ID].push_back(*IT);
+    }
+    ++IT;
+  }
+  current_clusters[CLUSTER_ID]=detected_clusters[CLUSTER_ID];
+}
+
+bool centresMatch(
+    cvb::CvBlobs &In, 
+    cvb::CvBlob *blob,
+    std::vector<unsigned int> &larvae, 
+    double factor=1-LARVA_SIZE_COMPARISON_FACTOR)
+{
+  double xcomb=0, ycomb=0;
+  double objectLength=
+      std::max(blob->maxx-blob->minx,blob->maxy-blob->miny);
+  double lrvAreaSum=0;
+  if(larvae.size()==1)
+  {
+    xcomb=In[larvae[0]]->centroid.x;
+    ycomb=In[larvae[0]]->centroid.y;
+  }
+  else
+  {
+    std::vector<unsigned int>::iterator it=larvae.begin();
+    while(it!=larvae.end())
+    {
+      xcomb+=In[*it]->centroid.x*In[*it]->area;
+      ycomb+=In[*it]->centroid.y*In[*it]->area;
+      lrvAreaSum+=In[*it]->area;
+      ++it;
+    }
+    xcomb=xcomb/lrvAreaSum;
+    ycomb=ycomb/lrvAreaSum;
+  }
+  if ((blob->centroid.x - xcomb)< factor*objectLength &&
+      (blob->centroid.y - ycomb)< factor*objectLength )
+    {
+      return true;
+    }
+  else
+    {
+      return false;
+    }
+}
+
+unsigned int factorial(unsigned int num)
+{
+  unsigned int val=1;
+  while(num>1)
+    val=(num--)*val;
+
+  return val;
+}
+
+unsigned int kofn(unsigned int k, unsigned int n)
+{
+  return factorial(n)/(factorial(k)*factorial(n-k));
+}
+
+//This is not exactly the powerset.
+//We do not need the sets of 1 element and the complete SET in there
+void powersets(std::vector<unsigned int> &IN, std::vector<std::vector<unsigned int> > &OUT){
+  for (unsigned int i=2 ; i<IN.size();i++)
+  {
+    std::vector<unsigned int> pointers;
+    for(unsigned int k=0;k<i;k++)
+    {
+      pointers.push_back(k);
+    }
+    for (unsigned int j=0 ; j<kofn(i,IN.size());j++)
+    {
+      std::vector<unsigned int> cvec;
+      for(unsigned int idx=0;idx<i;idx++)
+      {
+        cvec.push_back(IN[pointers[idx]]);
+      }
+      OUT.push_back(cvec);
+      for(unsigned int inc=i;inc>0;inc--)
+      {
+        if(pointers[inc-1]<IN.size()-1-(i-inc))
+        {
+          pointers[inc-1]++;
+          unsigned int add=0;
+          for(unsigned int res=inc;res<i;res++)
+          {
+            add++;
+            pointers[res]=pointers[inc-1]+add;
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
+int detect_diverging(std::vector<unsigned int> &preLarvaeNearby,
+                       std::vector<unsigned int> &newLarvaeNearby,
+                       cvb::CvBlobs &Pre,
+                       cvb::CvBlobs &New)
+{
+  if(newLarvaeNearby.size()<=1)
+    return -1; // No diverging is possible
+  // Check the complete set first
+  std::vector<unsigned int>::iterator pIT=preLarvaeNearby.begin();
+  while(pIT!=preLarvaeNearby.end())
+  {
+    if(centresMatch(New,Pre[*pIT],newLarvaeNearby))
+    {
+      // Centres of all candidates match with new blob
+      // cluster contains all. We can return
+      //assign_clustering(true,++LARVAE_COUNT,preLarvaeNearby);
+      //assign_diverging();
+      continue;
+    }
+    std::vector<std::vector<unsigned int> > pSETS;
+    powersets(newLarvaeNearby,pSETS);
+    std::vector<std::vector<unsigned int> >::iterator pSIT=pSETS.begin();
+    while(pSIT!=pSETS.end())
+    {
+      if(centresMatch(New,Pre[*pIT],*pSIT))
+      {
+        // Centres of all candidates match with new blob
+        // cluster contains all. We can return
+        //assign_clustering(true,++LARVAE_COUNT,*pSIT);
+        break;
+      }
+
+    }
+    ++pIT;
+  }
+}
+
+int detect_clustering(std::vector<unsigned int> &preLarvaeNearby,
+                       std::vector<unsigned int> &newLarvaeNearby,
+                       cvb::CvBlobs &Pre,
+                       cvb::CvBlobs &New)
+{
+  if(preLarvaeNearby.size()<=1)
+    return -1; // No clustering is possible
+
+  // Check the complete set first
+  std::vector<unsigned int>::iterator nIT=newLarvaeNearby.begin();
+  while(nIT!=newLarvaeNearby.end())
+  {
+    if(centresMatch(Pre,New[*nIT],preLarvaeNearby))
+    {
+      // Centres of all candidates match with new blob
+      // cluster contains all. We can return
+      assign_clustering(true,++LARVAE_COUNT,preLarvaeNearby);
+      continue;
+    }
+    std::vector<std::vector<unsigned int> > pSETS;
+    powersets(preLarvaeNearby,pSETS);
+    std::vector<std::vector<unsigned int> >::iterator pSIT=pSETS.begin();
+    while(pSIT!=pSETS.end())
+    {
+      if(centresMatch(Pre,New[*nIT],*pSIT))
+      {
+        // Centres of all candidates match with new blob
+        // cluster contains all. We can return
+        assign_clustering(true,++LARVAE_COUNT,*pSIT);
+        break;
+      }
+
+    }
+    ++nIT;
+  }
+
+  //std::vector<unsigned int>::iterator preIT=preLarvaeNearby;
 }
 
 void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
 {
 
   std::stringstream DEBUG;
-  // map of assignments of the blobs in the previous frame.
-  // Assignments are such that:
-  //    [ IDP of Previous Frame, [ IDN1, ..., IDNN]] IDs of
-  //    new Frame assigned to IDP
-  //    When a larva is lost assignment
-  std::map<unsigned int, std::vector<unsigned int> > assignedPrevious;
 
-  // map of assignments of the blobs in the current frame.
-  // Assignments are such that:
-  //    [ IDP of Current Frame, [ IDN1, ..., IDNN]] IDs of
-  //    Previous Frame assigned to IDP
-  std::map<unsigned int, std::vector<unsigned int> > assignedNew;
+  assignedNew.clear();
+  assignedPrevious.clear();
+  assignedPreMap.clear();
 
   cvb::CvBlobs::iterator prevIt=Prev.begin();
+  while (prevIt!=Prev.end())
+    {
+			assignedPreMap[prevIt->first]=0;
+			++prevIt;
+		}
 
   verbosePrint("Starting Tracking loop");
 
+	prevIt=Prev.begin();
   while (prevIt!=Prev.end())
+  {
+    //If the larvae from the previous frame has not been assigned
+    //  -- It may be that it is assigned during a previous larva
+    //     inspection.
+    if(assignedPreMap[prevIt->first]==0)
     {
-      //nearestNew and nearestDist store the ID and distance  of the
-      //closest blob found in the new frame as returned by the
-      //findClosest funtion.
-      unsigned int nearestNew=0;
-      double nearestDist=0.0;
-      // ID and Blob pointer of larva of the previous frame we are investigating
-      unsigned int prevID = prevIt->first;
-      cvb::CvBlob *prevBlob = prevIt->second;
+      cvb::CvBlob *preBlob=prevIt->second;
+      unsigned int preID=prevIt->first;
 
-      DEBUG << "Currently Processing Larva with PrevID: " << prevID;
-      verbosePrint(DEBUG);
-      // Find closest blob
-      findClosest(In,prevBlob, nearestNew, nearestDist);
+      // Get larva around it before and after
+      std::vector<unsigned int> preLarvaeNearby;
+      std::vector<unsigned int> postLarvaeNearby;
+      getNearbyLarvae(Prev,preBlob,preLarvaeNearby);
+      getNearbyLarvae(In,preBlob,postLarvaeNearby);
 
-      DEBUG << "    Found closest larva with ID: " << nearestNew << " and distance: " << nearestDist;
-      verbosePrint(DEBUG);
-      // Very close... Quick assign
-      if (nearestDist <2)
+      // Great case collection now:
+
+      // CASE 1 -> 1
+      if(preLarvaeNearby.size()==1 && postLarvaeNearby.size()==1)
+      {
+        if(blobSizeIsRelevant(In[postLarvaeNearby[0]],preBlob))
         {
-          assignedPrevious[prevID].push_back(nearestNew);
-          assignedNew[nearestNew].push_back(prevID);
-        }
-
-      if (nearestDist<30)
-        {
-          if(assignedNew.find(nearestNew)!=assignedNew.end())
-            {
-              //Larva closest to larva prevID has already been assigned.
-              //that is, two larvae have been matched to one new one.
-
-              DEBUG << "    Larva " << prevID << " has been previously assigned to " << assignedNew[nearestNew].size() << " larvae"   ;
-              verbosePrint(DEBUG);
-
-              //                CHECK AREA OF NEW BLOB FOR CONVERGING
-              // Quick area check to decide whether we should consider converging.
-              // For a single larva the change from one frame to the other
-              // should not be large
-              if (LARVA_SIZE_COMPARISON_FACTOR*prevBlob->area < In[nearestNew]->area)
-                {
-                  //Size shows that converging is likely. We add the larvae to the
-                  //group if the centres make sense.
-                  //std::vector<unsigned int> candidates
-
-                }
-              else
-                {
-                  //Size shows converging is unlikely. Possibilities:
-                  //1) Larva disappeared from the previous frame to the current
-                  //   one.
-                  //2) Larva converged with another one and centroid moved
-                  //
-                  //3) The nearestNew was falsely matched to another one.
-
-                  if (assignedNew[nearestNew].size() == 1)
-                    {
-                      //There's only one assignment already (i.e. no cluster was considered)
-                      //Check which one is closer
-                      if (closerTo(prevBlob,Prev[assignedNew[nearestNew][0]],In[nearestNew])==1)
-                        {
-                          //PrevBlob is closer! We should exchange assuming the sizes are
-                          //comparable:
-                          if (fabs((double) prevBlob->area-In[nearestNew]->area)<
-                              (LARVA_SIZE_COMPARISON_FACTOR -1 ) * prevBlob->area )
-                            {
-                              //Area matches reasonably perform the exchange
-                              assignedPrevious.erase(assignedNew[nearestNew][0]);
-                              assignedNew[nearestNew][0]=prevID;
-                              assignedPrevious[prevID].push_back(nearestNew);
-                            }
-                          else
-                            {
-                              //Area too different. Do nothing
-                            }
-                        }
-                    }
-                  else
-                    {
-                      // Seems the new larva is already a cluster.
-                    }
-                }
-
-            }
+          if(centresMatch(In,Prev[preLarvaeNearby[0]],postLarvaeNearby,1.5))
+          {
+            assign_one(preID,postLarvaeNearby[0]);
+          }
           else
-            {
-              assignedPrevious[prevID].push_back(nearestNew);
-              assignedNew[nearestNew].push_back(prevID);
-            }
+          {
+            // Centres do NOT match! Maybe it disappeared.
+            // TODO: Check
+            verbosePrint("1-1: with size similar\
+                and centres not matching. !UNHANDLED!");
+          }
         }
-      // for each current larva with min < 4 assign as successor
-      // if CUR was assigned
-      //find all pre that are within 50 of the current
-      //find combination of those that match new cetnre
-      // Add those to the cluster
+        else
+        {
+          // Sizes are too different:
+          //  Cases:
+          //    1) Object dissapeared and another came into sight.
+          //       Case will be handled when the other one is handled
+          //    2) Merge with a large object.
+          //       Case will be handled when the large object is handled.
+          verbosePrint("1-1: with size too different. No assignment.");
+        }
+      }
+      // END OF 1-1 CASE
+      // GENERAL CASE:
+      else
+      {
+        // Try to assign obvious ones:
+        std::vector<unsigned int>::iterator preNearIt=preLarvaeNearby.begin();
+        while(preNearIt!=preLarvaeNearby.end())
+        {
+          std::vector<unsigned int>::iterator postNearIt=postLarvaeNearby.begin();
+          while(postNearIt!=postLarvaeNearby.end())
+          {
+            if (blobSizeIsRelevant(Prev[*preNearIt],In[*postNearIt]) &&
+                centresMatch(Prev[*preNearIt],In[*postNearIt]))
+            {
+              //1-1 and one extra in sight
+              //New Larva matches preID larva therefore assign and ignore the
+              //other.
+              assign_one(*preNearIt,*postNearIt);
+              // erase the obvious assignments
+              preLarvaeNearby.erase(preNearIt);
+              postLarvaeNearby.erase(postNearIt);
+              break;
+            }
+            ++postNearIt;
+          }
+          ++preNearIt;
+        }
+        // The rest are either appearing/disappearing/clustering/diverging
+        // BUT if the main one was indeed assigned then we are in luck 
+        // and we move on
+        if(assignedPreMap[preID]>0)
+          break;
 
-      // for each larva with min < 50
-      // if only 1 current there (and distance less than 10)  assign as successor
-      // if CUR was assigned
-      //find all pre that are within 50 of the current
-      //find combination of those that match new cetnre
-      // Add those to the cluster
+        detect_clustering(preLarvaeNearby,postLarvaeNearby,Prev, In);
 
-      // if only 1 and distance more than 10 add previous to lost and assign current as new/match
+        if(assignedPreMap[preID]>0)
+          break;
 
-      // if more
-      // find combination matching centres
-      // those that fit the combination belong to the diverging case:
-      // try to match them if cluster is known
-      // assign new if cluster is unknown
-      // those that do not fit the combination are left
+        detect_diverging(preLarvaeNearby,postLarvaeNearby,Prev, In);
+        if(assignedPreMap[preID]>0)
+          break;
+        else
+          verbosePrint("FOUND TESTCASE FOR MIXED DIVERGING/CONVERGING");
+      }
     }
+  }
 }
 
 void findLarvaeInDistance(cvb::CvBlob *centerBlob, std::vector<unsigned int> &out, double distance, cvb::CvBlobs &set, unsigned int &minLabel, double &min)
@@ -970,8 +1283,8 @@ void findLarvaeInDistance(cvb::CvBlob *centerBlob, std::vector<unsigned int> &ou
       blob=((*it).second);
       // MIN_DISCARD_DISTANCE is used to quickly exclude larvae that are
       // too far to be considered
-      if (((XVAL=fabs(blob->centroid.x - centerBlob->centroid.x)) < MIN_DISCARD_DISTANCE ) &&
-          ((YVAL=fabs(blob->centroid.y - centerBlob->centroid.y)) < MIN_DISCARD_DISTANCE ))
+      if (((XVAL=cv::fast_abs(blob->centroid.x - centerBlob->centroid.x)) < MIN_DISCARD_DISTANCE ) &&
+          ((YVAL=cv::fast_abs(blob->centroid.y - centerBlob->centroid.y)) < MIN_DISCARD_DISTANCE ))
         {
           cur=XVAL+YVAL;
           if (cur < distance)
@@ -1054,7 +1367,7 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
           used_map[minLabel].push_back((*prevIt).first);
           //inactive[(*prevIt).first]=0;
         }
-      else if (min<30)
+      else if (min<100)
         {
           // Rather large jump. Indicates:
           // 1) larvae converged
@@ -1087,8 +1400,8 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
                              Prev[used_map[minLabel][0]]->centroid.y);
               double XDIF,YDIF;
               // TODO: Use correct centroid calculation based on area not just middle
-              if (((XDIF=fabs(2*blob->centroid.x - newx)) < 10 ) &&
-                  ((YDIF=fabs(2*blob->centroid.y - newy)) < 10))
+              if (((XDIF=cv::fast_abs(2*blob->centroid.x - newx)) < 10 ) &&
+                  ((YDIF=cv::fast_abs(2*blob->centroid.y - newy)) < 10))
                 {
                   // We're in luck! The center's match :) We have a cluster.
                   used_map[minLabel].push_back((*prevIt).first);
@@ -1153,8 +1466,8 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
                     {
                       cvb::CvBlob *blob;
                       blob=(*it).second;
-                      if (((XVAL=fabs(blob->centroid.x - preBlob->centroid.x)) < 90) &&
-                          ((YVAL=fabs(blob->centroid.y - preBlob->centroid.y)) < 90))
+                      if (((XVAL=cv::fast_abs(blob->centroid.x - preBlob->centroid.x)) < 90) &&
+                          ((YVAL=cv::fast_abs(blob->centroid.y - preBlob->centroid.y)) < 90))
                         {
                           cur=XVAL+YVAL;
                           if (cur < min)
@@ -1175,8 +1488,8 @@ void larvae_track(cvb::CvBlobs &In,cvb::CvBlobs &Prev,cvb::CvBlobs &out)
                   double newx = (In[minLabel]->centroid.x + In[secondDivergent]->centroid.x);
                   double newy = (In[minLabel]->centroid.y + In[secondDivergent]->centroid.y);
                   // TODO: Use correct centroid calculation based on area not just middle
-                  if (((XVAL=fabs(2*(*prevIt).second->centroid.x - newx)) < 20 ) &&
-                      ((YVAL=fabs(2*(*prevIt).second->centroid.y - newy)) < 20))
+                  if (((XVAL=cv::fast_abs(2*(*prevIt).second->centroid.x - newx)) < 20 ) &&
+                      ((YVAL=cv::fast_abs(2*(*prevIt).second->centroid.y - newy)) < 20))
                     {
                       // We're in luck! The center's match :) We have a diverging cluster.
                       used_map[minLabel].push_back((*prevIt).first);

@@ -35,10 +35,10 @@ ocl:
 	g++ $(GCCFLAGS_OPENCL) -g $(INCLUDES_GPU) -L/opt/opencv/2.4.5-gpu/lib -L/usr/local/lib -c larvaSkel.cpp -o larvaSkel.o
 	g++ $(GCCFLAGS_OPENCL) -g $(INCLUDES_GPU) -L/opt/opencv/2.4.5-gpu/lib -L/usr/local/lib -c larvaDistanceMap.cpp -o larvaDistanceMap.o
 	g++ $(GCCFLAGS_OPENCL) -g $(INCLUDES_GPU) -L/opt/opencv/2.4.5-gpu/lib -L/usr/local/lib -c larvaObject.cpp -o larvaObject.o
-	g++ $(GCCFLAGS_OPENCL) -g $(INCLUDES_GPU) -framework OpenCL -L/opt/opencv/2.4.5-gpu/lib -L/usr/local/lib main.cpp $(LIBS) -lopencv_ocl -o lrvTrack *.o
+	g++ $(GCCFLAGS_OPENCL) -g $(INCLUDES_GPU) -framework OpenCL -L/opt/opencv/2.4.5-gpu/lib -L/usr/local/lib main.cpp $(LIBS) -lopencv_gpu -lopencv_ocl -o lrvTrack *.o
 
 clean: 
-	@rm -f *.o lrvTrack
+	@rm -rf *.o lrvTrack *.dSYM
 
 qt:
 	@g++-4.9 $(GCCFLAGS) -g $(INCLUDES_QT) -F/usr/local/lib -framework QtCore -framework QtGui -DQT_GUI_LIB -DQT_CORE_LIB -DUNICODE -L/opt/opencv/2.4.5-qt/lib -L/usr/local/lib -c blobUtils.cpp -o blobUtils.o

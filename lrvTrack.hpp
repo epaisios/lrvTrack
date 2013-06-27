@@ -57,6 +57,21 @@ std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
 std::map<unsigned int,larvaObject> detected_larvae;
 std::map<unsigned int, std::vector<unsigned int> > current_clusters;
 std::map<unsigned int, std::vector<unsigned int> > current_diverged;
+
+//********* Used by the new tracking algorithm ************************
+// map of assignments of the blobs in the previous frame.
+// Assignments are such that:
+//    [ IDP of Previous Frame, [ IDN1, ..., IDNN]] IDs of
+//    new Frame assigned to IDP
+std::map<unsigned int, std::vector<unsigned int> > assignedPrevious;
+std::map<unsigned int, unsigned int> assignedPreMap;
+
+// map of assignments of the blobs in the current frame.
+// Assignments are such that:
+//    [ IDP of Current Frame, [ IDN1, ..., IDNN]] IDs of
+//    Previous Frame assigned to IDP
+std::map<unsigned int, std::vector<unsigned int> > assignedNew;
+//**********************************************************************
 std::vector<unsigned int> lost_larvae;
 std::vector<unsigned int> current_new;
 std::vector<unsigned int> current_gone;
