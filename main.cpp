@@ -1151,7 +1151,7 @@ void assign_clustering(bool NEW,
   detected_clusters[CLUSTER_ID][0]=IDs.size();
   current_clusters[CLUSTER_ID][0]=IDs.size();
   std::map<unsigned int,std::vector<unsigned int> >::iterator dcIT;
-  //assign_one(IDs,CLUSTER_ID);
+  assign_one(IDs,CLUSTER_ID);
   while (IT!=IDs.end())
   {
     if((dcIT=detected_clusters.find(*IT))!=detected_clusters.end())
@@ -1340,6 +1340,18 @@ int detect_clustering(std::vector<unsigned int> &preLarvaeNearby,
 
 }
 
+// TODO:
+// IMPORTANT NOTE!!
+//  We have essentially three mappings:
+//   1) The previous frame blobs -> new frame blobs
+//   2) The new frame blobs -> previous frame blobs
+//   3) The new frame blobs -> updated numbers
+//
+//   The updated numbers are:
+//    a) the numbers that remained from the previous frame.
+//    b) the numbers that diverged from frames before the previous
+//    c) new numbers (increasing LARVAE_COUNT)
+//
 void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
 {
 
