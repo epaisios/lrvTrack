@@ -8,6 +8,7 @@
 #include <boost/timer/timer.hpp>
 #ifdef _WIN32
 #include <winsock.h>
+//#include "lrvTrackConfig.h"
 #endif
 
 using boost::timer::cpu_timer;
@@ -48,6 +49,7 @@ bool LRVTRACK_SHOW_TAGS=true;
 
 //VALUES FOR VARIOUS COMPARISONS
 double LARVA_SIZE_COMPARISON_FACTOR=1.1;
+double LARVA_MAHALANOBIS_THRESHOLD=0.3;
 
 static double VIDEO_FPS=24.0;
 static unsigned int CURRENT_FRAME=0;
