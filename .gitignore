@@ -2,4 +2,5 @@ lrvTrack
 tmp/
 tmp/*
 results/*
-
+*.swp
+.DS_Store
