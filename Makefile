@@ -17,11 +17,11 @@ LIBS=-lm\
 		 	-lboost_system-mt\
 			-lboost_timer-mt
 all:
-	@g++ $(GCCFLAGS) -g $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c blobUtils.cpp -o blobUtils.o
-	@g++ $(GCCFLAGS) -g $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c larvaSkel.cpp -o larvaSkel.o
-	@g++ $(GCCFLAGS) -g $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c larvaDistanceMap.cpp -o larvaDistanceMap.o
-	@g++ $(GCCFLAGS) -g $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c larvaObject.cpp -o larvaObject.o
-	@g++ $(GCCFLAGS) -g $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib main.cpp $(LIBS) -o lrvTrack *.o
+	@g++ $(GCCFLAGS) -g -Wall -ansi $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c blobUtils.cpp -o blobUtils.o
+	@g++ $(GCCFLAGS) -g -Wall -ansi $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c larvaSkel.cpp -o larvaSkel.o
+	@g++ $(GCCFLAGS) -g -Wall -ansi $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c larvaDistanceMap.cpp -o larvaDistanceMap.o
+	@g++ $(GCCFLAGS) -g -Wall -ansi $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib -c larvaObject.cpp -o larvaObject.o
+	@g++ $(GCCFLAGS) -g -Wall -ansi $(INCLUDES) -L/opt/opencv/2.4.5/lib -L/usr/local/lib main.cpp $(LIBS) -o lrvTrack *.o
 
 gpu:
 	g++ $(GCCFLAGS_GPU) -g $(INCLUDES_GPU) -L/opt/opencv/2.4.5-gpu/lib -L/usr/local/lib -c blobUtils.cpp -o blobUtils.o

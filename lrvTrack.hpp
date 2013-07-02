@@ -29,7 +29,7 @@ std::ofstream summary;
 int START_FRAME=0;
 
 // *** FLAGS ***
-int LRVTRACK_VERBOSE_LEVEL=0;
+int LRVTRACK_VERBOSE_LEVEL=1;
 std::string LRVTRACK_RESULTS_FOLDER;
 std::string LRVTRACK_DATE;
 std::string LRVTRACK_NAME;
@@ -48,8 +48,8 @@ bool LRVTRACK_SHOW_TAGS=true;
 // *** FLAGS ***
 
 //VALUES FOR VARIOUS COMPARISONS
-double LARVA_SIZE_COMPARISON_FACTOR=1.1;
-double LARVA_MAHALANOBIS_THRESHOLD=0.3;
+double LARVA_SIZE_COMPARISON_FACTOR=1.15;
+double LARVA_MAHALANOBIS_THRESHOLD=1.5;
 
 static double VIDEO_FPS=24.0;
 static unsigned int CURRENT_FRAME=0;
@@ -70,8 +70,10 @@ std::map<unsigned int, unsigned int> assignedPreMap;
 
 // map of assignments of the blobs in the current frame.
 // Assignments are such that:
-//    [ IDP of Current Frame, [ IDN1, ..., IDNN]] IDs of
+//    [ IDP of Current Frame, [ID_NN, IDN1, ..., IDNN]] IDs of
+//    [ IDP of Current Frame, [ID_NN, IDN1, ..., IDNN]] IDs of
 //    Previous Frame assigned to IDP
+//    ID NN
 std::map<unsigned int, std::vector<unsigned int> > assignedNew;
 //**********************************************************************
 std::vector<unsigned int> lost_larvae;

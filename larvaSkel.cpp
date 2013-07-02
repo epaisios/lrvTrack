@@ -170,7 +170,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
   //Point2 *skelPointCurve=(Point2 *) malloc(rows*cols*sizeof(Point2Struct));
   //cv::GaussianBlur(p_enlarged_src,p_enlarged_src,cv::Size(2,2),0,0);
   // copy result
-  int cPoints=0;
+  //int cPoints=0;
   for(int i = 0; i < rows; ++i)
     {
       for(int j = 0; j < cols; ++j)
@@ -187,7 +187,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
 
   int mini;
   double min=65535;
-  for (int i=0; i<skelPoints.size(); ++i)
+  for (unsigned int i=0; i<skelPoints.size(); ++i)
     {
       double xdiff=fabs((double) skelPoints[i].x-centroid.x);
       double ydiff=fabs((double) skelPoints[i].y-centroid.y);
@@ -205,7 +205,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
 
 void larvaSkel::drawSkeleton(cv::Mat &img,cv::Scalar col)
 {
-  for (int i=0; i<skelPoints.size(); ++i)
+  for (unsigned int i=0; i<skelPoints.size(); ++i)
     {
       cv::circle(img,
                  skelPoints[i], // circle centre

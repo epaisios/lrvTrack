@@ -56,7 +56,8 @@ int larvaObject::switchFaultyAssignment(
 
 // Exchange the values
 
-  larvaObject &otherLarva=detected_larvae[otherLarvaID];
-  int exchangeIdx=0;
+  //larvaObject &otherLarva=detected_larvae[otherLarvaID];
+  //int exchangeIdx=0;
 
+  return 0;
 }

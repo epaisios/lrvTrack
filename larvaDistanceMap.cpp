@@ -14,7 +14,7 @@ void lBFS(int p1,
     {
       int cur=Q.front();
       Q.pop();
-      for(int i=0; i<Points.size() ; ++i)
+      for(unsigned int i=0; i<Points.size() ; ++i)
         {
           PointPair cur_pi = PointPair(Points[cur],Points[i]);
           PointPair p1_pi= PointPair(Points[p1],Points[i]);
@@ -62,12 +62,12 @@ void computeInnerDistances(cvb::CvBlob &blob,
 
   int origNZ=countNonZero(contour);
   double MAX=0;
-  for (int i=0; i<points.size(); ++i)
+  for (unsigned int i=0; i<points.size(); ++i)
     {
       cv::Point p1=cv::Point(points[i].x,points[i].y);
 
       Distances[i][i]=0;
-      for (int j=i+1; j<points.size(); ++j)
+      for (unsigned int j=i+1; j<points.size(); ++j)
         {
           cv::Point p2(points[j].x,points[j].y);
           cv::line(workingContour,
@@ -112,7 +112,7 @@ void computeInnerDistances(cvb::CvBlob &blob,
         }
     }
 
-  for (int i=0; i<points.size(); ++i)
+  for (unsigned int i=0; i<points.size(); ++i)
     {
       cv::Point p1(points[i].x,points[i].y);
       lBFS(i,points,Distances);
