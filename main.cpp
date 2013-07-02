@@ -1153,17 +1153,29 @@ void assign_diverging(cvb::CvBlobs &New,
     DEBUG << "New assignments return by diverge matching: " << std::endl << printUIMap(newAssignments);
     verbosePrint(DEBUG);
     std::map<unsigned int, unsigned int>::iterator asIT=newAssignments.begin();
+    std::vector<unsigned int> newCluster(dcIT->second.begin()+1,
+        dcIT->second.end());
+    std::map<unsigned int,unsigned int> IDsAssigned;
+    for(int i=0;i<IDs.size();++i)
+    {
+    	IDsAssigned[IDs[i]]=0;
+    }
+    
+    //TODO remove the assigned values from the cluster newCluster (below)
+    //TODO arrange the case where not all IDs are left.
     while(asIT!=newAssignments.end())
     {
       assign_one(asIT->second,asIT->first);
-      //TODO remove the assigned values from the cluster newCluster (below)
-      //TODO arrange the case where not all IDs are left.
+      newCluster.erase(asIT->second);
+      IDsAssigned.erase(asIT->first);
       ++asIT;
     }
-    if(newAssignments.size()==1)
+    if(newCluster.size()==1 && IDsAssigned.size()==1)
+    {
+	std::map<unsigned int, unsigned int>::iterator f=newCluster.begin();
+    	assign_one(f->
+    }
     std::vector<unsigned int>::iterator nIT=IDs.begin();
-    std::vector<unsigned int> newCluster(dcIT->second.begin()+1,
-        dcIT->second.end());
 
 
     std::vector<unsigned int> unassigned;
