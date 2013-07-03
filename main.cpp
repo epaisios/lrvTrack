@@ -1060,8 +1060,13 @@ bool centresMatch(
     cvb::CvBlob *blob2,
     double factor=LARVA_SIZE_COMPARISON_FACTOR-1)
 {
+  std::stringstream DEBUG;
   double objectLength=
       std::max(blob1->maxx-blob1->minx,blob1->maxy-blob1->miny);
+
+  DEBUG << "CentresMatch: Length: " << objectLength << " Difx: " << fabs(blob1->centroid.x - blob2->centroid.x) << " Dify: " << fabs(blob1->centroid.y - blob2->centroid.y) << " Threshold: " << factor*objectLength;
+  verbosePrint(DEBUG);
+
   if (fabs(blob1->centroid.x - blob2->centroid.x)< factor*objectLength &&
       fabs(blob1->centroid.y - blob2->centroid.y)< factor*objectLength )
     {
@@ -1078,9 +1083,9 @@ void assign_one(unsigned int preID,unsigned int postID)
   std::stringstream DEBUG;
   assignedPrevious[preID].push_back(postID);
   assignedNew[postID].push_back(preID);
-  assignedPreMap[preID]=1;
   DEBUG << "Assigning: " << postID << " -> " << preID;
   verbosePrint(DEBUG);
+  assignedPreMap[preID]=1;
 }
 
 void assign_one(unsigned int preID,
@@ -1097,20 +1102,23 @@ void assign_one(unsigned int preID,
     assignedPrevious[preID].push_back(NewID);
     ++postIT;
   }
-  assignedPreMap[preID]=postID.size();
   DEBUG << "Cluster " << preID << " diverged into new larvae: " << printVector(assignedPrevious[preID]);
   verbosePrint(DEBUG);
+  assignedPreMap[preID]=postID.size();
 }
 
 void assign_one(std::vector<unsigned int> preID,
                 unsigned int postID,unsigned int newID)
 {
+  std::stringstream DEBUG;
   std::vector<unsigned int>::iterator preIT=preID.begin();
   assignedNew[postID].push_back(newID);
+  DEBUG << "New cluster " << postID << " from larvae: " << printVector(preID);
+  verbosePrint(DEBUG);
   while(preIT!=preID.end())
   {
     assignedNew[postID].push_back(*preIT);
-    assignedNew[*preIT].push_back(postID);
+    assignedPrevious[*preIT].push_back(postID);
     assignedPreMap[*preIT]=1;
     ++preIT;
   }
@@ -1144,74 +1152,82 @@ void assign_diverging(cvb::CvBlobs &New,
   {
     std::vector<unsigned int> candidateLarvae(dcIT->second.begin()+1,
         dcIT->second.end());
+    // New assignments are returned by the diverge_match_new function
+    // [ NEW_ID -> OLD_ID ]
     std::map<unsigned int, unsigned int> newAssignments;
     diverge_match_new(candidateLarvae,
-                      IDs,
-                      newAssignments,
-                      New);
+        IDs,
+        newAssignments,
+        New);
 
     DEBUG << "New assignments return by diverge matching: " << std::endl << printUIMap(newAssignments);
     verbosePrint(DEBUG);
-    std::map<unsigned int, unsigned int>::iterator asIT=newAssignments.begin();
-    std::vector<unsigned int> newCluster(dcIT->second.begin()+1,
-        dcIT->second.end());
-    std::map<unsigned int,unsigned int> IDsAssigned;
-    for(int i=0;i<IDs.size();++i)
-    {
-    	IDsAssigned[IDs[i]]=0;
-    }
-    
-    //TODO remove the assigned values from the cluster newCluster (below)
-    //TODO arrange the case where not all IDs are left.
-    while(asIT!=newAssignments.end())
-    {
-      assign_one(asIT->second,asIT->first);
-      newCluster.erase(asIT->second);
-      IDsAssigned.erase(asIT->first);
-      ++asIT;
-    }
-    if(newCluster.size()==1 && IDsAssigned.size()==1)
-    {
-	std::map<unsigned int, unsigned int>::iterator f=newCluster.begin();
-    	assign_one(f->
-    }
-    std::vector<unsigned int>::iterator nIT=IDs.begin();
+    // Perform the assignments
 
+    //newCluster to register the assignments and what is left in the cluster
+    std::vector<unsigned int> 
+      newCluster(dcIT->second.begin()+1,dcIT->second.end()); 
 
-    std::vector<unsigned int> unassigned;
-    while(nIT!=IDs.end())
+    //Initiate a vector the the IDs to asign to keep track of what is assigned.
+    std::vector<unsigned int> newIDs=IDs;
+
+    for (std::map<unsigned int, unsigned int>::iterator naIT=
+        newAssignments.begin();
+        naIT!=newAssignments.end();
+        ++naIT)
     {
-      DEBUG << "New cluster: " << std::endl << printVector(newCluster);
-      verbosePrint(DEBUG);
-      if(newAssignments[*nIT]!=0)
+      if(naIT->second!=0)
       {
-        assign_one(newAssignments[*nIT],*nIT);
-        std::vector<unsigned int>::iterator eIT=newCluster.begin();
-        while(eIT!=newCluster.end())
+        assign_one(naIT->second,naIT->first);
+
+        for(std::vector<unsigned int>::iterator erIT=newCluster.begin();
+            erIT!=newCluster.end();++erIT)
         {
-          if (*eIT==newAssignments[*nIT])
-            newCluster.erase(eIT);
-          eIT++;
+          if(*erIT==naIT->second)
+          {
+            newCluster.erase(erIT);
+            break;
+          }
+        }
+        for(std::vector<unsigned int>::iterator erIT=newIDs.begin();
+            erIT!=newIDs.end();++erIT)
+        {
+          if(*erIT==naIT->first)
+          {
+            newIDs.erase(erIT);
+            break;
+          }
         }
       }
-      else
-      {
-        unassigned.push_back(*nIT);
-      }
-      ++nIT;
     }
-    if(unassigned.size()!=1)
+
+    // We have performed the assignents and what is left is contained in
+    // the newIDs and the newCluster vectors
+    if(newIDs.size()==newCluster.size()==0)
     {
-      verbosePrint("CASE OF TWO CLUSTERS EMERGING OUT OF ONE!!! Unhandled!!");
+      //perfect assignment. return from function
+      detected_clusters.erase(dcIT);
+      return;
     }
-    else
+    if(newIDs.size()==newCluster.size() && newCluster.size()==1)
     {
-      detected_clusters[unassigned[0]].push_back(newCluster.size());
-      detected_clusters[unassigned[0]].insert(
-          detected_clusters[unassigned[0]].end(),
-          newCluster.begin(),
-          newCluster.end());
+      // Object diverged and left only one unassigned and 
+      // only one is left in the cluster
+      // We force the assignment
+      assign_one(newCluster[0],newIDs[0]);
+      detected_clusters.erase(dcIT);
+      return;
     }
+    if(newIDs.size()==1 && newCluster.size()>1)
+    {
+      //only one object remains to be assigned but our cluster was bigger
+      unsigned int CLUSTER_ID=++LARVAE_COUNT;
+      detected_clusters[CLUSTER_ID]=newCluster;
+      detected_clusters.erase(dcIT);
+    }
+    // Unhandled should produce an message so that we debug it
+    std::cerr << "Unhandled case were more than 1 IDs were unassigned"
+      << std::endl;
   }
 }
 
@@ -1220,20 +1236,20 @@ void assign_clustering(
                       std::vector<unsigned int> &IDs
                       )
 {
-  std::vector<unsigned int>::iterator IT=IDs.begin();
   unsigned int CLUSTER_ID=++LARVAE_COUNT;
   std::vector<unsigned int> contents;
   contents.push_back(IDs.size());
   detected_clusters[CLUSTER_ID]=contents;
   std::map<unsigned int,std::vector<unsigned int> >::iterator dcIT;
   assign_one(IDs,POST_ID,CLUSTER_ID);
+  std::vector<unsigned int>::iterator IT=IDs.begin();
   while (IT!=IDs.end())
   {
     if((dcIT=detected_clusters.find(*IT))!=detected_clusters.end())
     {
       detected_clusters[CLUSTER_ID].insert(
           detected_clusters[CLUSTER_ID].end(),
-          dcIT->second.begin(),
+          dcIT->second.begin()+1,
           dcIT->second.end());
       // -2 because the cluster ID should be removed and replaced
       // by it's elements (-1) and another -1 because the 
@@ -1254,8 +1270,9 @@ bool centresMatch(
     cvb::CvBlobs &In, 
     cvb::CvBlob *blob,
     std::vector<unsigned int> &larvae, 
-    double factor=LARVA_SIZE_COMPARISON_FACTOR-1)
+    double factor=(LARVA_SIZE_COMPARISON_FACTOR-1)/2)
 {
+  std::stringstream DEBUG;
   double xcomb=0, ycomb=0;
   double objectLength=
       std::max(blob->maxx-blob->minx,blob->maxy-blob->miny);
@@ -1278,6 +1295,8 @@ bool centresMatch(
     xcomb=xcomb/lrvAreaSum;
     ycomb=ycomb/lrvAreaSum;
   }
+  DEBUG << "CentresMatch [" << blob->label << ", " << printVector(larvae) << "]: Length: " << objectLength << " Difx: " << fabs(blob->centroid.x - xcomb) << " Dify: " << fabs(blob->centroid.y - ycomb) << " Threshold: " << factor*objectLength;
+  verbosePrint(DEBUG);
   if (fabs(blob->centroid.x - xcomb)< factor*objectLength &&
       fabs(blob->centroid.y - ycomb)< factor*objectLength )
     {
@@ -1344,8 +1363,9 @@ int detect_diverging(std::vector<unsigned int> &preLarvaeNearby,
                        cvb::CvBlobs &Pre,
                        cvb::CvBlobs &New)
 {
-  std::stringstream DEBUG;
+  verbosePrint("Trying to detect diverging clusters");
 
+  std::stringstream DEBUG;
   DEBUG<< "Size of newLarvaeNearby: "  << newLarvaeNearby.size();
   verbosePrint(DEBUG);
 
@@ -1395,9 +1415,12 @@ int detect_clustering(std::vector<unsigned int> &preLarvaeNearby,
                        cvb::CvBlobs &Pre,
                        cvb::CvBlobs &New)
 {
+  verbosePrint("Trying to detect clusters");
+
+  std::stringstream DEBUG;
   if(preLarvaeNearby.size()<=1)
     return -1; // No clustering is possible
-
+  
   // Check the complete set first
   std::vector<unsigned int>::iterator nIT=newLarvaeNearby.begin();
   while(nIT!=newLarvaeNearby.end())
@@ -1406,6 +1429,10 @@ int detect_clustering(std::vector<unsigned int> &preLarvaeNearby,
     {
       // Centres of all candidates match with new blob
       // cluster contains all. We can return
+      DEBUG << "Centres of new larva: " << *nIT << " match centres of " 
+       << printVector(preLarvaeNearby) << ". Assigning clustering";
+      verbosePrint(DEBUG);
+
       assign_clustering(*nIT,preLarvaeNearby);
       //continue;
       break;
@@ -1415,10 +1442,14 @@ int detect_clustering(std::vector<unsigned int> &preLarvaeNearby,
     std::vector<std::vector<unsigned int> >::iterator pSIT=pSETS.begin();
     while(pSIT!=pSETS.end())
     {
+      verbosePrint("Trying to detect subsets for clustering");
       if(centresMatch(Pre,New[*nIT],*pSIT))
       {
         // Centres of all candidates match with new blob
         // cluster contains subset pSIT. We can return
+        DEBUG << "Centres of new larva: " << *nIT << " match centres of subset " 
+          << printVector(*pSIT) << ". Assigning clustering";
+        verbosePrint(DEBUG);
         assign_clustering(*nIT,*pSIT);
         break;
       }
@@ -1547,22 +1578,37 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
             }
           }
           if(!erased)
+          {
             ++preNearIt;
+            break;
+          }
         }
         // The rest are either appearing/disappearing/clustering/diverging
         // BUT if the main one was indeed assigned then we are in luck 
         // and we move on
+        DEBUG << "After initial assignment assignedPreMap: " << printUIMap(assignedPreMap) << " for larva with Id: " << preID;
+        verbosePrint(DEBUG);
         if(assignedPreMap[preID]>0)
+        {
           continue;
+        }
 
         detect_clustering(preLarvaeNearby,postLarvaeNearby,Prev, In);
 
+        DEBUG << "After clustering check assignedPreMap: " << printUIMap(assignedPreMap) << " for larva with Id: " << preID;
+        verbosePrint(DEBUG);
         if(assignedPreMap[preID]>0)
+        {
           continue;
+        }
 
         detect_diverging(preLarvaeNearby,postLarvaeNearby,Prev, In);
+        DEBUG << "After diverging check assignedPreMap: " << printUIMap(assignedPreMap) << " for larva with Id: " << preID;
+        verbosePrint(DEBUG);
         if(assignedPreMap[preID]>0)
+        {
           continue;
+        }
         else
           verbosePrint("FOUND TESTCASE FOR MIXED DIVERGING/CONVERGING");
       }
@@ -1615,6 +1661,9 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
     else
     {
       unsigned int NEWID=++LARVAE_COUNT;
+      verbosePrint("Extra Assignment:");
+      DEBUG << bIT->first << " -> " << NEWID;
+      verbosePrint(DEBUG);
       bIT->second->label=NEWID;
       out[NEWID]=bIT->second;
     }
@@ -2734,6 +2783,7 @@ int main(int argc, char* argv[])
 
           //unsigned int result=
           cvLabel(&ipl_thresholded, labelImg, blobs);
+          cvb::cvFilterByArea(blobs, 32, 900);
           //----------------------------------------------------------
           cv::Mat debugImg;
           frame.copyTo(debugImg);
@@ -2758,7 +2808,6 @@ int main(int argc, char* argv[])
           cv::waitKey(1);
           //------------------------------------------------------------
 
-          cvb::cvFilterByArea(blobs, 32, 900);
 
           cvb::CvBlobs tracked_blobs;
           cvb::CvBlobs blob1;
