@@ -540,21 +540,112 @@ inline void vmin(std::vector<double>& vals, std::vector<int>& seq)
 
 namespace std
 {
-template <typename number >
-std::string printVector(std::vector<number> vec,int position=0)
-{
-  std::stringstream sstm;
-  //bool const is_number= std::is_arithmetic<number>::value;
-  //static_assert( is_number, "Provided type is not an arithmetic type");
-  sstm << "[" ;
-  typename std::vector<number>::const_iterator i=vec.begin()+position;
-  sstm << *i ;
-  ++i;
-  for( ; i != vec.end(); ++i)
-    sstm << ","<< *i;
-  sstm << "]";
-  return sstm.str();
+  template <typename number >
+    std::string printVector(std::vector<number> vec,int position=0)
+    {
+      std::stringstream sstm;
+      //bool const is_number= std::is_arithmetic<number>::value;
+      //static_assert( is_number, "Provided type is not an arithmetic type");
+      sstm << "[" ;
+      typename std::vector<number>::const_iterator i=vec.begin()+position;
+      sstm << *i ;
+      ++i;
+      for( ; i != vec.end(); ++i)
+        sstm << ","<< *i;
+      sstm << "]";
+      return sstm.str();
+    }
 }
+
+double calculate_MH_sum(std::map<unsigned int, unsigned int> &AM,
+  std::map<unsigned int, cv::Mat> &candidateCovarMat,
+  std::map<unsigned int, cv::Mat> &candidateMeanMat,
+  std::map<unsigned int, cv::Mat> &newMeanMat
+                        )
+{
+  double SUM=0.0;
+  std::map <unsigned int, unsigned int>::iterator mIT=AM.begin();
+  while(mIT!=AM.end())
+  {
+    SUM+=cv::Mahalanobis(newMeanMat[mIT->first],
+        candidateMeanMat[mIT->second],
+        candidateCovarMat[mIT->second]);
+    ++mIT;
+  }
+  return SUM;
+}
+
+
+void assign_combinations(std::vector<unsigned int> &NEW,
+    std::map <unsigned int, unsigned int> &oldAssignments,
+    std::map <unsigned int, unsigned int> &AMcur,
+    std::map <unsigned int, unsigned int> &AMmin,
+    std::map<unsigned int, cv::Mat> &candidateCovarMat,
+    std::map<unsigned int, cv::Mat> &candidateMeanMat,
+    std::map<unsigned int, cv::Mat> &newMeanMat,
+    double &minSUM
+    )
+{
+  std::stringstream DEBUG;
+  if(NEW.size()==1)
+  {
+    std::map <unsigned int, unsigned int>::iterator c=oldAssignments.begin();
+    while(c!=oldAssignments.end())
+    {
+      if(c->second==0)
+      {
+        AMcur[NEW[0]]=c->first;
+        c->second=NEW[0];
+
+        double curSUM = calculate_MH_sum(AMcur, 
+            candidateCovarMat,
+            candidateMeanMat,
+            newMeanMat);
+
+        if (curSUM<minSUM)
+        {
+          DEBUG << "Minimum SUM found: " << curSUM << " with assignment " <<
+            printUIMap(AMcur);
+          verbosePrint(DEBUG);
+          minSUM=curSUM;
+          AMmin=AMcur;
+        }
+
+        std::cerr << printUIMap(AMcur) << std::endl;
+        c->second=0;
+      }
+      ++c;
+    }
+  }
+
+  if(NEW.size()>1)
+  {
+    std::map <unsigned int, unsigned int>::iterator c=oldAssignments.begin();
+    while(c!=oldAssignments.end())
+    {
+      if(c->second==0)
+      {
+        AMcur[NEW[0]]=c->first;
+        c->second=NEW[0];
+        std::vector<unsigned int> sub(NEW.begin()+1,NEW.end());
+
+        assign_combinations(
+            sub,
+            oldAssignments,
+            AMcur,
+            AMmin,
+            candidateCovarMat,
+            candidateMeanMat,
+            newMeanMat,
+            minSUM);
+        
+        c->second=0;
+      }
+      ++c;
+
+    }
+  }
+
 }
 
 void diverge_match_new(
@@ -658,80 +749,38 @@ void diverge_match_new(
     ++cIT;
   }
 
-    // For each new Larva we look at the MH distances with the candidates
-    //   if the min distance is less than MH_THRESHOLD assign it
-    //   if the assignment is already done assign the smaller of the two
-    //      and free the other.
-
-  //std::map <unsigned int, unsigned int> newAssignments;
+  double minSUM=999999999.0;
+  std::map <unsigned int, unsigned int> AMmin;
+  std::map <unsigned int, unsigned int> AMcur;
   std::map <unsigned int, unsigned int> oldAssignments;
-  std::map <unsigned int, double> oldAssignmentDistances;
 
-  cIT=newLarvae.begin();
-  while(cIT!=newLarvae.end())
+  std::vector<unsigned int> newLarvaeVec; //vector of objects that we are
+                                          // more certain are larvae
+  for(unsigned int i=0 ; i<candidateLarvae.size() ; i++)
   {
-    newAssignments[*cIT]=0;
-    ++cIT;
+    oldAssignments[candidateLarvae[i]]=0;
   }
 
-  bool changed=true;
-  while (changed)
+  for(unsigned int i=0; i<newLarvae.size();++i)
   {
-    changed=false;
-    cIT=newLarvae.begin();
-    while(cIT!=newLarvae.end())
+    if(is_larva(NEW(newLarvae[i]))<IS_LARVA_THRESHOLD)
     {
-      double minDist=9999.0;
-      unsigned int minCand=0;
-      if(newAssignments[*cIT]==0)
-      {
-        std::vector<unsigned int>::iterator oIT=candidateLarvae.begin();
-        while(oIT!=candidateLarvae.end())
-        {
-
-          double Dist=cv::Mahalanobis(newMeanMat[*cIT],
-              candidateMeanMat[*oIT],
-              candidateCovarMat[*oIT]);
-          DEBUG << "Candidate larva: " << *oIT << " compaired to new " << *cIT << " gives distance : " << Dist ;
-          verbosePrint(DEBUG);
-
-          if(Dist<LARVA_MAHALANOBIS_THRESHOLD && 
-              Dist < minDist)
-          {
-            if(oldAssignmentDistances.find(*oIT)==oldAssignmentDistances.end())
-            {
-              minDist=Dist;
-              minCand=*oIT;
-            }
-            else if(oldAssignmentDistances[*oIT]>Dist)
-            {
-              minDist=Dist;
-              minCand=*oIT;
-            }
-          }
-          ++oIT;
-        }
-        if(oldAssignmentDistances.find(minDist)==oldAssignmentDistances.end() && minCand!=0 )
-        {
-          DEBUG << "Provisional assignment: Candidate: " << minCand << " <- " << *cIT << " with distance : " << minDist ;
-          verbosePrint(DEBUG);
-          newAssignments[*cIT]=minCand;
-          oldAssignments[minCand]=*cIT;
-          oldAssignmentDistances[minCand]=minDist;
-        }
-        else if(oldAssignmentDistances[*oIT]>minDist)
-        {
-          DEBUG << "Update of assignment: Candidate: " << minCand << " <- " << *cIT << " with distance : " << minDist ;
-          verbosePrint(DEBUG);
-          newAssignments[*cIT]=minCand;
-          newAssignments[oldAssignments[minCand]]=0;
-          oldAssignments[minCand]=*cIT;
-          changed=true;
-        }
-      }
-      ++cIT;
+      newLarvaeVec.push_back(newLarvae[i]);
     }
   }
+
+  assign_combinations(
+      newLarvaeVec,
+      oldAssignments,
+      AMcur,
+      AMmin,
+      candidateCovarMat,
+      candidateMeanMat,
+      newMeanMat,
+      minSUM);
+
+  if(newLarvaeVec.size()>1 || minSUM<1.4)
+    newAssignments=AMmin;
 }
 
 void diverge_match(
@@ -888,25 +937,6 @@ void diverge_match(
   vmin(vals,minv);
   int mini=minv[0];
   if (DistA1+DistB2 > DistA2+DistB1)
-    /*
-       double miniDiff = cv::fast_abs(vals[minv[0]] - vals[minv[1]]);
-       if (mini >=2 && MHDiff < 0 )
-       {
-       if (cv::fast_abs(MHDiff) > miniDiff)
-       {
-       mini=0;
-       }
-       }
-       else if (mini < 2 && MHDiff > 0 )
-       {
-       if (cv::fast_abs(MHDiff) > miniDiff)
-       {
-       mini=2;
-       }
-       }
-
-       if (mini >=2 )
-       */
     {
       candidate_larva_a=newLarva2->label;
       candidate_larva_b=newLarva1->label;
@@ -1222,6 +1252,22 @@ void assign_diverging(cvb::CvBlobs &New,
     {
       //only one object remains to be assigned but our cluster was bigger
       unsigned int CLUSTER_ID=++LARVAE_COUNT;
+
+      detected_clusters[CLUSTER_ID].push_back(newCluster.size());
+      detected_clusters[CLUSTER_ID].insert(
+          detected_clusters[CLUSTER_ID].end(),
+          newCluster.begin(),
+          newCluster.end());
+
+      detected_clusters.erase(dcIT);
+    }
+    //TODO: Figure out the case for newIDs.size()>1
+    //  a) give new numbers to those that look like larvae
+    //  b) create new clusters with dummy? larvae plus those that are missing
+    if(newIDs.size()>1 && newCluster.size()>1)
+    {
+      //only one object remains to be assigned but our cluster was bigger
+      unsigned int CLUSTER_ID=++LARVAE_COUNT;
       detected_clusters[CLUSTER_ID]=newCluster;
       detected_clusters.erase(dcIT);
     }
@@ -1356,6 +1402,55 @@ void powersets(std::vector<unsigned int> &IN, std::vector<std::vector<unsigned i
       }
     }
   }
+}
+
+double is_larva(cvb::CvBlob *blob)
+{
+  std::stringstream DEBUG;
+  std::vector<cv::Point> cntPoints;
+  std::vector<cv::Point> SimplePoints;
+  std::vector<cv::Point> hull;
+  std::vector<int> hullPoints;
+  double defectSUM=0;
+  blobToPointVector(*blob,cntPoints);
+  cv::approxPolyDP(cntPoints,SimplePoints,0.9,true);
+
+  cv::convexHull(SimplePoints,hullPoints);
+  cv::convexHull(SimplePoints,hull);
+  
+  /*for(unsigned int p=0;p<hullPoints.size();++p)
+    {
+    hull[p]=cntPoints[hullPoints[p]];
+    }
+    */
+
+  std::vector<cv::Vec4i> defects;
+  convexityDefects(SimplePoints,hullPoints, defects);
+
+  for (unsigned int i=0;i<defects.size();i++)
+  {
+    defectSUM+=defects[i][3];
+  }
+
+  double ret=defectSUM * (0.5*defects.size());
+/*
+  if ( ret > 1300 )
+  {
+    DEBUG << "ISLARVA: Blob [" << blob->label << "] is likely a blob (ret: " << ret << ")"; 
+    verbosePrint(DEBUG);
+  }
+  else if (ret < 900 )
+  {
+    DEBUG << "ISLARVA: Blob [" << blob->label << "] is likely a larva (ret: " << ret << ")"; 
+    verbosePrint(DEBUG);
+  }
+  else
+  {
+    DEBUG << "ISLARVA: Blob [" << blob->label << "] is a bit vague... (ret: " << ret << ")"; 
+    verbosePrint(DEBUG);
+  }
+  */
+  return ret; 
 }
 
 int detect_diverging(std::vector<unsigned int> &preLarvaeNearby,
@@ -2852,6 +2947,7 @@ int main(int argc, char* argv[])
               it=tracked_blobs.begin();
               while (it!=tracked_blobs.end())
                 {
+                  //is_larva(it->second);
                   std::stringstream sstm;
                   cvb::CvBlob *blob=it->second;
                   try
