@@ -516,6 +516,55 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
     }
 }
 
+double is_larva(cvb::CvBlob *blob)
+{
+  std::stringstream DEBUG;
+  std::vector<cv::Point> cntPoints;
+  std::vector<cv::Point> SimplePoints;
+  std::vector<cv::Point> hull;
+  std::vector<int> hullPoints;
+  double defectSUM=0;
+  blobToPointVector(*blob,cntPoints);
+  cv::approxPolyDP(cntPoints,SimplePoints,0.9,true);
+
+  cv::convexHull(SimplePoints,hullPoints);
+  cv::convexHull(SimplePoints,hull);
+  
+  /*for(unsigned int p=0;p<hullPoints.size();++p)
+    {
+    hull[p]=cntPoints[hullPoints[p]];
+    }
+    */
+
+  std::vector<cv::Vec4i> defects;
+  convexityDefects(SimplePoints,hullPoints, defects);
+
+  for (unsigned int i=0;i<defects.size();i++)
+  {
+    defectSUM+=defects[i][3];
+  }
+
+  double ret=defectSUM * (0.5*defects.size());
+/*
+  if ( ret > 1300 )
+  {
+    DEBUG << "ISLARVA: Blob [" << blob->label << "] is likely a blob (ret: " << ret << ")"; 
+    verbosePrint(DEBUG);
+  }
+  else if (ret < 900 )
+  {
+    DEBUG << "ISLARVA: Blob [" << blob->label << "] is likely a larva (ret: " << ret << ")"; 
+    verbosePrint(DEBUG);
+  }
+  else
+  {
+    DEBUG << "ISLARVA: Blob [" << blob->label << "] is a bit vague... (ret: " << ret << ")"; 
+    verbosePrint(DEBUG);
+  }
+  */
+  return ret; 
+}
+
 inline double SQUARE(double n)
 {
   return n*n;
@@ -763,7 +812,7 @@ void diverge_match_new(
 
   for(unsigned int i=0; i<newLarvae.size();++i)
   {
-    if(is_larva(NEW(newLarvae[i]))<IS_LARVA_THRESHOLD)
+    if(is_larva(NEW[newLarvae[i]])<IS_LARVA_THRESHOLD)
     {
       newLarvaeVec.push_back(newLarvae[i]);
     }
@@ -1263,7 +1312,10 @@ void assign_diverging(cvb::CvBlobs &New,
     }
     //TODO: Figure out the case for newIDs.size()>1
     //  a) give new numbers to those that look like larvae
-    //  b) create new clusters with dummy? larvae plus those that are missing
+    //  b) create new clusters with dummy? larvae (if necessary i.e. if )
+    //     plus those that were there
+    //
+    // IMPORTANT!! LIMIT THE SIZE
     if(newIDs.size()>1 && newCluster.size()>1)
     {
       //only one object remains to be assigned but our cluster was bigger
@@ -1402,55 +1454,6 @@ void powersets(std::vector<unsigned int> &IN, std::vector<std::vector<unsigned i
       }
     }
   }
-}
-
-double is_larva(cvb::CvBlob *blob)
-{
-  std::stringstream DEBUG;
-  std::vector<cv::Point> cntPoints;
-  std::vector<cv::Point> SimplePoints;
-  std::vector<cv::Point> hull;
-  std::vector<int> hullPoints;
-  double defectSUM=0;
-  blobToPointVector(*blob,cntPoints);
-  cv::approxPolyDP(cntPoints,SimplePoints,0.9,true);
-
-  cv::convexHull(SimplePoints,hullPoints);
-  cv::convexHull(SimplePoints,hull);
-  
-  /*for(unsigned int p=0;p<hullPoints.size();++p)
-    {
-    hull[p]=cntPoints[hullPoints[p]];
-    }
-    */
-
-  std::vector<cv::Vec4i> defects;
-  convexityDefects(SimplePoints,hullPoints, defects);
-
-  for (unsigned int i=0;i<defects.size();i++)
-  {
-    defectSUM+=defects[i][3];
-  }
-
-  double ret=defectSUM * (0.5*defects.size());
-/*
-  if ( ret > 1300 )
-  {
-    DEBUG << "ISLARVA: Blob [" << blob->label << "] is likely a blob (ret: " << ret << ")"; 
-    verbosePrint(DEBUG);
-  }
-  else if (ret < 900 )
-  {
-    DEBUG << "ISLARVA: Blob [" << blob->label << "] is likely a larva (ret: " << ret << ")"; 
-    verbosePrint(DEBUG);
-  }
-  else
-  {
-    DEBUG << "ISLARVA: Blob [" << blob->label << "] is a bit vague... (ret: " << ret << ")"; 
-    verbosePrint(DEBUG);
-  }
-  */
-  return ret; 
 }
 
 int detect_diverging(std::vector<unsigned int> &preLarvaeNearby,
