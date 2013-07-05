@@ -28,6 +28,54 @@ void verbosePrint(std::stringstream &toPrint)
     }
 }
 
+double avgVec(std::vector<double> vec)
+{
+  double SUM=0;
+  std::vector<double>::iterator it=vec.begin();
+  while(it!=vec.end())
+  {
+    SUM+=*it;
+    ++it;
+  }
+  return SUM/vec.size();
+}
+
+double avgNVec(std::vector<int> vec)
+{
+  double SUM=0;
+  unsigned int range;
+  std::vector<int>::reverse_iterator it=vec.rbegin();
+  if (vec.size()>=HISTORY_SIZE)
+    range=HISTORY_SIZE;
+  else
+    range=vec.size();
+
+  while(it!=vec.rbegin()+range)
+  {
+    SUM+=*it;
+    ++it;
+  }
+  return SUM/vec.size();
+}
+
+double avgNVec(std::vector<double> vec)
+{
+  double SUM=0;
+  unsigned int range;
+  std::vector<double>::reverse_iterator it=vec.rbegin();
+  if (vec.size()>=HISTORY_SIZE)
+    range=HISTORY_SIZE;
+  else
+    range=vec.size();
+
+  while(it!=vec.rbegin()+range)
+  {
+    SUM+=*it;
+    ++it;
+  }
+  return SUM/vec.size();
+}
+
 void verbosePrint(const char * toPrint)
 {
   if(LRVTRACK_VERBOSE_LEVEL>0)
@@ -592,6 +640,8 @@ namespace std
   template <typename number >
     std::string printVector(std::vector<number> vec,int position=0)
     {
+      if (vec.size()==0)
+        return "";
       std::stringstream sstm;
       //bool const is_number= std::is_arithmetic<number>::value;
       //static_assert( is_number, "Provided type is not an arithmetic type");
@@ -660,7 +710,6 @@ void assign_combinations(std::vector<unsigned int> &NEW,
           AMmin=AMcur;
         }
 
-        std::cerr << printUIMap(AMcur) << std::endl;
         c->second=0;
       }
       ++c;
@@ -697,10 +746,24 @@ void assign_combinations(std::vector<unsigned int> &NEW,
 
 }
 
+void diverge_match_centroid(
+  std::vector<unsigned int> &candidateLarvae,
+  std::vector<unsigned int> &newLarvae,
+  std::map<unsigned int, unsigned int> &newAssignments,
+  cvb::CvBlobs &NEW)
+{
+  std::vector<unsigned int>::iterator nl=newLarvae.begin();
+  while(nl!=newLarvae.end())
+  {
+    ++nl;
+  }
+}
+
 void diverge_match_new(
   std::vector<unsigned int> &candidateLarvae,
   std::vector<unsigned int> &newLarvae,
   std::map<unsigned int, unsigned int> &newAssignments,
+  unsigned int duration,
   cvb::CvBlobs &NEW)
 {
   std::stringstream DEBUG;
@@ -709,6 +772,7 @@ void diverge_match_new(
 
   std::map<unsigned int, cv::Mat> newMeanMat;
 
+  double FACTOR=0.000005;
   std::vector<unsigned int>::iterator cIT=candidateLarvae.begin();
   verbosePrint("Setting up candidate larvae data");
   while(cIT!=candidateLarvae.end())
@@ -723,6 +787,13 @@ void diverge_match_new(
       detected_larvae[*cIT].perimeter.size();
     double width_avg=detected_larvae[*cIT].width_sum/
       detected_larvae[*cIT].width.size();
+    /*
+    double size_avg=avgNVec(detected_larvae[*cIT].area);
+    double grey_value_avg=avgNVec(detected_larvae[*cIT].grey_value);
+    double length_avg=avgNVec(detected_larvae[*cIT].length);
+    double perimeter_avg=avgNVec(detected_larvae[*cIT].perimeter);
+    double width_avg=avgNVec(detected_larvae[*cIT].width);
+*/
 
     cv::Mat InputArray;
     cv::hconcat(cv::Mat(detected_larvae[*cIT].area),
@@ -747,7 +818,7 @@ void diverge_match_new(
     meanVec.push_back(length_avg);
     meanVec.push_back(perimeter_avg);
     meanVec.push_back(width_avg);
-
+    
     cv::Mat meanMat(meanVec);
     cv::Mat meanTMat;
     cv::transpose(meanMat,meanTMat);
@@ -784,6 +855,8 @@ void diverge_match_new(
     double newLength=dstLarva.MaxDist;
     double newPerimeter=getPerimeter(*NEW[*cIT]);
     double newWidth=dstLarva.WidthDist;
+    double relative_centroid_x=FACTOR*NEW[*cIT]->centroid.x/duration;
+    double relative_centroid_y=FACTOR*NEW[*cIT]->centroid.y/duration;
 
     std::vector<double> meanVec;
     meanVec.push_back(newSize);
@@ -791,6 +864,8 @@ void diverge_match_new(
     meanVec.push_back(newLength);
     meanVec.push_back(newPerimeter);
     meanVec.push_back(newWidth);
+    meanVec.push_back(relative_centroid_x);
+    meanVec.push_back(relative_centroid_y);
 
     cv::Mat meanMat(meanVec);
     meanMat.copyTo(newMeanMat[*cIT]);
@@ -829,7 +904,11 @@ void diverge_match_new(
       minSUM);
 
   if(newLarvaeVec.size()>1 || minSUM<1.4)
+  {
     newAssignments=AMmin;
+    std::cerr << printUIMap(AMmin) << std::endl;
+  }
+
 }
 
 void diverge_match(
@@ -1237,6 +1316,7 @@ void assign_diverging(cvb::CvBlobs &New,
     diverge_match_new(candidateLarvae,
         IDs,
         newAssignments,
+        CURRENT_FRAME - detected_larvae[dcIT->first].start_frame,
         New);
 
     DEBUG << "New assignments return by diverge matching: " << std::endl << printUIMap(newAssignments);
@@ -1282,7 +1362,7 @@ void assign_diverging(cvb::CvBlobs &New,
 
     // We have performed the assignents and what is left is contained in
     // the newIDs and the newCluster vectors
-    if(newIDs.size()==newCluster.size()==0)
+    if(newIDs.size()==newCluster.size() && newCluster.size()==0)
     {
       //perfect assignment. return from function
       detected_clusters.erase(dcIT);
@@ -1308,6 +1388,7 @@ void assign_diverging(cvb::CvBlobs &New,
           newCluster.begin(),
           newCluster.end());
 
+      assign_one(newCluster,newIDs[0],CLUSTER_ID);
       detected_clusters.erase(dcIT);
     }
     //TODO: Figure out the case for newIDs.size()>1
@@ -2641,6 +2722,7 @@ int main(int argc, char* argv[])
   bool SHOWTAGS=true;
   bool TRACK=false;
   bool STEP=true;
+  bool NOOUTPUT=true;
 
 #ifdef LRVTRACK_WITH_CUDA
   cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());
@@ -2881,8 +2963,10 @@ int main(int argc, char* argv[])
 
           //unsigned int result=
           cvLabel(&ipl_thresholded, labelImg, blobs);
-          cvb::cvFilterByArea(blobs, 32, 900);
+          cvb::cvFilterByArea(blobs, 36, 900);
+          
           //----------------------------------------------------------
+          /*
           cv::Mat debugImg;
           frame.copyTo(debugImg);
           cvb::CvBlobs::iterator dbg=blobs.begin();
@@ -2904,6 +2988,7 @@ int main(int argc, char* argv[])
           }
           cv::imshow("DEBUG",debugImg);
           cv::waitKey(1);
+          */
           //------------------------------------------------------------
 
 
@@ -2982,13 +3067,21 @@ int main(int argc, char* argv[])
 
                   // Here we define an extra PADDING
                   int PAD=2;
-                  cv::Mat larvaROI(frame,
+                  cv::Mat larvaROI;
+                  try{
+                    //(0 <= roi.x && 0 <= roi.width && roi.x + roi.width <= m.cols && 0 <= roi.y && 0 <= roi.height && roi.y + roi.height <= m.rows)
+                  larvaROI=cv::Mat(frame,
                                    cv::Rect(blob->minx-ROI_PADDING-PAD,
                                             blob->miny-ROI_PADDING-PAD,
                                             blob->maxx-blob->minx+2*(ROI_PADDING+PAD),
                                             blob->maxy-blob->miny+2*(ROI_PADDING+PAD))
                                   );
-
+                  }
+                  catch(...)
+                  {
+                    std::cerr << "larvaROI failed. continuing" << std::endl;
+                    break;
+                  }
                   cv::circle(frame,
                              cv::Point2d(blob->centroid.x,blob->centroid.y),
                              1,
@@ -3033,7 +3126,8 @@ int main(int argc, char* argv[])
 
         }
 
-      cv::imshow("Extracted Frame",frame);
+      if(!TRACK)
+        cv::imshow("Extracted Frame",frame);
       if (LRVTRACK_SAVE_PROCESSED_VIDEO!="")
         {
           vidPOut << frame;
@@ -3044,11 +3138,12 @@ int main(int argc, char* argv[])
       if (STEP==true)
         k=46;
       else
-        k=cv::waitKey(1);
+          k=cv::waitKey(1);
       if (k>=0)
         {
           if (k==32)
             {
+              if(!TRACK)
               while (cv::waitKey(1)!=32)
                 {
                   //No OP
