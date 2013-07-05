@@ -54,7 +54,7 @@ void computeInnerDistances(cvb::CvBlob &blob,
   contour.copyTo(workingContour);
   std::vector<cv::Point> &points=Distances.points;
   std::vector<cv::Point> SimplePoints;
-  cv::approxPolyDP(points,SimplePoints,0.9,true);
+  cv::approxPolyDP(points,SimplePoints,0.8,true);
   cv::Point MP(MidPoint.x+blob.minx,MidPoint.y+blob.miny);
   points=SimplePoints;
   double mWidth=0;

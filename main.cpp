@@ -746,19 +746,6 @@ void assign_combinations(std::vector<unsigned int> &NEW,
 
 }
 
-void diverge_match_centroid(
-  std::vector<unsigned int> &candidateLarvae,
-  std::vector<unsigned int> &newLarvae,
-  std::map<unsigned int, unsigned int> &newAssignments,
-  cvb::CvBlobs &NEW)
-{
-  std::vector<unsigned int>::iterator nl=newLarvae.begin();
-  while(nl!=newLarvae.end())
-  {
-    ++nl;
-  }
-}
-
 void diverge_match_new(
   std::vector<unsigned int> &candidateLarvae,
   std::vector<unsigned int> &newLarvae,
@@ -772,7 +759,7 @@ void diverge_match_new(
 
   std::map<unsigned int, cv::Mat> newMeanMat;
 
-  double FACTOR=0.000005;
+  double FACTOR=0.000009;
   std::vector<unsigned int>::iterator cIT=candidateLarvae.begin();
   verbosePrint("Setting up candidate larvae data");
   while(cIT!=candidateLarvae.end())
@@ -794,6 +781,17 @@ void diverge_match_new(
     double perimeter_avg=avgNVec(detected_larvae[*cIT].perimeter);
     double width_avg=avgNVec(detected_larvae[*cIT].width);
 */
+    double relative_centroid_x=FACTOR*detected_larvae[*cIT].centroids.back().x/duration;
+    double relative_centroid_y=FACTOR*detected_larvae[*cIT].centroids.back().y/duration;
+
+    std::vector<double> xd;
+    std::vector<double> yd;
+
+    for (unsigned int i=0; i<detected_larvae[*cIT].area.size(); i++)
+    {
+      xd.push_back(FACTOR*detected_larvae[*cIT].centroids[i].x/duration);
+      yd.push_back(FACTOR*detected_larvae[*cIT].centroids[i].y/duration);
+    }
 
     cv::Mat InputArray;
     cv::hconcat(cv::Mat(detected_larvae[*cIT].area),
@@ -812,12 +810,22 @@ void diverge_match_new(
         cv::Mat(detected_larvae[*cIT].width),
         InputArray);
 
+    cv::hconcat(InputArray,
+        cv::Mat(xd),
+        InputArray);
+
+    cv::hconcat(InputArray,
+        cv::Mat(yd),
+        InputArray);
+
     std::vector<double> meanVec;
     meanVec.push_back(size_avg);
     meanVec.push_back(grey_value_avg);
     meanVec.push_back(length_avg);
     meanVec.push_back(perimeter_avg);
     meanVec.push_back(width_avg);
+    meanVec.push_back(relative_centroid_x);
+    meanVec.push_back(relative_centroid_y);
     
     cv::Mat meanMat(meanVec);
     cv::Mat meanTMat;
