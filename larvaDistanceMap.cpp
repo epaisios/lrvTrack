@@ -9,7 +9,7 @@ void lBFS(int p1,
 {
   std::queue<int> Q;
   Q.push(p1);
-  double MAX=Distances.MaxDist;
+  float MAX=Distances.MaxDist;
   while (!Q.empty())
     {
       int cur=Q.front();
@@ -26,7 +26,7 @@ void lBFS(int p1,
               float multres=Distances[cur][i]*Distances[p1][cur];
               float sqrtres[1];
               ltsqrt(sqrtres,&multres);
-              double newDst = Distances[cur][i]+Distances[p1][cur] +
+              float newDst = Distances[cur][i]+Distances[p1][cur] +
                               2*sqrtres[0];
               if (Distances[p1][i]>newDst)
                 {
@@ -60,11 +60,11 @@ void computeInnerDistances(cvb::CvBlob &blob,
   cv::approxPolyDP(points,SimplePoints,0.8,true);
   cv::Point MP(MidPoint.x+blob.minx,MidPoint.y+blob.miny);
   points=SimplePoints;
-  double mWidth=0;
+  float mWidth=0;
   Distances.WidthDist=9999;
 
   int origNZ=countNonZero(contour);
-  double MAX=0;
+  float MAX=0;
   for (unsigned int i=0; i<points.size(); ++i)
     {
       cv::Point p1=cv::Point(points[i].x,points[i].y);
@@ -85,9 +85,9 @@ void computeInnerDistances(cvb::CvBlob &blob,
           else
             {
               PointPair p1p2 = PointPair(p1,p2);
-              double xdiff=points[i].x-points[j].x;
-              double ydiff=points[i].y-points[j].y;
-              double sqDst=xdiff*xdiff+ydiff*ydiff;
+              float xdiff=points[i].x-points[j].x;
+              float ydiff=points[i].y-points[j].y;
+              float sqDst=xdiff*xdiff+ydiff*ydiff;
               Distances[i][j]=sqDst;
               Distances[j][i]=sqDst;
 

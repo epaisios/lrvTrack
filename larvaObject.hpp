@@ -18,47 +18,47 @@ public:
   unsigned int parentBlobID;
   bool isCluster;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
-  std::vector<double> area;
-  double area_mean;
-  double area_sum;
-  double area_max;
-  double area_min;
+  std::vector<float> area;
+  float area_mean;
+  float area_sum;
+  float area_max;
+  float area_min;
 
-  std::vector<double> grey_value;
-  double grey_value_mean;
-  double grey_value_sum;
-  double grey_value_max;
-  double grey_value_min;
+  std::vector<float> grey_value;
+  float grey_value_mean;
+  float grey_value_sum;
+  float grey_value_max;
+  float grey_value_min;
 
-  std::vector<double> length;
-  double length_mean;
-  double length_sum;
-  double length_max;
-  double length_min;
+  std::vector<float> length;
+  float length_mean;
+  float length_sum;
+  float length_max;
+  float length_min;
 
-  std::vector<double> perimeter;
-  double perimeter_mean;
-  double perimeter_sum;
-  double perimeter_max;
-  double perimeter_min;
+  std::vector<float> perimeter;
+  float perimeter_mean;
+  float perimeter_sum;
+  float perimeter_max;
+  float perimeter_min;
 
-  std::vector<double> width;
-  double width_mean;
-  double width_sum;
-  double width_max;
-  double width_min;
+  std::vector<float> width;
+  float width_mean;
+  float width_sum;
+  float width_max;
+  float width_min;
 
-  std::vector<double> roundness;
-  std::vector<double> angular_speed;
+  std::vector<float> roundness;
+  std::vector<float> angular_speed;
 
   std::vector<cv::Point> centroids;
-  std::vector<double> centroid_speed_x;
-  std::vector<double> centroid_speed_y;
+  std::vector<float> centroid_speed_x;
+  std::vector<float> centroid_speed_y;
 
-  std::vector<double> centroid_distance_x;
-  std::vector<double> centroid_distance_y;
-  double centroid_distance_x_sum;
-  double centroid_distance_y_sum;
+  std::vector<float> centroid_distance_x;
+  std::vector<float> centroid_distance_y;
+  float centroid_distance_x_sum;
+  float centroid_distance_y_sum;
 
   std::vector<unsigned int> inCluster;
 

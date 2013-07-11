@@ -3,6 +3,7 @@
 #include <map>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/ml/ml.hpp>
 #include <fstream>
 #include "larvaObject.hpp"
 #include <boost/timer/timer.hpp>
@@ -48,14 +49,14 @@ bool LRVTRACK_SHOW_TAGS=true;
 // *** FLAGS ***
 
 //VALUES FOR VARIOUS COMPARISONS
-double LARVA_SIZE_COMPARISON_FACTOR=1.3;
-double LARVA_CENTRE_COMPARISON_FACTOR=1.05;
-double LARVA_MAHALANOBIS_THRESHOLD=11.0;
-double IS_LARVA_THRESHOLD=1300;
-double COLLISION_DURATION_THRESHOLD=48;
+float LARVA_SIZE_COMPARISON_FACTOR=1.3;
+float LARVA_CENTRE_COMPARISON_FACTOR=1.05;
+float LARVA_MAHALANOBIS_THRESHOLD=11.0;
+float IS_LARVA_THRESHOLD=1300;
+float COLLISION_DURATION_THRESHOLD=48;
 unsigned int HISTORY_SIZE=10;
 
-double VIDEO_FPS=24.1;
+float VIDEO_FPS=24.1;
 static unsigned int CURRENT_FRAME=0;
 unsigned int LARVAE_COUNT;
 
@@ -88,7 +89,7 @@ cpu_timer tS,tP;
 cpu_times FrameEllapsedTime;
 //struct timeval tP;
 //struct timeval tC;
-//double FrameEllapsedTime;
+//float FrameEllapsedTime;
 cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;
@@ -97,7 +98,7 @@ cv::Mat previousFrame;
 IplImage *labelImg;
 int DEBUG_INFO=0;
 
-double Wlength=1.0;
-double Wsize=0.2;
+float Wlength=1.0;
+float Wsize=0.2;
 
 #endif

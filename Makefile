@@ -11,6 +11,7 @@ LIBS=-lm\
 		 	-lopencv_highgui\
 		 	-lopencv_video\
 		 	-lopencv_imgproc\
+			-lopencv_ml\
 		 	-lcvblob\
 		 	-lboost_program_options-mt\
 		 	-lboost_filesystem-mt\
