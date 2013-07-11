@@ -11,18 +11,18 @@ void larvaSkel::ThinSubiteration1(cv::Mat & pSrc, cv::Mat & pDst)
     {
       for(int j = 0; j < cols; ++j)
         {
-          if(pSrc.at<float>(i, j) == 1.0f)
+          if(pSrc.at<double>(i, j) == 1.0f)
             {
               /// get 8 neighbors
               /// calculate C(p)
-              int neighbor0 = (int) pSrc.at<float>( i-1, j-1);
-              int neighbor1 = (int) pSrc.at<float>( i-1, j);
-              int neighbor2 = (int) pSrc.at<float>( i-1, j+1);
-              int neighbor3 = (int) pSrc.at<float>( i, j+1);
-              int neighbor4 = (int) pSrc.at<float>( i+1, j+1);
-              int neighbor5 = (int) pSrc.at<float>( i+1, j);
-              int neighbor6 = (int) pSrc.at<float>( i+1, j-1);
-              int neighbor7 = (int) pSrc.at<float>( i, j-1);
+              int neighbor0 = (int) pSrc.at<double>( i-1, j-1);
+              int neighbor1 = (int) pSrc.at<double>( i-1, j);
+              int neighbor2 = (int) pSrc.at<double>( i-1, j+1);
+              int neighbor3 = (int) pSrc.at<double>( i, j+1);
+              int neighbor4 = (int) pSrc.at<double>( i+1, j+1);
+              int neighbor5 = (int) pSrc.at<double>( i+1, j);
+              int neighbor6 = (int) pSrc.at<double>( i+1, j-1);
+              int neighbor7 = (int) pSrc.at<double>( i, j-1);
               int C = int(~neighbor1 & ( neighbor2 | neighbor3)) +
                       int(~neighbor3 & ( neighbor4 | neighbor5)) +
                       int(~neighbor5 & ( neighbor6 | neighbor7)) +
@@ -45,7 +45,7 @@ void larvaSkel::ThinSubiteration1(cv::Mat & pSrc, cv::Mat & pDst)
                       int c3 = ( neighbor1 | neighbor2 | ~neighbor4) & neighbor3;
                       if(c3 == 0)
                         {
-                          pDst.at<float>( i, j) = 0.0f;
+                          pDst.at<double>( i, j) = 0.0f;
                         }
                     }
                 }
@@ -64,18 +64,18 @@ void larvaSkel::ThinSubiteration2(cv::Mat & pSrc, cv::Mat & pDst)
     {
       for(int j = 0; j < cols; ++j)
         {
-          if (pSrc.at<float>( i, j) == 1.0f)
+          if (pSrc.at<double>( i, j) == 1.0f)
             {
               /// get 8 neighbors
               /// calculate C(p)
-              int neighbor0 = (int) pSrc.at<float>( i-1, j-1);
-              int neighbor1 = (int) pSrc.at<float>( i-1, j);
-              int neighbor2 = (int) pSrc.at<float>( i-1, j+1);
-              int neighbor3 = (int) pSrc.at<float>( i, j+1);
-              int neighbor4 = (int) pSrc.at<float>( i+1, j+1);
-              int neighbor5 = (int) pSrc.at<float>( i+1, j);
-              int neighbor6 = (int) pSrc.at<float>( i+1, j-1);
-              int neighbor7 = (int) pSrc.at<float>( i, j-1);
+              int neighbor0 = (int) pSrc.at<double>( i-1, j-1);
+              int neighbor1 = (int) pSrc.at<double>( i-1, j);
+              int neighbor2 = (int) pSrc.at<double>( i-1, j+1);
+              int neighbor3 = (int) pSrc.at<double>( i, j+1);
+              int neighbor4 = (int) pSrc.at<double>( i+1, j+1);
+              int neighbor5 = (int) pSrc.at<double>( i+1, j);
+              int neighbor6 = (int) pSrc.at<double>( i+1, j-1);
+              int neighbor7 = (int) pSrc.at<double>( i, j-1);
               int C = int(~neighbor1 & ( neighbor2 | neighbor3)) +
                       int(~neighbor3 & ( neighbor4 | neighbor5)) +
                       int(~neighbor5 & ( neighbor6 | neighbor7)) +
@@ -97,7 +97,7 @@ void larvaSkel::ThinSubiteration2(cv::Mat & pSrc, cv::Mat & pDst)
                       int E = (neighbor5 | neighbor6 | ~neighbor0) & neighbor7;
                       if(E == 0)
                         {
-                          pDst.at<float>(i, j) = 0.0f;
+                          pDst.at<double>(i, j) = 0.0f;
                         }
                     }
                 }
@@ -115,39 +115,39 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
   int cols = inputarray.cols;
   cv::Mat img_thr;
   inputarray.copyTo(img_thr);
-  img_thr.convertTo(img_thr,CV_32FC1);
+  img_thr.convertTo(img_thr,CV_64FC1);
   img_thr.copyTo(skelImg);
 
-  skelImg.convertTo(skelImg,CV_32FC1);
+  skelImg.convertTo(skelImg,CV_64FC1);
 
   /// pad source
-  cv::Mat p_enlarged_src = cv::Mat(rows + 2, cols + 2, CV_32FC1);
+  cv::Mat p_enlarged_src = cv::Mat(rows + 2, cols + 2, CV_64FC1);
   for(int i = 0; i < (rows+2); ++i)
     {
-      p_enlarged_src.at<float>(i, 0) = 0.0f;
-      p_enlarged_src.at<float>( i, cols+1) = 0.0f;
+      p_enlarged_src.at<double>(i, 0) = 0.0f;
+      p_enlarged_src.at<double>( i, cols+1) = 0.0f;
     }
   for(int j = 0; j < (cols+2); ++j)
     {
-      p_enlarged_src.at<float>(0, j) = 0.0f;
-      p_enlarged_src.at<float>(rows+1, j) = 0.0f;
+      p_enlarged_src.at<double>(0, j) = 0.0f;
+      p_enlarged_src.at<double>(rows+1, j) = 0.0f;
     }
   for(int i = 0; i < rows; ++i)
     {
       for(int j = 0; j < cols; ++j)
         {
-          if (img_thr.at<float>(i, j) >= 20.0f)
+          if (img_thr.at<double>(i, j) >= 20.0f)
             {
-              p_enlarged_src.at<float>( i+1, j+1) = 1.0f;
+              p_enlarged_src.at<double>( i+1, j+1) = 1.0f;
             }
           else
-            p_enlarged_src.at<float>( i+1, j+1) = 0.0f;
+            p_enlarged_src.at<double>( i+1, j+1) = 0.0f;
         }
     }
 
   /// start to thin
-  cv::Mat p_thinMat1 = cv::Mat::zeros(rows + 2, cols + 2, CV_32FC1);
-  cv::Mat p_thinMat2 = cv::Mat::zeros(rows + 2, cols + 2, CV_32FC1);
+  cv::Mat p_thinMat1 = cv::Mat::zeros(rows + 2, cols + 2, CV_64FC1);
+  cv::Mat p_thinMat2 = cv::Mat::zeros(rows + 2, cols + 2, CV_64FC1);
   cv::Mat p_cmp = cv::Mat::zeros(rows + 2, cols + 2, CV_8UC1);
 
   while (bDone != true)
@@ -175,8 +175,8 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
     {
       for(int j = 0; j < cols; ++j)
         {
-          skelImg.at<float>( i, j) = p_enlarged_src.at<float>( i+1, j+1);
-          if (skelImg.at<float>( i, j) > 0)
+          skelImg.at<double>( i, j) = p_enlarged_src.at<double>( i+1, j+1);
+          if (skelImg.at<double>( i, j) > 0)
             {
               skelPoints.push_back(cv::Point(j,i));
               //    skelPointCurve[cPoints].x=i;

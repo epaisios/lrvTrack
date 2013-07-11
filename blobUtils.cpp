@@ -1,9 +1,9 @@
 #include "blobUtils.hpp"
 #include "lrvTrackBase.hpp"
 
-float diff(cv::Point &a, cv::Point &b)
+double diff(cv::Point &a, cv::Point &b)
 {
-  return (fabs((float) a.x-b.x)+fabs((float)a.y-b.y));
+  return (fabs((double) a.x-b.x)+fabs((double)a.y-b.y));
 }
 
 void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point> &points)
@@ -94,22 +94,22 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
   delete(cntPoly);
 }
 
-float angle( cv::Point &pt1, cv::Point &pt0, cv::Point &pt2 )
+double angle( cv::Point &pt1, cv::Point &pt0, cv::Point &pt2 )
 {
-  float dx1 = pt1.x - pt0.x;
-  float dy1 = pt1.y - pt0.y;
-  float dx2 = pt2.x - pt0.x;
-  float dy2 = pt2.y - pt0.y;
+  double dx1 = pt1.x - pt0.x;
+  double dy1 = pt1.y - pt0.y;
+  double dx2 = pt2.x - pt0.x;
+  double dy2 = pt2.y - pt0.y;
   return acos((dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10));
 }
 
-float plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD)
+double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD)
 {
-  float angle = cvb::cvAngle(blob);
+  double angle = cvb::cvAngle(blob);
 
-  float x1,y1,x2,y2;
-  float cx,cy;
-  float lengthLine = MAX(blob->maxx-blob->minx, blob->maxy-blob->miny)/2.;
+  double x1,y1,x2,y2;
+  double cx,cy;
+  double lengthLine = MAX(blob->maxx-blob->minx, blob->maxy-blob->miny)/2.;
 
   cx=blob->centroid.x-blob->minx+PAD;
   cy=blob->centroid.y-blob->miny+PAD;
@@ -125,7 +125,7 @@ float plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD)
   return angle;
 }
 
-float getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
+double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
 {
   cv::Mat ROI;
   //TODO: Fix when the Padding exceeds the image size!!!
@@ -137,18 +137,18 @@ float getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
   ROIcopy.copyTo(ROI);
   ROI=ROI&larvaROI;
   lrvTrackNormalize(ROI, ROI, 0, 255, CV_MINMAX );
-  float nz=cv::norm(ROI,cv::NORM_L1);
+  double nz=cv::norm(ROI,cv::NORM_L1);
   return nz/blob.area;
 }
 
-float getPerimeter(cvb::CvBlob &blob)
+double getPerimeter(cvb::CvBlob &blob)
 {
   std::vector<cv::Point> cntPoints;
   blobToPointVector(blob,cntPoints);
   return arcLength(cntPoints, true);
 }
 
-float getSurroundingSize(cv::Point &point, cvb::CvBlob &blob, cv::Mat &grey_frame)
+double getSurroundingSize(cv::Point &point, cvb::CvBlob &blob, cv::Mat &grey_frame)
 {
   cv::Mat larvaImg,lrvROI;
   grey_frame.copyTo(larvaImg);
@@ -164,7 +164,7 @@ float getSurroundingSize(cv::Point &point, cvb::CvBlob &blob, cv::Mat &grey_fram
   cROI=cv::Scalar(0);
   cv::circle(cROI, cv::Point(point.x,point.y),3,cv::Scalar(255),-1);
   cv::Mat area=ROI&cROI;
-  float nz=cv::norm(area,cv::NORM_L1);
-  //float nz=cv::countNonZero(area);
+  double nz=cv::norm(area,cv::NORM_L1);
+  //double nz=cv::countNonZero(area);
   return nz;
 }

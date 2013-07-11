@@ -24,7 +24,7 @@ typedef std::pair<cv::Point_<int>,cv::Point_<int> > PointPair;
 
 // SSE Optimized reciprocal sqrt and mutliplies it by pIn to get the sqrt
 // Optimized sqrt from http://stackoverflow.com/questions/1528727/why-is-sse-scalar-sqrtx-slower-than-rsqrtx-x
-inline void SSESqrt_Recip_Times_X( float * pOut, float * pIn )
+inline void SSESqrt_Recip_Times_X( float* pOut, float* pIn )
 {
   __m128 in = _mm_load_ss( pIn );
   _mm_store_ss( pOut, _mm_mul_ss( in, _mm_rsqrt_ss( in ) ) );
@@ -32,7 +32,7 @@ inline void SSESqrt_Recip_Times_X( float * pOut, float * pIn )
 }
 #else
 #define ltsqrt mysqrt
-inline void mysqrt(float * pOut, float * pIn)
+inline void mysqrt(float* pOut, float* pIn)
 {
   *pOut=sqrt(*pIn);
 }
