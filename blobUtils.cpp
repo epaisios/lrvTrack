@@ -136,9 +136,9 @@ double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
                             );
   ROIcopy.copyTo(ROI);
   ROI=ROI&larvaROI;
-  //lrvTrackNormalize(ROI, ROI, 0, 255, CV_MINMAX );
+  lrvTrackNormalize(ROI, ROI, 0, 255, CV_MINMAX );
   double nz=cv::norm(ROI,cv::NORM_L1);
-  return nz;
+  return nz/blob.area;
 }
 
 double getPerimeter(cvb::CvBlob &blob)

@@ -37,7 +37,10 @@ void lBFS(int p1,
                 {
                   MAX=Distances[p1][i];
                   Distances.MaxDistPoints=p1_pi;
-                  Distances.MaxDist=MAX;
+                  float len;
+                  float MAXf=MAX;
+                  ltsqrt(&len, &MAXf);
+                  Distances.MaxDist=len;
                 }
             }
         }
@@ -92,7 +95,10 @@ void computeInnerDistances(cvb::CvBlob &blob,
                 {
                   MAX=Distances[i][j];
                   Distances.MaxDistPoints=p1p2;
-                  Distances.MaxDist=MAX;
+                  float len;
+                  float MAXf=MAX;
+                  ltsqrt(&len, &MAXf);
+                  Distances.MaxDist=len;
                 }
               if(abs(j-i)>1)
                 {

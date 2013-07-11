@@ -55,6 +55,11 @@ public:
   std::vector<double> centroid_speed_x;
   std::vector<double> centroid_speed_y;
 
+  std::vector<double> centroid_distance_x;
+  std::vector<double> centroid_distance_y;
+  double centroid_distance_x_sum;
+  double centroid_distance_y_sum;
+
   std::vector<unsigned int> inCluster;
 
   std::vector<larvaSkel> lrvskels;
@@ -89,7 +94,9 @@ public:
     width_mean(0),
     width_sum(0),
     width_max(0),
-    width_min(0)
+    width_min(0),
+    centroid_distance_x_sum(0),
+    centroid_distance_y_sum(0)
   {}
 
   int switchFaultyAssignment(
