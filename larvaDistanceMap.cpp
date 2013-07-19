@@ -402,20 +402,25 @@ void computeSpine(
   std::vector<cv::Point2f> &Dpoints=Distances.points;
   std::vector<cv::Point2f> points;
   cv::approxPolyDP(Dpoints,points,0.4,true);
-  std::cerr << "computeSpine: points: " << points.size() << std::endl;
-  int PADDING=2;
+  //std::cerr << "computeSpine: points: " << points.size() << std::endl;
+  //int PADDING=2;
   double RES=4.0;
   //Distances.WidthDist=DBL_MAX;
-
+  PointPair wpoints;
   std::vector<cv::Point2f> spine;
   double maxDist=0;
+  double maxWidth=0;
+  std::vector<double> widths;
 
   for (unsigned int i=0; i<points.size()-1; ++i)
   {
     cv::Point2f fwdPoint;
     cv::Point2f bwdPoint;
     
-    
+    double curMaxWidth=0;
+    std::vector<double> curWidths;
+    PointPair curWidthPoints;
+
     std::vector<cv::Point2f> curSpine;  
     curSpine.push_back(points[i]);
     double curDist=0.0;
@@ -445,7 +450,6 @@ void computeSpine(
 
     while(pointsCrossed<points.size())
     {
-      showPoints(blob,points,curSpine,i,fwdIdx,bwdIdx,pfwdIdx,pbwdIdx,bwdPoint,fwdPoint,PADDING);
       if(distanceMatch(fwd_dst_fPoint_fwdIdx,fwdRESLeft))
       {
         assignPoint(fwdPoint,points[fwdIdx]);
@@ -584,10 +588,23 @@ void computeSpine(
         }
       }
 
-      showPoints(blob,points,curSpine,i,fwdIdx,bwdIdx,pfwdIdx,pbwdIdx,fwdPoint,fwdPoint,PADDING);
 
       cv::Point2f newMP;
       newMP=(bwdPoint+fwdPoint)*0.5;
+      double width=p2fdist(bwdPoint,fwdPoint);
+      if(fwdIdx != i && 
+          bwdIdx != i && 
+          pfwdIdx != i && 
+          pbwdIdx != i )
+      {
+        if (curMaxWidth<width)
+        {
+          curMaxWidth=width;
+          curWidthPoints.first.x=bwdPoint.x;
+          curWidthPoints.first.y=bwdPoint.y;
+        }
+        curWidths.push_back(width);
+      }
       if(cv::pointPolygonTest(points,newMP,false)<=0)
       {
         curSpine.pop_back();
@@ -617,25 +634,11 @@ void computeSpine(
     {
       spine=curSpine;
       maxDist=curDist;
+      maxWidth=curMaxWidth;
+      widths=curWidths;
+      wpoints=curWidthPoints;
     }
   }
-
-  std::cerr << "computeSpine: spine size: " << spine.size() << std::endl;
-  
-  createLarvaContour(contour,blob,CV_8UC3,PADDING);
-  std::vector<cv::Point2f>::iterator sIT=spine.begin();
-  while(sIT!=spine.end())
-  {
-    cv::circle(contour,
-        cv::Point2d(sIT->x-blob.minx+PADDING,sIT->y-blob.miny+PADDING),
-        0,
-        cv::Scalar(0,0,255),
-        -1);
-    ++sIT;
-  }
-  cv::resize(contour,lcontour,cv::Size(),8,8,cv::INTER_NEAREST);
-  cv::imshow("Spine3",lcontour);
-  cv::waitKey(1);
 
 
   //maxDist=arcLength(spine,false);
@@ -695,46 +698,11 @@ void computeSpine(
   Distances.p80.y=p80.y;
   Distances.MidPoint.x=p50.x;
   Distances.MidPoint.y=p50.y;
+  Distances.WidthDist=maxWidth;
+  Distances.WidthDistPoints=wpoints;
   
   std::vector<std::vector<cv::Point2f> > cnts;
   cnts.push_back(spine);
-
-  createLarvaContour(contour,blob,CV_8UC3,PADDING);
-  
-  for(unsigned int i=0;i<spine.size()-1;i++)
-  {
-    cv::Point p1,p2;
-    p1.x=spine[i].x-blob.minx+PADDING;
-    p1.y=spine[i].y-blob.miny+PADDING;
-    p2.x=spine[i+1].x-blob.minx+PADDING;
-    p2.y=spine[i+1].y-blob.miny+PADDING;
-    cv::line(contour,p1,p2,cv::Scalar(255,255,0));
-    cv::resize(contour,lcontour,cv::Size(),8,8,cv::INTER_NEAREST);
-    cv::imshow("Spine3",lcontour);
-    cv::waitKey(1);
-  }
-
-  cv::circle(contour,
-      cv::Point2d(p50.x-blob.minx+PADDING,p50.y-blob.miny+PADDING),
-      0,
-      cv::Scalar(0,0,255),
-      -1);
-  
-  cv::circle(contour,
-      cv::Point2d(spine.back().x-blob.minx+PADDING,spine.back().y-blob.miny+PADDING),
-      0,
-      cv::Scalar(0,200,0),
-      -1);
-
-  cv::circle(contour,
-      cv::Point2d(spine.front().x-blob.minx+PADDING,spine.front().y-blob.miny+PADDING),
-      0,
-      cv::Scalar(255,0,0),
-      -1);
-
-      cv::resize(contour,lcontour,cv::Size(),8,8,cv::INTER_NEAREST);
-      cv::imshow("Spine3",lcontour);
-      cv::waitKey(1);
 }
 
 void computeInnerDistances(cvb::CvBlob &blob,

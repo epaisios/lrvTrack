@@ -2,7 +2,7 @@
 #define __LRVTRACK_LARVAOBJECT_HPP__
 #include "cvblob.h"
 #include <vector>
-#include "larvaSkel.hpp"
+#include "larvaDistanceMap.hpp"
 
 /*
  * Class containing information about each larva and its history on the plate.
@@ -64,7 +64,7 @@ public:
 
   std::vector<unsigned int> inCluster;
 
-  std::vector<larvaSkel> lrvskels;
+  std::vector<larvaDistanceMap> lrvDistances;
 
   std::vector<cv::Point2f> heads;
   std::vector<cv::Point2f> tails;

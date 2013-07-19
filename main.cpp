@@ -316,14 +316,16 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
                   static_cast<int>(blob.centroid.y-blob.miny+ROI_PADDING+0.5)
                   );
               newLarva.centroids.push_back(centroid);
-              larvaSkel newLarvaSkel(larvaROI,centroid);
-              newLarva.lrvskels.push_back(newLarvaSkel);
+              //larvaSkel newLarvaSkel(larvaROI,centroid);
+              //newLarva.lrvskels.push_back(newLarvaSkel);
 
               // In this block we compute the inner distances for the larva
               std::vector<cv::Point2f> cntPoints;
               blobToPointVector(blob,cntPoints);
               larvaDistanceMap Distances(cntPoints);
-              computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
+              //computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
+              computeSpine(blob,Distances);
+              newLarva.lrvDistances.push_back(Distances);
               newLarva.length.push_back(Distances.MaxDist);
               newLarva.length_mean = Distances.MaxDist;
               newLarva.length_sum= Distances.MaxDist;
@@ -346,7 +348,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
               findHeadTail(startPoints,newLarva,Head,Tail);
               newLarva.heads.push_back(Head);
               newLarva.tails.push_back(Tail);
-              newLarva.headBodyAngle.push_back(angleD(Head,newLarva.lrvskels.back().MidPoint,Tail));
+              newLarva.headBodyAngle.push_back(angleD(Head,newLarva.lrvDistances.back().MidPoint,Tail));
 
               newLarva.width.push_back(Distances.WidthDist);
               newLarva.width_mean = Distances.WidthDist;
@@ -488,8 +490,6 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
               ++cur_larva.lifetimeWithStats;
               cur_larva.lastIdxWithStats=cur_larva.area.size();
 
-              larvaSkel newLarvaSkel(larvaROI,centroid);
-              cur_larva.lrvskels.push_back(newLarvaSkel);
 
               // If not then:
               //  Update area values for larva.
@@ -508,6 +508,8 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 
 
               // Try to find Head and Tail
+              //larvaSkel newLarvaSkel(larvaROI,centroid);
+              //cur_larva.lrvskels.push_back(newLarvaSkel);
 
               // Point coordinates for head/tail
               cv::Point2f Head,Tail;
@@ -518,7 +520,9 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
               blobToPointVector(blob,cntPoints);
               larvaDistanceMap Distances(cntPoints);
               // Compute all the inner distances for the larva
-              computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
+              //computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
+              computeSpine(blob,Distances);
+              cur_larva.lrvDistances.push_back(Distances);
               cur_larva.length.push_back(Distances.MaxDist);
               cur_larva.length_mean=(cur_larva.length_mean+Distances.MaxDist)/2;
               cur_larva.length_sum=cur_larva.length_sum+Distances.MaxDist;
@@ -594,7 +598,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
               cur_larva.heads.push_back(Head);
               cur_larva.tails.push_back(Tail);
 
-              cur_larva.headBodyAngle.push_back(angleD(Head,cur_larva.lrvskels.back().MidPoint,Tail));
+              cur_larva.headBodyAngle.push_back(angleD(Head,Distances.MidPoint,Tail));
 
               //state that larva is not detected as part of a blob of larvae
               //NOTE: It is important to perform this value setting !AFTER!
@@ -1017,8 +1021,7 @@ void diverge_match_new(
     cv::Point2f centroid;
     centroid.x=NEW[*cIT]->centroid.x;
     centroid.y=NEW[*cIT]->centroid.y;
-    larvaSkel newLarvaSkel(larvaROI,centroid);
-    computeInnerDistances(*NEW[*cIT],dstLarva,newLarvaSkel.MidPoint);
+    computeSpine(*NEW[*cIT],dstLarva);
 
     double newSize=NEW[*cIT]->area;
     double newGreyval=getGreyValue(larvaROI,*NEW[*cIT],grey_frame);
@@ -1122,11 +1125,13 @@ void diverge_match(
   centroid2.x=newLarva2->centroid.x;
   centroid2.y=newLarva2->centroid.y;
 
-  larvaSkel newLarvaSkel1(larvaROI1,centroid1);
-  larvaSkel newLarvaSkel2(larvaROI2,centroid2);
+  //larvaSkel newLarvaSkel1(larvaROI1,centroid1);
+  //larvaSkel newLarvaSkel2(larvaROI2,centroid2);
 
-  computeInnerDistances(*newLarva1,dstLarva1,newLarvaSkel1.MidPoint);
-  computeInnerDistances(*newLarva2,dstLarva2,newLarvaSkel2.MidPoint);
+  //computeInnerDistances(*newLarva1,dstLarva1,newLarvaSkel1.MidPoint);
+  //computeInnerDistances(*newLarva2,dstLarva2,newLarvaSkel2.MidPoint);
+  computeSpine(*newLarva1,dstLarva1);
+  computeSpine(*newLarva2,dstLarva2);
 
 
   double length_a=LarvaA.length_sum/LarvaA.length.size();
@@ -2645,10 +2650,10 @@ void printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
           //average wiggle
           double a1,a2;
           a1=angle(cl.heads.back(),
-                   cl.lrvskels.back().Point20,
+                   cl.lrvDistances.back().p20,
                    cl.tails.back());
           a2=angle(cl.heads.back(),
-                   cl.lrvskels.back().Point80,
+                   cl.lrvDistances.back().p80,
                    cl.tails.back());
 
           avgWiggleSUM += MAX(a1,a2);
@@ -3220,6 +3225,7 @@ int main(int argc, char* argv[])
 
                   if(detected_larvae[it->first].isCluster==false)
                     {
+                      /*
                       cv::circle(larvaROI,
                                  cv::Point2f(
                                    detected_larvae[it->first].lrvskels.back().Point20.x+PAD,
@@ -3227,7 +3233,7 @@ int main(int argc, char* argv[])
                                  1,
                                  cv::Scalar(255,255,0),
                                  -1);
-
+                      */
                       cv::circle(larvaROI,
                                  cv::Point2f(
                                    detected_larvae[it->first].heads.back().x+PAD,
