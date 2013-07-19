@@ -30,7 +30,7 @@ std::ofstream summary;
 int START_FRAME=0;
 
 // *** FLAGS ***
-int LRVTRACK_VERBOSE_LEVEL=1;
+int LRVTRACK_VERBOSE_LEVEL=0;
 std::string LRVTRACK_RESULTS_FOLDER;
 std::string LRVTRACK_DATE;
 std::string LRVTRACK_NAME;
@@ -96,7 +96,7 @@ cv::Mat grey_frame;
 cv::Mat bgFrame;
 cv::Mat previousFrame;
 IplImage *labelImg;
-int DEBUG_INFO=0;
+int DEBUG_INFO=1;
 
 double Wlength=1.0;
 double Wsize=0.2;

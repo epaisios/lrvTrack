@@ -18,7 +18,11 @@ public:
   double WidthDist;
   PointPair MaxDistPoints;
   PointPair WidthDistPoints;
-  std::vector<cv::Point> &points;
+  cv::Point2f MidPoint;
+  cv::Point2f p20;
+  cv::Point2f p80;
+  std::vector<cv::Point2f> &points;
+  std::vector<cv::Point2f> Spine;
   class my2ndPoint
   {
   private:
@@ -31,7 +35,7 @@ public:
     {
       return parent.distances[p1*parent.points.size()+p2];
     }
-    double &operator[](cv::Point p2)
+    double &operator[](cv::Point2f p2)
     {
       int index_p2=std::distance(parent.points.begin(),
                                  std::find(parent.points.begin(),
@@ -47,7 +51,7 @@ public:
   {
     return my2ndPoint(*this,p1);
   }
-  my2ndPoint operator[](cv::Point p1)
+  my2ndPoint operator[](cv::Point2f p1)
   {
     int index_p1=std::distance(points.begin(),
                                std::find(points.begin(),
@@ -58,28 +62,34 @@ public:
   }
   friend class my2ndPoint;
 
-  larvaDistanceMap(std::vector<cv::Point> &ps):points(ps)
+  larvaDistanceMap(std::vector<cv::Point2f> &ps):points(ps)
   {
     distances.reserve((points.size())*(points.size()));
   }
+
   void getPxPy(cv::Mat &x,cv::Mat &y)
   {
     x=px;
     y=py;
   }
-  void getDistances(cv::Point p1)
+  void getDistances(cv::Point2f p1)
   {
   }
 
 };
 void lBFS(int p1,
-          std::vector<cv::Point> &Points ,
+          std::vector<cv::Point2f> &Points ,
           larvaDistanceMap &Distances
          );
 
 void computeInnerDistances(cvb::CvBlob &blob,
                            larvaDistanceMap &Distances,
-                           cv::Point &MidPoint);
+                           cv::Point2f &MidPoint);
 
+
+void computeSpine(
+    cvb::CvBlob &blob,
+    larvaDistanceMap &Distances
+    );
 
 #endif

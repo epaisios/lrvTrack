@@ -48,10 +48,12 @@ public:
   double width_max;
   double width_min;
 
+  std::vector<double> headBodyAngle;
+
   std::vector<double> roundness;
   std::vector<double> angular_speed;
 
-  std::vector<cv::Point> centroids;
+  std::vector<cv::Point2f> centroids;
   std::vector<double> centroid_speed_x;
   std::vector<double> centroid_speed_y;
 
@@ -64,8 +66,8 @@ public:
 
   std::vector<larvaSkel> lrvskels;
 
-  std::vector<cv::Point> heads;
-  std::vector<cv::Point> tails;
+  std::vector<cv::Point2f> heads;
+  std::vector<cv::Point2f> tails;
 
   larvaObject():
     start_frame(0),

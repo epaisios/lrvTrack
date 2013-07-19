@@ -107,7 +107,7 @@ void larvaSkel::ThinSubiteration2(cv::Mat & pSrc, cv::Mat & pDst)
 }
 
 larvaSkel::larvaSkel(cv::Mat &inputarray,
-                     cv::Point &centroid):
+                     cv::Point2f &centroid):
   emptySkeleton(false)
 {
   bool bDone = false;
@@ -178,7 +178,7 @@ larvaSkel::larvaSkel(cv::Mat &inputarray,
           skelImg.at<double>( i, j) = p_enlarged_src.at<double>( i+1, j+1);
           if (skelImg.at<double>( i, j) > 0)
             {
-              skelPoints.push_back(cv::Point(j,i));
+              skelPoints.push_back(cv::Point2f(j,i));
               //    skelPointCurve[cPoints].x=i;
               //    skelPointCurve[cPoints++].y=cols-j+1;
             }

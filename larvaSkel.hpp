@@ -15,18 +15,18 @@ class larvaSkel
 {
 private:
   cv::Mat skelImg;
-  std::vector<cv::Point> skelPoints;
+  std::vector<cv::Point2f> skelPoints;
   void ThinSubiteration1(cv::Mat & pSrc, cv::Mat & pDst);
   void ThinSubiteration2(cv::Mat & pSrc, cv::Mat & pDst);
 
 public:
-  std::vector <cv::Point> startPoints;
-  cv::Point MidPoint;
-  cv::Point Point20;
-  cv::Point Point80;
+  std::vector <cv::Point2f> startPoints;
+  cv::Point2f MidPoint;
+  cv::Point2f Point20;
+  cv::Point2f Point80;
   bool emptySkeleton;
   larvaSkel(bool emptySkel):emptySkeleton(true) {};
-  larvaSkel(cv::Mat &inputarray, cv::Point &centroid);
+  larvaSkel(cv::Mat &inputarray, cv::Point2f &centroid);
   void drawSkeleton(cv::Mat &img,cv::Scalar col=cv::Scalar(0,0,0));
 };
 #endif
