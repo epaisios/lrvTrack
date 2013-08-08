@@ -1,5 +1,6 @@
 #include "blobUtils.hpp"
 #include "lrvTrackBase.hpp"
+#include "boost/dynamic_bitset.hpp"
 
 double diff(cv::Point2f &a, cv::Point2f &b)
 {
@@ -23,14 +24,15 @@ void createLarvaROI(cv::Mat &frame, cv::Mat &ROI, cvb::CvBlob &blob)
   ROI=cv::Mat(frame,
               cv::Rect(blob.minx-ROI_PADDING,
                        blob.miny-ROI_PADDING,
-                       blob.maxx-blob.minx+2*ROI_PADDING,
-                       blob.maxy-blob.miny+2*ROI_PADDING
+                       blob.maxx-blob.minx+1+2*ROI_PADDING,
+                       blob.maxy-blob.miny+1+2*ROI_PADDING
                       )
              );
   //cv::normalize(ROI,ROI,0,255,cv::NORM_MINMAX);
 }
 
-void createLarvaContour(cv::Mat &lrvROI,
+/* BROKEN!! IF FIXED MAY BE FASTER
+void createLarvaContourCV(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,
                         int type,
                         int PADDING,
@@ -42,6 +44,48 @@ void createLarvaContour(cv::Mat &lrvROI,
 
   lrvROI=cv::Mat::zeros(blob.maxy-blob.miny+(2*ROI_PADDING)+(2*PADDING),
                         blob.maxx-blob.minx+(2*ROI_PADDING)+(2*PADDING),
+                        type);
+
+  cv::Point *ContourPoints[1];
+  ContourPoints[0]=(cv::Point*) malloc(
+                     blob.contour.chainCode.size()*sizeof(cv::Point)
+                   );
+
+  std::vector<cv::Point2f> cntVec;
+
+  for (unsigned int i=0; i<cntPoly->size(); ++i)
+  {
+    ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING+PADDING;
+    ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING+PADDING;
+    cntVec.push_back(ContourPoints[0][i]);
+  }
+
+  sizes[0]=static_cast<int> (cntPoly->size());
+  std::vector<std::vector<cv::Point2f> > cvec;
+  cvec.push_back(cntVec);
+
+  cv::Scalar color;
+  if(type==CV_8UC1)
+    color=cv::Scalar(255);
+  else
+    color=cv::Scalar(255,255,255);
+
+  drawContours(lrvROI,cvec,0,color,1,4,cv::noArray(),INT_MAX,cv::Point(PADDING,PADDING));
+}
+*/
+
+void createLarvaContour(cv::Mat &lrvROI,
+                        cvb::CvBlob &blob,
+                        int type,
+                        int PADDING,
+                        bool FILL)
+{
+  int sizes[1];
+  cvb::CvContourPolygon *cntPoly=
+    cvb::cvConvertChainCodesToPolygon(&blob.contour);
+
+  lrvROI=cv::Mat::zeros(blob.maxy-blob.miny+1+(2*ROI_PADDING)+(2*PADDING),
+                        blob.maxx-blob.minx+1+(2*ROI_PADDING)+(2*PADDING),
                         type);
 
   cv::Point *ContourPoints[1];
@@ -62,9 +106,11 @@ void createLarvaContour(cv::Mat &lrvROI,
     ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING+PADDING;
     if(!FILL && i>0)
     {
-      cv::line(lrvROI,ContourPoints[0][i-1],ContourPoints[0][i],color);
+      cv::line(lrvROI,ContourPoints[0][i-1],ContourPoints[0][i],color,1,4);
     }
   }
+  if(!FILL)
+    cv::line(lrvROI,ContourPoints[0][cntPoly->size()-1],ContourPoints[0][0],color,1,4);
 
 
   if(FILL)
@@ -80,6 +126,7 @@ void createLarvaContour(cv::Mat &lrvROI,
   delete(cntPoly);
 
 }
+
 
 void createLarvaContourPoints(cv::Mat &lrvROI,
                               cvb::CvBlob &blob,
@@ -116,6 +163,102 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
   free(ContourPoints[0]);
   delete(cntPoly);
 }
+
+void createLarvaContourPacked(cv::Point &first, 
+                              unsigned int &size,
+                              std::string &STR,
+                              cvb::CvBlob &blob)
+{
+  std::vector<cv::Point2f> contourPoints;
+  blobToPointVector(blob, contourPoints);
+  first.x=(int) contourPoints[0].x;
+  first.y=(int) contourPoints[0].y;
+  std::stringstream outline;
+  unsigned int acc=0;
+  unsigned int cntSize=0;
+  cv::Mat lrvROI;
+  createLarvaContour(lrvROI,blob,CV_8UC1,0,false);
+  int cnt3=0;
+
+  std::vector<cv::Point2f>::iterator P=contourPoints.begin()+1;
+  std::vector<cv::Point2f>::iterator pP=contourPoints.begin();
+  for(;pP!=contourPoints.end();)
+  {
+    cv::Point a;
+    a.x= (int) P->x - blob.minx;
+    a.y= (int) P->y - blob.miny;
+    cv::Point pre;
+    pre.x= (int) pP->x - blob.minx;
+    pre.y= (int) pP->y - blob.miny;
+
+    cv::LineIterator it(lrvROI, pre, a, 4);
+    ++it;
+    std::vector<uchar> buf(it.count);
+    cv::Point cur;
+    for(int i = 1; i < it.count; i++, ++it)
+    {
+      acc <<= 2;
+      //contourSize++;
+      cur.x=(int) it.pos().x;
+      cur.y=(int) it.pos().y;
+      cv::Point d=cur-pre;
+      if(d.x==1 && d.y==0)
+      {
+        acc |= 0x1;
+      }
+      else if(d.y==1 && d.x==0)
+      {
+        acc |= 0x3;
+      }
+      else if(d.x==-1 && d.y==0)
+      {
+        acc |= 0x0;
+      }
+      else if(d.y==-1 && d.x==0)
+      {
+        acc |= 0x2;
+      }
+      else
+      {
+        std::cerr << "Error creating 4-connected bitset!!!" << std::endl;
+      }
+      cnt3++;
+      cntSize++;
+      lrvROI.at<uchar>(cur)=100;
+      lrvROI.at<uchar>(a)=50;
+      if (cnt3==3)
+      {
+        cnt3=0;
+        outline << (uchar) (acc+48);
+        acc=0;
+      }
+      pre.x=cur.x;
+      pre.y=cur.y;
+    }
+    ++pP;
+    ++P;
+    if(P==contourPoints.end())
+      P=contourPoints.begin();
+  }
+
+  if (cnt3==1)
+  {
+    acc <<= 2;
+    acc <<= 2;
+    acc |= 0x1;
+    cnt3=0;
+    outline << (char) (acc+48);
+  }
+  if (cnt3==2)
+  {
+    acc <<= 2;
+    cnt3=0;
+    outline << (char) (acc+48);
+  }
+  STR=outline.str();
+  size=cntSize;
+}
+
 
 double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 )
 {
@@ -207,8 +350,8 @@ double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
   //TODO: Fix when the Padding exceeds the image size!!!
   cv::Mat ROIcopy=grey_frame(cv::Rect(blob.minx-ROI_PADDING,
                                       blob.miny-ROI_PADDING,
-                                      blob.maxx-blob.minx+2*ROI_PADDING,
-                                      blob.maxy-blob.miny+2*ROI_PADDING)
+                                      blob.maxx-blob.minx+1+12*ROI_PADDING,
+                                      blob.maxy-blob.miny+1+2*ROI_PADDING)
                             );
   ROIcopy.copyTo(ROI);
   ROI=ROI&larvaROI;
@@ -227,20 +370,50 @@ double getPerimeter(cvb::CvBlob &blob)
 double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob, cv::Mat &grey_frame)
 {
   cv::Mat larvaImg,lrvROI;
-  grey_frame.copyTo(larvaImg);
-
-  cv::Mat ROI=larvaImg(cv::Rect(blob.minx-ROI_PADDING,
-                                blob.miny-ROI_PADDING,
-                                blob.maxx-blob.minx+2*ROI_PADDING,
-                                blob.maxy-blob.miny+2*ROI_PADDING)
-                      );
-  createLarvaContour(lrvROI, blob);
+  unsigned int PADDING=4;
+  cv::Mat rROI,ROI;
+  try{
+    rROI=grey_frame(cv::Rect(blob.minx-PADDING,
+          blob.miny-PADDING,
+          blob.maxx-blob.minx+1+2*PADDING,
+          blob.maxy-blob.miny+1+2*PADDING)
+        );
+    rROI.copyTo(ROI);
+    createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
+  }
+  catch(...)
+  {
+    std::cerr << "getSurroundingSize: Error creating ROI" << std::endl;
+    return 0;
+  }
+  cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+  cv::dilate(lrvROI,lrvROI,element);
+  lrvTrackNormalize(lrvROI, lrvROI, 0, 255, CV_MINMAX );
   ROI=ROI&lrvROI;
+  /*
+  cv::Mat dbg;
+  ROI.copyTo(dbg);
+  cv::circle(dbg,
+      cv::Point2d(point.x+PADDING,point.y+PADDING),
+      0,
+      cv::Scalar(255),
+      -1);
+
+  cv::resize(dbg,dbg,cv::Size(),8,8,cv::INTER_NEAREST);
+  cv::imshow("headtail",dbg);
+  cv::waitKey(1);
+*/
   cv::Mat cROI(ROI.size(),ROI.depth());
   cROI=cv::Scalar(0);
-  cv::circle(cROI, cv::Point2f(point.x,point.y),3,cv::Scalar(255),-1);
+  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),4,cv::Scalar(255),-1);
   cv::Mat area=ROI&cROI;
+/*
+  cv::resize(area,dbg,cv::Size(),8,8,cv::INTER_NEAREST);
+  cv::imshow("headtail",dbg);
+  cv::waitKey(1);
+  */
   double nz=cv::norm(area,cv::NORM_L1);
-  //double nz=cv::countNonZero(area);
-  return nz;
+  double nc=cv::countNonZero(area);
+  return nz/nc;
+  //return nz;
 }

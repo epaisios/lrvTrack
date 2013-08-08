@@ -13,6 +13,19 @@ void createLarvaContour(cv::Mat &lrvROI,
                         int PADDING=0,
                         bool FILL=true);
 
+/*
+void createLarvaContourCV(cv::Mat &lrvROI,
+                        cvb::CvBlob &blob,
+                        int type=CV_8UC1,
+                        int PADDING=0,
+                        bool FILL=true);
+
+*/
+void createLarvaContourPacked(cv::Point &first, 
+                              unsigned int &size,
+                              std::string &STR,
+                              cvb::CvBlob &blob);
+
 void createLarvaContourPoints(cv::Mat &lrvROI,
                               cvb::CvBlob &blob,
                               int type=CV_8UC1,

@@ -11,9 +11,8 @@ class larvaObject
 {
 public:
   unsigned int start_frame;
-  unsigned int cur_frame;
   unsigned int lifetimeWithStats;
-  unsigned int lastIdxWithStats;
+  unsigned int lastBlobWithStats;
   unsigned int larva_ID;
   unsigned int parentBlobID;
   bool isCluster;
@@ -49,11 +48,13 @@ public:
   double width_min;
 
   std::vector<double> headBodyAngle;
+  std::vector<double> orientationAngle;
 
   std::vector<double> roundness;
   std::vector<double> angular_speed;
 
   std::vector<cv::Point2f> centroids;
+  std::vector<cv::Point2f> centroids_full;
   std::vector<double> centroid_speed_x;
   std::vector<double> centroid_speed_y;
 
@@ -71,9 +72,8 @@ public:
 
   larvaObject():
     start_frame(0),
-    cur_frame(0),
     lifetimeWithStats(0),
-    lastIdxWithStats(0),
+    lastBlobWithStats(0),
     larva_ID(0),
     parentBlobID(0),
     isCluster(false),

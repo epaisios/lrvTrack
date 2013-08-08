@@ -16,9 +16,11 @@ private:
 public:
   double MaxDist;
   double WidthDist;
+  unsigned int spineSegments;
   PointPair MaxDistPoints;
   PointPair WidthDistPoints;
   cv::Point2f MidPoint;
+  std::vector<cv::Point2f> spinePoints;
   cv::Point2f p20;
   cv::Point2f p80;
   std::vector<cv::Point2f> points;
@@ -62,9 +64,10 @@ public:
   }
   friend class my2ndPoint;
 
-  larvaDistanceMap(std::vector<cv::Point2f> ps):points(ps)
+  larvaDistanceMap(std::vector<cv::Point2f> ps):spineSegments(11),points(ps)
   {
     //distances.reserve((points.size())*(points.size()));
+    spinePoints.resize(spineSegments);
   }
 
   void getPxPy(cv::Mat &x,cv::Mat &y)

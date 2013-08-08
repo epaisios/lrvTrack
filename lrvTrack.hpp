@@ -4,6 +4,9 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/ml/ml.hpp>
+//#include <opencv2/superres/superres.hpp>
+//#include <opencv2/superres/optical_flow.hpp>
+#include <tbb/concurrent_hash_map.h>
 #include <fstream>
 #include "larvaObject.hpp"
 #include <boost/timer/timer.hpp>
@@ -51,7 +54,7 @@ bool LRVTRACK_SHOW_TAGS=true;
 //VALUES FOR VARIOUS COMPARISONS
 double LARVA_SIZE_COMPARISON_FACTOR=1.3;
 double LARVA_CENTRE_COMPARISON_FACTOR=1.05;
-double LARVA_MAHALANOBIS_THRESHOLD=11.0;
+double LARVA_MAHALANOBIS_THRESHOLD=1.41;
 double IS_LARVA_THRESHOLD=1300;
 double COLLISION_DURATION_THRESHOLD=48;
 unsigned int HISTORY_SIZE=10;
@@ -61,6 +64,7 @@ static unsigned int CURRENT_FRAME=0;
 unsigned int LARVAE_COUNT;
 
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
+//std::map<unsigned int,larvaObject> detected_larvae;
 std::map<unsigned int,larvaObject> detected_larvae;
 std::map<unsigned int, std::vector<unsigned int> > current_clusters;
 std::map<unsigned int, std::vector<unsigned int> > current_diverged;
@@ -72,6 +76,8 @@ std::map<unsigned int, std::vector<unsigned int> > current_diverged;
 //    new Frame assigned to IDP
 std::map<unsigned int, std::vector<unsigned int> > assignedPrevious;
 std::map<unsigned int, unsigned int> assignedPreMap;
+std::vector<unsigned int> newClusters;
+std::map<unsigned int,std::vector<unsigned int> > newDiverging;
 
 // map of assignments of the blobs in the current frame.
 // Assignments are such that:
@@ -80,6 +86,7 @@ std::map<unsigned int, unsigned int> assignedPreMap;
 //    Previous Frame assigned to IDP
 //    ID NN
 std::map<unsigned int, std::vector<unsigned int> > assignedNew;
+std::vector<unsigned int> newInFrame;
 //**********************************************************************
 std::vector<unsigned int> lost_larvae;
 std::vector<unsigned int> current_new;

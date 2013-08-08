@@ -81,126 +81,6 @@ bool distanceMatch(double dist1, double dist2)
     return false;
 }
 
-/*
- *
-    unsigned int pointsHandled=1;
-    std::vector<cv::Point2f> curSpine;
-    curSpine.push_back(points[i]);
-
-    unsigned int pIdx;
-    unsigned int nIdx=i+1;
-    unsigned int ppIdx=i,pnIdx=i;
-    double npadx=0;
-    double npady=0;
-    double ppadx=0;
-    double ppady=0;
-
-    if(i==0)
-      pIdx=points.size()-1;
-    else
-      pIdx=i-1;
-
-    cv::Point2f backPoint;
-    cv::Point2f fwdPoint;
-
-    double dstTo_pRes=RES;
-    double dstTo_pIdx=0.0;
-    double dstTo_nRes=RES;
-    double dstTo_nIdx=0.0;
-
-    createLarvaContour(contour,blob,CV_8UC1,PADDING,false);
-
-    double curDist=0;
-    bool backOK=false;
-    bool fwdOK=false;
-
-    assignPoint(backPoint,points[pIdx]);
-    assignPoint(pbackPoint,points[ppIdx]);
-    assignPoint(fwdPoint,points[nIdx]);
-    assignPoint(pfwdPoint,points[pnIdx]);
-
-    while(pointsHandled<points.size())
-    {
-
-      cv::Point newMP;
-      double BackDist=p2fdist(points[ppIdx],backPoint);
-      double FwdDist=p2fdist(points[pnIdx],fwdPoint);
-
-      if(distanceMatch(BackDist,pDST))
-      {
-        //By chance the contour point matches our sampling rate
-        //Move index to the next point and keep backPoint 
-        ppIdx=pIdx;
-        pointsHandled++;
-        backOK=true;
-
-        dstTo_pRES=RES;
-        dstTo_pIdx=0.0;
-
-        if(pIdx==0)
-          pIdx=points.size()-1;
-        else
-          pIdx--;
-      }
-      else if(BackDist<DST)
-      {
-        ppIdx=pIdx;
-        DST=DST-BackDist;
-        pointsHandled++;
-        backOK=false;
-        if(pIdx==0)
-          pIdx=points.size()-1;
-        else
-          pIdx--;
-        continue;
-      }
-      else if(BackDist>DST)
-      {
-        backOK=true;
-        pointWithDist(points[ppIdx],backPoint,backPoint,DST);
-      }
-
-      if(distanceMatch(FwdDist,DST))
-      {
-        //By chance the contour point matches our sampling rate
-        //Move index to the next point and keep backPoint 
-        pnIdx=nIdx;
-        pointsHandled++;
-        if(nIdx==points.size()-1)
-          nIdx=0;
-        else
-          nIdx++;
-        DST=RES;
-      }
-      else if(FwdDist<DST)
-      {
-        pnIdx=nIdx;
-        DST=DST-FwdDist;
-        pointsHandled++;
-        if(nIdx==points.size()-1)
-          nIdx=0;
-        else
-          nIdx++;
-        continue;
-      }
-      else if(FwdDist>DST)
-      {
-        pointWithDist(points[pnIdx],backPoint,backPoint,DST);
-        DST=RES;
-      }
-
-      newMP.x=(backPoint.x+fwdPoint.x)/2;
-      newMP.y=(backPoint.y+fwdPoint.y)/2;
-      if(cv::pointPolygonTest(points,newMP,false)<=0)
-      {
-        curSpine.pop_back();
-        break;
-      }
-      curSpine.push_back(newMP);
-
-    }
- */
-
 void showPoints(cvb::CvBlob blob,
                 std::vector<cv::Point2f > points,
                 std::vector<cv::Point2f > curSpine,
@@ -362,35 +242,6 @@ bool checkFinish(
         }
       }
       return false;
-      /*
-      if(pointsCrossed==points.size()-3)
-      {
-        
-        fwdIdx++;
-        if(fwdIdx==points.size())
-          fwdIdx=0;
-
-        if(bwdIdx==0)
-          bwdIdx=points.size();
-        bwdIdx--;
-
-        unsigned int lastIdx=fwdIdx+1;
-        if(lastIdx==points.size())
-          lastIdx=0;
-
-        std::map<unsigned int,double> dists;
-        std::map<unsigned int,double>::iterator maxIt;
-        dists[fwdIdx]=p2fdist(curSpine.back(),points[fwdIdx]);
-        dists[bwdIdx]=p2fdist(curSpine.back(),points[bwdIdx]);
-        dists[lastIdx]=p2fdist(curSpine.back(),points[lastIdx]);
-        
-        maxIt=std::max_element(dists.begin(),dists.end());
-        curDist+=maxIt->second;
-        curSpine.push_back(points[maxIt->first]);
-
-        break;
-      }*/
-
 }
 
 void computeSpine(
@@ -404,7 +255,7 @@ void computeSpine(
   cv::approxPolyDP(Dpoints,points,0.4,true);
   //std::cerr << "computeSpine: points: " << points.size() << std::endl;
   //int PADDING=2;
-  double RES=4.0;
+  double RES=1.0;
   //Distances.WidthDist=DBL_MAX;
   PointPair wpoints;
   std::vector<cv::Point2f> spine;
@@ -642,11 +493,17 @@ void computeSpine(
 
 
   //maxDist=arcLength(spine,false);
-  double dist80=0.8 * maxDist;
-  double dist20=0.2 * maxDist;
-  double dist50=0.5 * maxDist;
+  //double dist80=0.8 * maxDist;
+  //double dist20=0.2 * maxDist;
+  //double dist50=0.5 * maxDist;
 
   cv::Point2f p20,p80,p50;
+  
+  if(spine.size()==0)
+  {
+    std::cerr << "Compute Spine: No spine constructed." << std::endl;
+    return;
+  }
 
   cv::Point2f aPoint;
   aPoint.x=spine.front().x;
@@ -655,6 +512,11 @@ void computeSpine(
   double cLength=0.0;
   double pLength=0.0;
 
+  std::vector<cv::Point2f> &spinepoints=Distances.spinePoints;
+  spinepoints[0].x=spine[0].x;
+  spinepoints[0].y=spine[0].y;
+  unsigned int j=1;
+
   for(unsigned i=1;i<spine.size();i++)
   {
     double xDist=aPoint.x-spine[i].x;
@@ -662,45 +524,40 @@ void computeSpine(
     double lDist=sqrt(xDist*xDist+yDist*yDist);
     pLength=cLength;
     cLength+=lDist;
+    double r=0.1;
+    double splength=r*j*maxDist;
 
-    if(cLength>dist20 && pLength<dist20)
+    while(cLength>splength && pLength<splength)
     {
-      double xLength=dist20-pLength;
+      double xLength=r-pLength;
       double f=xLength/lDist;
-      p20.x=aPoint.x+f*(spine[i].x-aPoint.x);
-      p20.y=aPoint.y+f*(spine[i].y-aPoint.y);
-    }
-    if(cLength>dist50 && pLength<dist50)
-    {
-      double xLength=dist50-pLength;
-      double f=xLength/lDist;
-      p50.x=aPoint.x+f*(spine[i].x-aPoint.x);
-      p50.y=aPoint.y+f*(spine[i].y-aPoint.y);
-    }
-    if(cLength>dist80 && pLength<dist80)
-    {
-      double xLength=dist80-pLength;
-      double f=xLength/lDist;
-      p80.x=aPoint.x+f*(spine[i].x-aPoint.x);
-      p80.y=aPoint.y+f*(spine[i].y-aPoint.y);
+      spinepoints[j].x=aPoint.x+f*(spine[i].x-aPoint.x);
+      spinepoints[j].y=aPoint.y+f*(spine[i].y-aPoint.y);
+      j++;
+      splength=r*j*maxDist;
     }
     aPoint.x=spine[i].x;
     aPoint.y=spine[i].y;
   }
+  spinepoints.back().x=spine.back().x;
+  spinepoints.back().y=spine.back().y;
+
+  //cv::Mat wMat(widths);
+  //double wavg=cv::mean(wMat)[0];
 
   Distances.Spine=spine;
   Distances.MaxDist=maxDist;
   Distances.MaxDistPoints.first=Distances.Spine.front();
   Distances.MaxDistPoints.second=Distances.Spine.back();
-  Distances.p20.x=p20.x;
-  Distances.p20.y=p20.y;
-  Distances.p80.x=p80.x;
-  Distances.p80.y=p80.y;
-  Distances.MidPoint.x=p50.x;
-  Distances.MidPoint.y=p50.y;
+  Distances.p20.x=spinepoints[2].x;
+  Distances.p20.y=spinepoints[2].y;
+  Distances.p80.x=spinepoints[8].x;
+  Distances.p80.y=spinepoints[8].y;
+  Distances.MidPoint.x=spinepoints[5].x;
+  Distances.MidPoint.y=spinepoints[5].y;
   Distances.WidthDist=maxWidth;
+  //Distances.WidthDist=(double) wavg;
   Distances.WidthDistPoints=wpoints;
-  
   std::vector<std::vector<cv::Point2f> > cnts;
   cnts.push_back(spine);
 }
