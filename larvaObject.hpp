@@ -16,6 +16,7 @@ public:
   unsigned int larva_ID;
   unsigned int parentBlobID;
   bool isCluster;
+  std::vector<double> capture_times;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
   std::vector<double> area;
   double area_mean;
@@ -55,8 +56,8 @@ public:
 
   std::vector<cv::Point2f> centroids;
   std::vector<cv::Point2f> centroids_full;
-  std::vector<double> centroid_speed_x;
-  std::vector<double> centroid_speed_y;
+  std::vector<double> midpoint_speed_x;
+  std::vector<double> midpoint_speed_y;
 
   std::vector<double> centroid_distance_x;
   std::vector<double> centroid_distance_y;

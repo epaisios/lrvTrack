@@ -82,11 +82,6 @@ bool centresMatch(
     }
 }
 
-void packedContour(cvb::CvBlob &blob)
-{
-
-}
-
 void principalAxes(cvb::CvBlob &blob, 
                    cv::Point2f &major,
                    cv::Point2f &minor,
@@ -114,9 +109,9 @@ void principalAxes(cvb::CvBlob &blob,
     std::cerr << "principalAxes: Error creating contour" << std::endl;
     return;
   }
-  cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-  cv::dilate(lrvROI,lrvROI,element);
-  lrvTrackNormalize(lrvROI, lrvROI, 0, 255, CV_MINMAX );
+  //cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+  //cv::dilate(lrvROI,lrvROI,element);
+  //lrvTrackNormalize(lrvROI, lrvROI, 0, 255, CV_MINMAX );
   ROI=ROI&lrvROI;
   
   // Least squares fit (standard formula)
@@ -126,18 +121,22 @@ void principalAxes(cvb::CvBlob &blob,
   int nc=ROI.cols;
   int nr=ROI.rows;
 
-  for(int i=0;i<nr;++i)
+  for(int i=0;i<nc;++i)
   {
     a=i-(blob.centroid.x-blob.minx);
-    for(int j=0;j<nc;j++)
+    for(int j=0;j<nr;j++)
     {
-      cv::Point p(j,i);
+      cv::Point p(i,j);
       uchar gdata= ROI.at<uchar>(p);
       uchar bwdata= lrvROI.at<uchar>(p);
       if (bwdata != 0)
       {
-        I=255-gdata;
+        I=gdata;
+        if (255-I < I)
+          I=255-I;
       }
+      else
+        continue;
       b=j-(blob.centroid.y-blob.miny);
       Si += I;
       Sxx += I*a*a;
@@ -149,7 +148,6 @@ void principalAxes(cvb::CvBlob &blob,
   Sxx /= Si;
   Sxy /= Si;
   Syy /= Si;
-
   f = sqrt( (Sxx-Syy)*(Sxx-Syy)+4*Sxy*Sxy )/2;
   a = 0.5*(Sxx+Syy);
   b = 0.5*(Sxx-Syy);
@@ -157,23 +155,31 @@ void principalAxes(cvb::CvBlob &blob,
   L2 = a - f;
   // If major axis poorly defined for the shape, arbitrarily choose X direction.
   if (fabs(f-b) < 1e-6)
+  {
     major = cv::Point2f( 1.0 , 0.0 );  
+  }
   else
   {
     major = cv::Point2f(Sxy/(f-b) , 1.0);
     if (fabs(major.x) < 1e-6) 
       major.x = 0.0;
 
-    major = major*(1/sqrt(major.x*major.x + major.y*major.y));
+    //major = major*(1/(sqrt(major.x*major.x + major.y*major.y)));
+    major.x=major.x/sqrt(major.x*major.x + major.y*major.y);
+    major.y=major.y/sqrt(major.x*major.x + major.y*major.y);
   }
   // Likewise for minor axis
-  if (fabs(b+f) < 1e-7) minor = cv::Point2f( 1.0 , 0.0 );
+  if (fabs(b+f) < 1e-7)
+  {
+    minor = cv::Point2f( 1.0 , 0.0 );
+  }
   else
   {    
     minor = cv::Point2f(Sxy/(b+f) , -1.0);
     if (fabs(minor.x) < 1e-6) 
       minor.x = 0.0;
-    minor = minor*(1/sqrt(minor.x*minor.x + minor.y*minor.y));
+    minor.x = minor.x/sqrt(minor.x*minor.x + minor.y*minor.y);
+    minor.y = minor.y/sqrt(minor.x*minor.x + minor.y*minor.y);
   }
 
   // Find length along the least squares axes
@@ -181,13 +187,25 @@ void principalAxes(cvb::CvBlob &blob,
   double maj_max,maj_min,min_max,min_min;
   maj_max = maj_min = min_max = min_min = 0.0;
 
-  for(int i=0;i<nr;++i)
+  for(int i=0;i<nc;++i)
   {
+    int j=0;
+    cv::Point p;
+    double gval=0.0;
+    while(gval==0 && j<nr)
+    {
+      p=cv::Point(i,j);
+      gval=lrvROI.at<uchar>(p);
+      j++;
+    }
+    if(j==nr)
+      continue;
+    
     p.x = i - (blob.centroid.x - blob.minx);
-    p.y = 0 - (blob.centroid.y - blob.miny);
+    p.y = j - (blob.centroid.y - blob.miny);
 
     a = p.x*major.x+p.y*major.y;
-    b = p.x*minor.x+p.y*major.y;
+    b = p.x*minor.x+p.y*minor.y;
     if (a > maj_max) maj_max = a;
     else if (a < maj_min) maj_min = a;
     if (b > min_max) min_max = b;
@@ -386,9 +404,12 @@ void updateOneLarva(cvb::CvBlobs &In,
         (blob.centroid.y)
         );
 
+    double FrameEllapsedSeconds=FrameEllapsedTime.wall/1000000000.0;
+    newLarva.capture_times.push_back(FrameEllapsedSeconds);
+
     // Initialize the speed to 0
-    newLarva.centroid_speed_x.push_back(0);
-    newLarva.centroid_speed_y.push_back(0);
+    newLarva.midpoint_speed_x.push_back(0);
+    newLarva.midpoint_speed_y.push_back(0);
 
     newLarva.centroids.push_back(centroid);
     newLarva.centroids_full.push_back(centroidf);
@@ -479,8 +500,8 @@ void updateOneLarva(cvb::CvBlobs &In,
           " , " << newLarva.larva_ID <<
           " , " << newLarva.headBodyAngle.back() <<
           " , " << newLarva.orientationAngle.back() <<
-          " , " << newLarva.centroid_speed_x.back() <<
-          " , " << newLarva.centroid_speed_y.back() <<
+          " , " << newLarva.midpoint_speed_x.back() <<
+          " , " << newLarva.midpoint_speed_y.back() <<
           " , " << newLarva.centroids.size()-1 <<
           " , " << newLarva.centroids.back().x + blob.minx <<
           " , " << newLarva.centroids.back().y + blob.miny <<
@@ -517,8 +538,8 @@ void updateOneLarva(cvb::CvBlobs &In,
             " , " << clusterLarva.larva_ID <<
             " , " << clusterLarva.headBodyAngle.back() <<
             " , " << clusterLarva.orientationAngle.back() <<
-            " , " << clusterLarva.centroid_speed_x.back() <<
-            " , " << clusterLarva.centroid_speed_y.back() <<
+            " , " << clusterLarva.midpoint_speed_x.back() <<
+            " , " << clusterLarva.midpoint_speed_y.back() <<
             " , " << clusterLarva.centroids.size()-1 <<
             " , " << clusterLarva.centroids.back().x + blob.minx <<
             " , " << clusterLarva.centroids.back().y + blob.miny <<
@@ -564,21 +585,8 @@ void updateOneLarva(cvb::CvBlobs &In,
     cur_larva.centroids_full.push_back(centroidf);
     cur_larva.centroids.push_back(centroid);
 
-    // Update centroid_speeds (in pixel per second per axis)
     double FrameEllapsedSeconds=FrameEllapsedTime.wall/1000000000.0;
-
-    if(cur_larva.inCluster.back()==0)
-    {
-      cur_larva.centroid_speed_x.push_back(
-          (blob.centroid.x - preBlob.centroid.x)/FrameEllapsedSeconds);
-      cur_larva.centroid_speed_y.push_back(
-          (blob.centroid.y - preBlob.centroid.y)/FrameEllapsedSeconds);
-    }
-    else
-    {
-      cur_larva.centroid_speed_x.push_back(cur_larva.centroid_speed_x.back());
-      cur_larva.centroid_speed_y.push_back(cur_larva.centroid_speed_y.back());
-    }
+    cur_larva.capture_times.push_back(CurrentTime.wall/1000000000.0);
 
     // Look if larva is a blob
     if ( (!cur_larva.isCluster) &&
@@ -627,6 +635,28 @@ void updateOneLarva(cvb::CvBlobs &In,
       // Compute all the inner distances for the larva
       //computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
       computeSpine(blob,Distances);
+
+      if(cur_larva.inCluster.back()==0)
+      {
+        cur_larva.midpoint_speed_x.push_back(
+            (Distances.MidPoint.x - cur_larva.lrvDistances.back().MidPoint.x)
+            /FrameEllapsedSeconds);
+        cur_larva.midpoint_speed_y.push_back(
+            (Distances.MidPoint.y - cur_larva.lrvDistances.back().MidPoint.y)
+            /FrameEllapsedSeconds);
+      }
+      else
+      {
+        cur_larva.midpoint_speed_x.push_back(
+            (Distances.MidPoint.x - cur_larva.lrvDistances.back().MidPoint.x)
+            /(CurrentTime.wall - cur_larva.capture_times.back())
+            );
+        cur_larva.midpoint_speed_y.push_back(
+            (Distances.MidPoint.y - cur_larva.lrvDistances.back().MidPoint.y)
+            /(CurrentTime.wall - cur_larva.capture_times.back())
+            );
+      }
+
       cur_larva.lrvDistances.push_back(Distances);
       cur_larva.length.push_back(Distances.MaxDist);
       cur_larva.length_mean=(cur_larva.length_mean+Distances.MaxDist)/2;
@@ -640,7 +670,7 @@ void updateOneLarva(cvb::CvBlobs &In,
         cur_larva.length_min=Distances.MaxDist;
       }
       PointPair MAXPair=Distances.MaxDistPoints;
-
+      
       cur_larva.width.push_back(Distances.WidthDist);
       cur_larva.width_mean=(cur_larva.width_mean+Distances.WidthDist)/2;
       cur_larva.width_sum=cur_larva.width_sum+Distances.WidthDist;
@@ -729,8 +759,8 @@ void updateOneLarva(cvb::CvBlobs &In,
           " , " << cur_larva.larva_ID <<
           " , " << cur_larva.headBodyAngle.back() <<
           " , " << cur_larva.orientationAngle.back() <<
-          " , " << cur_larva.centroid_speed_x.back() <<
-          " , " << cur_larva.centroid_speed_y.back() <<
+          " , " << cur_larva.midpoint_speed_x.back() <<
+          " , " << cur_larva.midpoint_speed_y.back() <<
           " , " << cur_larva.centroids.size()-1 <<
           " , " << cur_larva.centroids.back().x + blob.minx <<
           " , " << cur_larva.centroids.back().y + blob.miny <<
@@ -762,6 +792,7 @@ void updateOneLarva(cvb::CvBlobs &In,
         std::cerr << "We are working with a cluster but the size of registered nodes is too small" << std::endl;
         return;
       }
+      
       for ( cl=detected_clusters[ID].begin()+1 ; cl!=detected_clusters[ID].end() ; ++cl)
       {
         larvaObject &clusterLarva=detected_larvae[*cl];
@@ -773,8 +804,8 @@ void updateOneLarva(cvb::CvBlobs &In,
             " , " << clusterLarva.larva_ID <<
             " , " << clusterLarva.headBodyAngle.back() <<
             " , " << clusterLarva.orientationAngle.back() <<
-            " , " << clusterLarva.centroid_speed_x.back() <<
-            " , " << clusterLarva.centroid_speed_y.back() <<
+            " , " << clusterLarva.midpoint_speed_x.back() <<
+            " , " << clusterLarva.midpoint_speed_y.back() <<
             " , " << clusterLarva.centroids.size()-1 <<
             " , " << clusterLarva.centroids.back().x + blob.minx <<
             " , " << clusterLarva.centroids.back().y + blob.miny <<
@@ -937,7 +968,7 @@ double calculate_MH_sum(std::map<unsigned int, unsigned int> &AM,
   std::map<unsigned int, cv::Mat> &candidateCovarMat,
   std::map<unsigned int, cv::Mat> &candidateMeanMat,
   std::map<unsigned int, cv::Mat> &newMeanMat,
-  cvb::CvBlobs NEW
+  cvb::CvBlobs &NEW
                         )
 {
   /*
@@ -947,7 +978,19 @@ double calculate_MH_sum(std::map<unsigned int, unsigned int> &AM,
   std::map <unsigned int, unsigned int>::iterator mIT=AM.begin();
   while(mIT!=AM.end())
   {
-    SUM+=cv::Mahalanobis(newMeanMat[mIT->first],
+    double speed_x=
+      detected_larvae[mIT->second].blobs.back().centroid.x-
+      NEW[mIT->first]->centroid.x/
+      (CurrentTime.wall-detected_larvae[mIT->second].capture_times.back());
+    double speed_y=
+      detected_larvae[mIT->second].blobs.back().centroid.y-
+      NEW[mIT->first]->centroid.y/
+      (CurrentTime.wall-detected_larvae[mIT->second].capture_times.back());
+    cv::Mat nm;
+    newMeanMat[mIT->first].copyTo(nm);
+    nm.push_back(speed_x);
+    nm.push_back(speed_y);
+    SUM+=cv::Mahalanobis(nm,
         candidateMeanMat[mIT->second],
         candidateCovarMat[mIT->second]);
     /*cv::Mat res;
@@ -987,7 +1030,7 @@ void assign_combinations(std::vector<unsigned int> &NEW,
       {
         AMcur[NEW[0]]=c->first;
         c->second=NEW[0];
-
+        
         double curSUM = calculate_MH_sum(AMcur, 
             candidateCovarMat,
             candidateMeanMat,
@@ -1079,7 +1122,7 @@ void diverge_match_new(
   cvb::CvBlobs &NEW)
 {
 
-  if(duration<0.31)
+  if(duration<0.51)
   {
     int matched=
       diverge_match_short(candidateLarvae,newLarvae,newAssignments,NEW);
@@ -1118,6 +1161,8 @@ void diverge_match_new(
     double length_avg=avgNVec(detected_larvae[*cIT].length);
     double perimeter_avg=avgNVec(detected_larvae[*cIT].perimeter);
     double width_avg=avgNVec(detected_larvae[*cIT].width);
+    double speed_x=avgNVec(detected_larvae[*cIT].midpoint_speed_x);
+    double speed_y=avgNVec(detected_larvae[*cIT].midpoint_speed_y);
 
 
     cv::Mat InputArray;
@@ -1137,12 +1182,22 @@ void diverge_match_new(
         cv::Mat(detected_larvae[*cIT].width),
         InputArray);
 
+    cv::hconcat(InputArray,
+        cv::Mat(detected_larvae[*cIT].midpoint_speed_x),
+        InputArray);
+
+    cv::hconcat(InputArray,
+        cv::Mat(detected_larvae[*cIT].midpoint_speed_y),
+        InputArray);
+
     std::vector<double> meanVec;
     meanVec.push_back(size_avg);
     meanVec.push_back(grey_value_avg);
     meanVec.push_back(length_avg);
     meanVec.push_back(perimeter_avg);
     meanVec.push_back(width_avg);
+    meanVec.push_back(speed_x);
+    meanVec.push_back(speed_y);
     
     cv::Mat meanMat(meanVec);
     cv::Mat meanTMat;
@@ -2801,12 +2856,12 @@ void printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
           lifespanSUM+=(CURRENT_FRAME-cl.start_frame)/VIDEO_FPS;
           // avg speed
           double xvel,yvel;
-          if(cl.centroid_speed_x.size()>0)
-            xvel=cl.centroid_speed_x.back();
+          if(cl.midpoint_speed_x.size()>0)
+            xvel=cl.midpoint_speed_x.back();
           else
             xvel=0.0;
-          if(cl.centroid_speed_y.size()>0)
-            yvel=cl.centroid_speed_y.back();
+          if(cl.midpoint_speed_y.size()>0)
+            yvel=cl.midpoint_speed_y.back();
           else
             yvel=0.0;
           float sqvel=xvel*xvel+yvel*yvel;
@@ -3015,7 +3070,7 @@ void printSummary(cvb::CvBlobs &preBlobs,cvb::CvBlobs &blobs, bool first)
     }
 }
 
-void printBlobFile(larvaObject lrv)
+void printBlobFile(larvaObject &lrv)
 {
   
   if(lrv.isCluster)
@@ -3107,6 +3162,7 @@ void printBlobFile(larvaObject lrv)
                << short_axis
                << " ";
 
+  /*
   blobFile << "% ";
    
   larvaDistanceMap &dm=lrv.lrvDistances.back();
@@ -3122,7 +3178,7 @@ void printBlobFile(larvaObject lrv)
     blobFile << (int) (dm.spinePoints[i].x-c.x) << " " ;
     blobFile << (int) (dm.spinePoints[i].y-c.y) << " " ;
   }
-
+*/
   blobFile << "%% ";
 
   std::string cntstr;
@@ -3461,6 +3517,7 @@ int main(int argc, char* argv[])
           if(preBlobs.size()>0)
             {
               FrameEllapsedTime = tP.elapsed();
+              CurrentTime= tS.elapsed();
               //larvae_track(blobs,preBlobs,tracked_blobs);
               newLarvaeTrack(blobs,preBlobs,tracked_blobs);
               tP.start();

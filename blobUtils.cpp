@@ -171,8 +171,8 @@ void createLarvaContourPacked(cv::Point &first,
 {
   std::vector<cv::Point2f> contourPoints;
   blobToPointVector(blob, contourPoints);
-  first.x=(int) contourPoints[0].x;
-  first.y=(int) contourPoints[0].y;
+  first.x=(int) contourPoints.back().x;
+  first.y=(int) contourPoints.back().y;
   std::stringstream outline;
   unsigned int acc=0;
   unsigned int cntSize=0;
@@ -180,9 +180,9 @@ void createLarvaContourPacked(cv::Point &first,
   createLarvaContour(lrvROI,blob,CV_8UC1,0,false);
   int cnt3=0;
 
-  std::vector<cv::Point2f>::iterator P=contourPoints.begin()+1;
-  std::vector<cv::Point2f>::iterator pP=contourPoints.begin();
-  for(;pP!=contourPoints.end();)
+  std::vector<cv::Point2f>::reverse_iterator P=contourPoints.rbegin()+1;
+  std::vector<cv::Point2f>::reverse_iterator pP=contourPoints.rbegin();
+  for(;pP!=contourPoints.rend();)
   {
     cv::Point a;
     a.x= (int) P->x - blob.minx;
@@ -237,8 +237,8 @@ void createLarvaContourPacked(cv::Point &first,
     }
     ++pP;
     ++P;
-    if(P==contourPoints.end())
-      P=contourPoints.begin();
+    if(P==contourPoints.rend())
+      P=contourPoints.rbegin();
   }
 
   if (cnt3==1)

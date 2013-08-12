@@ -92,18 +92,18 @@ std::vector<unsigned int> lost_larvae;
 std::vector<unsigned int> current_new;
 std::vector<unsigned int> current_gone;
 
-cpu_timer tS,tP;
+cpu_timer tS;
+cpu_timer tP;
 cpu_times FrameEllapsedTime;
-//struct timeval tP;
-//struct timeval tC;
-//double FrameEllapsedTime;
+cpu_times CurrentTime;
+
 cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;
 cv::Mat bgFrame;
 cv::Mat previousFrame;
 IplImage *labelImg;
-int DEBUG_INFO=1;
+int DEBUG_INFO=0;
 
 double Wlength=1.0;
 double Wsize=0.2;
