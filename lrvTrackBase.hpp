@@ -17,7 +17,7 @@
 #define MAX_HORIZ_RESOLUTION 22000 //Pixels
 #define ROUNDNESS_THRESHOLD 230000
 
-typedef std::pair<cv::Point_<int>,cv::Point_<int> > PointPair;
+typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
 
 #ifndef NO_SSE
 #define ltsqrt SSESqrt_Recip_Times_X

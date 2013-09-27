@@ -5,6 +5,8 @@
 #include "lrvTrackBase.hpp"
 #include "cvblob.h"
 
+#define SPINE_SEGMENTS 11
+
 //typedef std::unordered_map<PointPair, double> DistanceMap;
 
 class larvaDistanceMap
@@ -18,13 +20,18 @@ public:
   double WidthDist;
   unsigned int spineSegments;
   PointPair MaxDistPoints;
-  PointPair WidthDistPoints;
   cv::Point2f MidPoint;
-  std::vector<cv::Point2f> spinePoints;
   cv::Point2f p20;
   cv::Point2f p80;
   std::vector<cv::Point2f> points;
   std::vector<cv::Point2f> Spine;
+  std::vector<double> Angles;
+  std::vector<double> Widths;
+  std::vector<PointPair> spinePairs;
+  double maxAngle;
+  double firstHalfWidthsSum;
+  double secondHalfWidthsSum;
+  int maxAngleLocation;
   class my2ndPoint
   {
   private:
@@ -64,10 +71,13 @@ public:
   }
   friend class my2ndPoint;
 
-  larvaDistanceMap(std::vector<cv::Point2f> ps):spineSegments(11),points(ps)
+  larvaDistanceMap(std::vector<cv::Point2f> ps):spineSegments(SPINE_SEGMENTS),
+                                                points(ps),
+                                                maxAngle(DBL_MIN),
+                                                maxAngleLocation(-1)
   {
     //distances.reserve((points.size())*(points.size()));
-    spinePoints.resize(spineSegments);
+    Spine.resize(spineSegments);
   }
 
   void getPxPy(cv::Mat &x,cv::Mat &y)
@@ -89,10 +99,16 @@ void computeInnerDistances(cvb::CvBlob &blob,
                            larvaDistanceMap &Distances,
                            cv::Point2f &MidPoint);
 
+void fixContour(
+    cvb::CvBlob &blob,
+    larvaDistanceMap &Distances,
+    unsigned int RES,
+    cv::Mat &frame);
 
 void computeSpine(
     cvb::CvBlob &blob,
-    larvaDistanceMap &Distances
+    larvaDistanceMap &Distances,
+    cv::Mat &frame
     );
 
 #endif

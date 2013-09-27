@@ -20,9 +20,11 @@ using boost::timer::cpu_times;
 using boost::timer::nanosecond_type;
 
 std::string VIDEO_TYPE=".avi";
+int VIDEO_CODEC=CV_FOURCC('H','F','Y','U');
+//int VIDEO_CODEC=CV_FOURCC('F','F','V','1');
 //int VIDEO_CODEC=CV_FOURCC('X','2','6','4');
 //int VIDEO_CODEC=CV_FOURCC('S','V','Q','3');
-int VIDEO_CODEC=CV_FOURCC('F','M','P','4');
+//int VIDEO_CODEC=CV_FOURCC('F','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('L','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('M','P','4','2');
 //int VIDEO_CODEC=CV_FOURCC('A','V','C','1');
@@ -30,6 +32,7 @@ int VIDEO_CODEC=CV_FOURCC('F','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('D','A','V','C');
 
 std::ofstream summary;
+std::ofstream csvfile;
 int START_FRAME=0;
 
 // *** FLAGS ***
@@ -42,7 +45,10 @@ std::string LRVTRACK_SAVE_PROCESSED_VIDEO;
 std::string LRVTRACK_FILE_INPUT;
 int  LRVTRACK_CAMERA_INPUT;
 int  LRVTRACK_ODOUR_CUPS=0;
+bool LRVTRACK_INVERT=true;
 bool LRVTRACK_NORMALIZE=true;
+bool LRVTRACK_CHOREOGRAPHY_OUTPUT=false;
+bool LRVTRACK_CSV_OUTPUT=false;
 bool LRVTRACK_SHOW_SKELETON=false;
 bool LRVTRACK_SHOW_CONTOUR=false;
 bool LRVTRACK_SHOW_ORIENTATION=false;
@@ -54,8 +60,9 @@ bool LRVTRACK_SHOW_TAGS=true;
 //VALUES FOR VARIOUS COMPARISONS
 double LARVA_SIZE_COMPARISON_FACTOR=1.3;
 double LARVA_CENTRE_COMPARISON_FACTOR=1.05;
-double LARVA_MAHALANOBIS_THRESHOLD=1.41;
-double IS_LARVA_THRESHOLD=1300;
+double LARVA_MAHALANOBIS_THRESHOLD=2.3;
+double LARVA_OBJECT_LENGTH=40;
+double IS_LARVA_THRESHOLD=280;
 double COLLISION_DURATION_THRESHOLD=48;
 unsigned int HISTORY_SIZE=10;
 
