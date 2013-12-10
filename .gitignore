@@ -4,3 +4,6 @@ tmp/*
 results/*
 *.swp
 .DS_Store
+alglib/*
+cvBlob/*
+gnuplot_i.hpp
