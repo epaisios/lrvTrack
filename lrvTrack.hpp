@@ -45,8 +45,9 @@ std::string LRVTRACK_SAVE_PROCESSED_VIDEO;
 std::string LRVTRACK_FILE_INPUT;
 int  LRVTRACK_CAMERA_INPUT;
 int  LRVTRACK_ODOUR_CUPS=0;
+int  LRVTRACK_CONTOUR_RESOLUTION=150;
 bool LRVTRACK_INVERT=true;
-bool LRVTRACK_NORMALIZE=true;
+bool LRVTRACK_NORMALIZE=false;
 bool LRVTRACK_CHOREOGRAPHY_OUTPUT=false;
 bool LRVTRACK_CSV_OUTPUT=false;
 bool LRVTRACK_SHOW_SKELETON=false;
@@ -62,7 +63,7 @@ double LARVA_SIZE_COMPARISON_FACTOR=1.3;
 double LARVA_CENTRE_COMPARISON_FACTOR=1.05;
 double LARVA_MAHALANOBIS_THRESHOLD=2.3;
 double LARVA_OBJECT_LENGTH=40;
-double IS_LARVA_THRESHOLD=280;
+double IS_LARVA_THRESHOLD=253.2;
 double COLLISION_DURATION_THRESHOLD=48;
 unsigned int HISTORY_SIZE=10;
 
@@ -73,8 +74,11 @@ unsigned int LARVAE_COUNT;
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
 //std::map<unsigned int,larvaObject> detected_larvae;
 std::map<unsigned int,larvaObject> detected_larvae;
-std::map<unsigned int, std::vector<unsigned int> > current_clusters;
-std::map<unsigned int, std::vector<unsigned int> > current_diverged;
+std::vector<unsigned int> lost_larvae;
+
+std::vector<cv::Vec3f> circles;
+
+cvb::CvBlobs NEW;
 
 //********* Used by the new tracking algorithm ************************
 // map of assignments of the blobs in the previous frame.
@@ -95,7 +99,7 @@ std::map<unsigned int,std::vector<unsigned int> > newDiverging;
 std::map<unsigned int, std::vector<unsigned int> > assignedNew;
 std::vector<unsigned int> newInFrame;
 //**********************************************************************
-std::vector<unsigned int> lost_larvae;
+
 std::vector<unsigned int> current_new;
 std::vector<unsigned int> current_gone;
 
@@ -104,9 +108,12 @@ cpu_timer tP;
 cpu_times FrameEllapsedTime;
 cpu_times CurrentTime;
 
+double PIXEL_SIZE_IN_MM=0.14450867052023;
+
 cv::Mat frame;
 cv::Mat thresholded_frame;
 cv::Mat grey_frame;
+cv::Mat origFrame;
 cv::Mat bgFrame;
 cv::Mat previousFrame;
 IplImage *labelImg;
@@ -114,5 +121,7 @@ int DEBUG_INFO=0;
 
 double Wlength=1.0;
 double Wsize=0.2;
+
+unsigned int bestCircle=0;
 
 #endif

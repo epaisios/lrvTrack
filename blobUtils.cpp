@@ -1,6 +1,5 @@
 #include "alglib/stdafx.h"
 #include "blobUtils.hpp"
-#include "gnuplot_i.hpp"
 #include "lrvTrackBase.hpp"
 #include "boost/dynamic_bitset.hpp"
 #include "alglib/interpolation.h"
@@ -11,6 +10,10 @@ cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &e, cv::Point2f &a, cv::Point2f &b
   cv::Vec3b va=f.at<cv::Vec3b>(a);
   cv::Vec3b vb=f.at<cv::Vec3b>(b);
   cv::Vec3b vc=f.at<cv::Vec3b>(c);
+  /*cv::Vec3b va(1,1,1);
+  cv::Vec3b vb(1,1,1);
+  cv::Vec3b vc(1,1,1);*/
+  
   
   float ua=(va[0]+va[1]+va[2])/3;
   float ub=(vb[0]+vb[1]+vb[2])/3;
@@ -22,12 +25,14 @@ cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &e, cv::Point2f &a, cv::Point2f &b
   float wc=uc/sum;
 
   return wa*a+wb*b+wc*c;
+  //return b;
 }
 
 void derivVec(std::vector<cv::Point2f> &in,
               std::vector<float> &p,
     std::vector<cv::Point2f> &d)
 {
+  std::vector<double> idx;
   d.push_back(cv::Point(0,0));
   for(unsigned int i=1;i<in.size();i++)
   {
@@ -35,6 +40,7 @@ void derivVec(std::vector<cv::Point2f> &in,
     d.push_back((in[i]-in[i-1])*R);
   }
   d[0]=(in[0]-in.back())*(1/(p[p.size()-1]-p[p.size()-2]));
+
 }
 
 void deriv2Vec(
@@ -61,15 +67,16 @@ void curvVec(std::vector<cv::Point2f> &in,
   deriv2Vec(d1,p,d2);
   for(unsigned int i=0;i<in.size();i++)
   {
-    c.push_back(
-        (d1[i].x*d2[i].y-d1[i].y*d2[i].x)/
-        pow(d1[i].x*d1[i].x+d1[i].y*d1[i].y,1.5));
+    //std::cerr << d1[i].x << "," << d1[i].y << "," << d2[i].x << "," << d2[i].y << std::endl;
+    float val=(d1[i].x*d2[i].y-d1[i].y*d2[i].x)/
+        pow(d1[i].x*d1[i].x+d1[i].y*d1[i].y,1.5);
+    c.push_back(val);
   }
 }
 
 cv::Point2f px5Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d, cv::Point2f &e)
 {
-  cv::Vec3b va=f.at<cv::Vec3b>(a);
+  /*cv::Vec3b va=f.at<cv::Vec3b>(a);
   cv::Vec3b vb=f.at<cv::Vec3b>(b);
   cv::Vec3b vc=f.at<cv::Vec3b>(c);
   cv::Vec3b vd=f.at<cv::Vec3b>(d);
@@ -88,7 +95,9 @@ cv::Point2f px5Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c
   float wd=ud/sum;
   float we=ue/sum;
 
-  return wa*a+wb*b+wc*c+wd*d+we*e;
+  return wa*a+wb*b+wc*c+wd*d+we*e;*/
+  cv::Point2f NP=0.2*(a+b+c+d+e);
+  return NP;
 }
 
 
@@ -145,6 +154,45 @@ void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points)
   delete cntPoly;
 }
 
+void pointsToContourVector(cvb::CvBlob &blob,
+                         std::vector<cv::Point2f> &kpoints,
+                         cv::Mat &frame, 
+                         int PAD,
+                         std::vector<cv::Point2f> &points)
+{
+  cv::Mat ROI=cv::Mat(frame,
+              cv::Rect(blob.minx-PAD,
+                       blob.miny-PAD,
+                       blob.maxx-blob.minx+1+2*PAD,
+                       blob.maxy-blob.miny+1+2*PAD
+                      )
+             );
+
+  cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
+  for(unsigned int i=1;i<kpoints.size();i++)
+  {
+    cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,8);
+    for(int j = 1; j < it.count; j++)
+    {
+      cv::Point2f newPoint;
+      newPoint.x=it.pos().x;
+      newPoint.y=it.pos().y;
+      points.push_back(newPoint+PADpoint);
+      ++it;
+    }
+  }
+
+  cv::LineIterator it(ROI,kpoints.back()-PADpoint,kpoints[0]-PADpoint,8);
+  for(int i = 0; i < it.count; i++)
+  {
+    cv::Point2f newPoint;
+    newPoint.x=it.pos().x;
+    newPoint.y=it.pos().y;
+    points.push_back(newPoint+PADpoint);
+    ++it;
+  }
+}
+
 void blobToContourVector(cvb::CvBlob &blob,
                          cv::Mat &frame, 
                          int PAD,
@@ -164,23 +212,25 @@ void blobToContourVector(cvb::CvBlob &blob,
   cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
   for(unsigned int i=1;i<kpoints.size();i++)
   {
-    cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,8);
-    for(int j = 1; j < it.count; j++, ++it)
+    cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,4);
+    for(int j = 1; j < it.count; j++)
     {
       cv::Point2f newPoint;
       newPoint.x=it.pos().x;
       newPoint.y=it.pos().y;
       points.push_back(newPoint+PADpoint);
+      ++it;
     }
   }
 
-  cv::LineIterator it(ROI,kpoints.back()-PADpoint,kpoints[0]-PADpoint,8);
-  for(int i = 0; i < it.count; i++, ++it)
+  cv::LineIterator it(ROI,kpoints.back()-PADpoint,kpoints[0]-PADpoint,4);
+  for(int i = 0; i < it.count; i++)
   {
     cv::Point2f newPoint;
     newPoint.x=it.pos().x;
     newPoint.y=it.pos().y;
     points.push_back(newPoint+PADpoint);
+    ++it;
   }
 }
 
@@ -215,8 +265,8 @@ if(x3>0 && y3>0)
 }
 if(x4>0 && y4>0)
 {
-  length = 2 * std::max(x4,y4);
-  width = 2 * std::min(x4,y4);
+  length = std::max(x4,y4);
+  width = std::min(x4,y4);
 }
 
 }
@@ -282,16 +332,17 @@ void createLarvaContour(cv::Mat &lrvROI,
                         int PADDING,
                         bool FILL,
                         cv::Scalar color,
-                        int connectivity)
+                        int connectivity,
+                        cv::Scalar bg)
 {
   int sizes[1];
   cvb::CvContourPolygon *cntPoly=
     cvb::cvConvertChainCodesToPolygon(&blob.contour);
 
   if (lrvROI.empty())
-    lrvROI=cv::Mat::zeros(blob.maxy-blob.miny+1+(2*ROI_PADDING)+(2*PADDING),
+    lrvROI=cv::Mat(blob.maxy-blob.miny+1+(2*ROI_PADDING)+(2*PADDING),
                         blob.maxx-blob.minx+1+(2*ROI_PADDING)+(2*PADDING),
-                        type);
+                        type,bg);
 
   cv::Point *ContourPoints[1];
   ContourPoints[0]=(cv::Point*) malloc(
@@ -611,71 +662,200 @@ void sortPoints(std::vector<cv::Point2f> &cp,
   }
 }
 
-void wait_for_key ()
-{
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)  // every keypress registered, also arrow keys
-  std::cout << std::endl << "Press any key to continue..." << std::endl;
-
-    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
-    _getch();
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__)
-    std::cout << std::endl << "Press ENTER to continue..." << std::endl;
-
-    std::cin.clear();
-    std::cin.ignore(std::cin.rdbuf()->in_avail());
-    std::cin.get();
-#endif
-    return;
-}
-
 void getBestCurvatureS(std::vector<float> &curv,
+                      std::map<float,unsigned int> &curvatures,
                       std::vector<unsigned int> &di,
                       std::vector<float> &dmax
                       )
 {
+  //std::map<float,unsigned int> c;
   std::vector<float> c;
-  int sf=25;
-  std::vector<double> idx;
+  std::vector<float> c_tmp;
+  int sf=21;
+  //std::vector<double> idx;
+  //for(unsigned int i=0;i<curv.size();i++)
+  //{
+  //  idx.push_back(i);
+  //}
+  curv[0]=(curv.back()+curv[1])/2;
+  //Gnuplot g1("linespoints");
+  //Gnuplot g2("linespoints");
+  //g1.plot_xy(idx,curv,"curvature");
+  smoothVec(curv,c_tmp,sf,(float)0.0);
+  smoothVecMap(c_tmp,curvatures,c,sf/2,(float)0.0);
+
+  //g1.plot_xy(idx,c,"curvature smoothened");
+  //wait_for_key();
+
+  unsigned int dmaxsz=0;
+  /*for(std::map<float,unsigned int>::reverse_iterator rit=curvatures.rbegin();
+      rit!=curvatures.rend();rit++)
+  {
+    di[dmaxsz]=rit->second;
+    dmax[dmaxsz]=rit->first;
+    dmaxsz++;
+    if(dmaxsz>=di.size())
+      break;
+  }*/
+  std::map<float,std::vector<unsigned int> > maxima;
+  bool prePos=false;
+  if(c[0]-c.back()>=0)
+    prePos=true;
+
+  for(unsigned int i=1;i<c.size();i++)
+  {
+    double vp=c[i-1];
+    double va=c[i];
+    if(c[i]-c[i-1]>=0 )
+    {
+      prePos=true;
+      continue;
+    }
+    if(c[i]-c[i-1]<0 )
+    {
+      if(prePos)
+        maxima[c[i-1]].push_back(i-1);
+
+      prePos=false;
+    }
+  }
+  if(c[0]-c.back()<0 )
+  {
+    if(prePos)
+      maxima[c.back()].push_back(c.size()-1);
+  }
+  
+  if(maxima.size()<2)
+  {
+    return;
+  }
+
+  std::map<float,std::vector<unsigned int> >::reverse_iterator f=maxima.rbegin();
+  float m1=10.0;
+  int i1;
+  unsigned int sz1;
+  while(m1>(float) 1.1)
+  {
+    if(f==maxima.rend())
+      return;
+    m1=f->first;
+    sz1=f->second.size();
+    i1=f->second[0];
+    f++;
+  }
+  int i2=i1;
+  int sz2;
+  float m2;
+  i2=i1;
+  while(fabs(i2-i1)<40 || (c.size()-fabs(i2-i1))<40)
+  {
+    if(f==maxima.rend())
+      return;
+    m2=f->first;
+    sz2=f->second.size();
+    i2=f->second[0];
+    f++;
+  }
+  double P=0.6;
+  /*std::vector<double> idx;
   for(unsigned int i=0;i<curv.size();i++)
   {
     idx.push_back(i);
   }
-  //Gnuplot g1("lines");
-  //Gnuplot g2("lines");
-  //g1.plot_xy(idx,curv,"curvature");
-  //wait_for_key();
-  smoothVec(curv,c,sf,(float)0.0);
-
-  //g2.plot_xy(idx,c,"curvature smoothened");
-  //wait_for_key();
-
-  bool positive=true;
-  for(unsigned int i=1;i<c.size();i++)
+  if(i1==5 && i2==146)
   {
-    if(c[i]-c[i-1]>=0 )
+    Gnuplot g1("linespoints");
+    g1.plot_xy(idx,c,"curvature smoothened");
+    //wait_for_key();
+  }*/
+
+  int p1l=INT_MIN;
+  int p1r=INT_MIN;
+
+  int p2l=INT_MIN;
+  int p2r=INT_MIN;
+
+  //std::cerr << i1 << ", " << i2 << std::endl;
+  for(int i=i1;i>i1-50;i--)
+  {
+    int j=i;
+    if(j<0)
     {
-      positive=true;
-      continue;
+      j=c.size()+i;
     }
-    else if(positive)
+    if(c[j]<P*m1)
     {
-      positive=false;
-      std::vector<unsigned int>::iterator dj=di.begin();
-      for(std::vector<float>::iterator j=dmax.begin();j!=dmax.end();j++)
-      {
-        if(c[i-1]>(*j))
-        {
-          dmax.insert(j,c[i-1]);
-          di.insert(dj,i);
-          dmax.pop_back();
-          di.pop_back();
-          dj++;
-          break;
-        }
-        dj++;
-      }
+        p1l=i;
+        break;
     }
   }
+
+  for(int i=i1;i<i1+50;i++)
+  {
+    int j=i;
+    if(j>c.size()-1)
+    {
+      j=i-c.size();
+    }
+    if(c[j]<P*m1)
+    {
+      p1r=i;
+      break;
+    }
+  }
+  if(p1r!=INT_MIN && p1l!=INT_MIN)
+  {
+    i1=(p1r+p1l)/2;
+    if(i1>=(int) c.size())
+      i1=i1-c.size();
+    if(i1<0)
+      i1=c.size()+i1;
+  }
+
+  for(int i=i2;i>i2-50;i--)
+  {
+    int j=i;
+    if(j<0)
+    {
+      j=c.size()+i;
+    }
+    if(c[j]<P*m2)
+    {
+      p2l=i;
+      break;
+    }
+  }
+
+  for(int i=i2;i<i2+50;i++)
+  {
+    int j=i;
+    if(i>c.size()-1)
+    {
+      j=i-c.size();
+    }
+    if(c[j]<P*m2)
+    {
+      p2r=i;
+      break;
+    }
+  }
+
+  if(p2r!=INT_MIN && p2l!=INT_MIN)
+  {
+    i2=(p2r+p2l)/2;
+    if(i2>=(int) c.size())
+      i2=i2-c.size();
+    if(i2<0)
+      i2=c.size()+i2;
+  }
+
+  di[0]=i1;
+  dmax[0]=m1;
+
+  di[1]=i2;
+  dmax[1]=m2;
+  //std::cerr << i1 << ", " << i2 << std::endl;
+
 }
 
 void getBestCurvature(std::vector<float> &c,
@@ -712,7 +892,24 @@ void getBestCurvature(std::vector<float> &c,
   }
 }
 
-void spline2(std::vector<cv::Point2f> &cp,
+void splint(std::vector<cv::Point2f> &cp,
+            std::vector<float> &x2a, 
+            std::vector<float> &y2a, 
+            std::vector<float> &d,
+            float t, 
+            int khi,
+            int klo,
+            cv::Point2f &np)
+{
+  float b,a;
+  
+  double h=d[khi]-d[klo];
+  a=(d[khi]-t)/h;
+  b=(t-d[klo])/h;
+  np.x=a*cp[klo].x+b*cp[khi].x+((a*a*a-a)*x2a[klo]+(b*b*b-b)*x2a[khi])*(h*h)/6.0;
+  np.y=a*cp[klo].y+b*cp[khi].y+((a*a*a-a)*y2a[klo]+(b*b*b-b)*y2a[khi])*(h*h)/6.0;
+}
+void spline3(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
            std::vector<float> &w,
            int n,
@@ -720,56 +917,39 @@ void spline2(std::vector<cv::Point2f> &cp,
            /*int d0,
            int dm,*/
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di)
+           std::vector<unsigned int> &di,
+           std::map<float,unsigned int> &curvatures)
 {
-  //alglib::real_1d_array x,y;
-  alglib::real_2d_array xy;
-  alglib::real_1d_array ad,aw;
-  alglib::real_1d_array dummy;
-  alglib::integer_1d_array dummyint;
-  //alglib::ae_int_t info;
-  //x.setlength(n);
-  //y.setlength(n);
-  xy.setlength(n,2);
-  ad.setlength(n);
-  aw.setlength(n);
-  alglib::spline1dinterpolant sx;
-  alglib::spline1dinterpolant sy;
-  alglib::spline1dfitreport rep;
-  //alglib::ae_int_t m=n;
-  //double rho=-5.0;
-  alglib::pspline2interpolant p;
-  std::vector<cv::Point2f> NP;
-  for(int i=0;i<n;i++)
-  {
-    //x[i]=cp[i].x;
-    //y[i]=cp[i].y;
-    xy[i][0]=cp[i].x;
-    xy[i][1]=cp[i].y;
-    ad[i]=d[i];
-    aw[i]=w[i];
-  }
+  std::vector<float> x2;
+  std::vector<float> y2;
+  /*std::cerr << cp.size() << std::endl;
+  std::cerr << printVector(cp) << std::endl;
+  std::cerr << d.size() << std::endl;
+  std::cerr << printVector(d) << std::endl;
+  std::cerr << w.size() << std::endl;
+  std::cerr << printVector(w) << std::endl;*/
 
-  //alglib::spline1dfitpenalizedw(ad,x,aw,m+2,0.19,info,sx,rep);
-  //alglib::spline1dfitpenalizedw(ad,y,aw,m+2,0.19,info,sy,rep);
-  //alglib::spline1dfitpenalized(ad,x,m+2,-0.09,info,sx,rep);
-  //alglib::spline1dfitpenalized(ad,y,m+2,-0.09,info,sy,rep);
-  alglib::pspline2buildperiodic(xy,n,1,2,p);
-  
+  spline(cp,d,w,n,FLT_MAX,FLT_MAX,FLT_MAX,FLT_MAX,x2,y2);
+
   double t0=0;
   double t;
   double step=(1.0-t0)/RES;
-  std::vector<float> dmax(6,0);
+  std::vector<float> dmax(di.size(),0);
   std::vector<float> curvature;
   std::vector<float> pvals;
+  std::vector<cv::Point2f> NP;
+  unsigned int didx=0;
   for (int i=0;i<RES;i++)
   {
     t=t0+i*step;
     double x,y;
     //double dx,dy;
     //double d2x,d2y;
-    alglib::pspline2calc(p,t,x,y);
-    cv::Point2f N(x,y);
+    //pspline2calc(p,t,x,y);
+    cv::Point2f N;
+    if(d[didx]<t)
+      didx++;
+    splint(cp,x2,y2,d,t,didx+1,didx,N);
     NP.push_back(N);
     pvals.push_back(t);
     //alglib::pspline2diff2( p, t, x, dx, d2x, y, dy, d2y);
@@ -783,7 +963,158 @@ void spline2(std::vector<cv::Point2f> &cp,
 
   std::vector<float> scurvature;
   curvVec(np,pvals,scurvature);
-  getBestCurvatureS(scurvature,di,dmax);
+  getBestCurvatureS(scurvature,curvatures,di,dmax);
+}
+
+void spline4(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<unsigned int> &di,
+           std::map<float,unsigned int> &curvatures)
+{
+  /*std::cerr << printVector(cp) << std::endl; 
+  std::cerr << std::endl; 
+  std::cerr << printVector(d) << std::endl; 
+  std::cerr << std::endl; 
+  std::cerr << printVector(w) << std::endl; 
+  std::cerr << std::endl; */
+  alglib::real_1d_array x,y;                 
+  alglib::real_2d_array xy;                  
+  alglib::real_1d_array ad,aw;               
+  alglib::real_1d_array dummy;               
+  alglib::integer_1d_array dummyint;         
+  alglib::ae_int_t info;                     
+  alglib::ae_int_t m=n-2;
+  unsigned int extra=5;
+  x.setlength(m+extra);                          
+  y.setlength(m+extra);                          
+  xy.setlength(n,2);                         
+  ad.setlength(m+extra);                         
+  aw.setlength(m+extra);                         
+  alglib::spline1dinterpolant sx;            
+  alglib::spline1dinterpolant sy;            
+  alglib::spline1dfitreport rep;             
+  double rho=-2.9;
+  alglib::pspline2interpolant p;
+  std::vector<cv::Point2f> NP;
+  for(int i=0;i<m;i++)
+  {
+    x[i]=cp[i].x;
+    y[i]=cp[i].y;
+    xy[i][0]=cp[i].x;
+    xy[i][1]=cp[i].y;
+    ad[i]=d[i]/(1+d[4]);
+    aw[i]=w[i];
+  }
+  for(int i=0;i<extra;i++)
+  {
+    x[m+i]=cp[i].x;
+    y[m+i]=cp[i].y;
+    ad[m+i]=(1+d[i])/(1+d[4]);
+    aw[m+i]=w[i];
+  }
+
+  alglib::spline1dfitpenalizedw(ad,x,aw,m+extra,rho,info,sx,rep);
+  alglib::spline1dfitpenalizedw(ad,y,aw,m+extra,rho,info,sy,rep);
+  //alglib::spline1dfitpenalized(ad,x,m+extra,rho,info,sx,rep);
+  //alglib::spline1dfitpenalized(ad,y,m+extra,rho,info,sy,rep);
+  //alglib::spline1dfithermite(ad,x,m+extra,info,sx,rep);
+  //alglib::spline1dfithermite(ad,y,m+extra,info,sy,rep);
+  
+  double t0=ad[4];
+  double t;
+  double step=(1.0-t0)/(RES);
+  std::vector<float> dmax(di.size(),0);
+  std::vector<float> curvature;
+  std::vector<float> pvals;
+  for (int i=0;i<RES;i++)
+  {
+    t=t0+i*step;
+    //double x,y;
+    double vx,vy;
+    //double dx,dy;
+    //double d2x,d2y;
+    //alglib::pspline2calc(p,t,x,y);
+    vx = spline1dcalc(sx, t);
+    vy = spline1dcalc(sy, t);
+    cv::Point2f N(vx,vy);
+    NP.push_back(N);
+    pvals.push_back(t);
+    //alglib::pspline2diff2( p, t, x, dx, d2x, y, dy, d2y);
+
+    //dp.push_back(cv::Point2f(d2x,d2y));
+    //double val=(dx*d2y-dy*d2x)/pow(dx*dx+dy*dy,1.5);
+    //curvature.push_back(val);
+  }
+  pvals.push_back(t+step);
+  smoothVec(NP,np,5,cv::Point2f(0,0));
+  //np=NP;
+  std::vector<float> scurvature;
+  curvVec(np,pvals,scurvature);
+  getBestCurvatureS(scurvature,curvatures,di,dmax);
+}
+
+void spline2(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           /*int d0,
+           int dm,*/
+           std::vector<cv::Point2f> &np,
+           std::vector<unsigned int> &di,
+           std::map<float,unsigned int> &curvatures,
+           std::vector<float> &vcurv)
+{
+  //alglib::real_1d_array x,y;
+  alglib::real_2d_array xy;
+  alglib::real_1d_array ad,aw;
+  alglib::real_1d_array dummy;
+  alglib::integer_1d_array dummyint;
+  xy.setlength(n+2,2);
+  int rot=10;
+  //xyrot.setlength(n+2,2);
+  ad.setlength(n);
+  aw.setlength(n);
+  alglib::pspline2interpolant p;
+  std::vector<cv::Point2f> NP;
+  for(int i=0;i<n;i++)
+  {
+    xy[i][0]=cp[i].x;
+    xy[i][1]=cp[i].y;
+    ad[i]=d[i];
+    aw[i]=w[i];
+  }
+  xy[n][0]=xy[0][0];
+  xy[n][1]=xy[0][1];
+  xy[n+1][0]=xy[1][0];
+  xy[n+1][1]=xy[1][1];
+
+  alglib::pspline2buildperiodic(xy,n,1,2,p);
+  
+  double t0=0;
+  double t;
+  double step=(1.0-t0)/(RES);
+  std::vector<float> dmax(di.size(),0);
+  std::vector<float> curvature;
+  std::vector<float> pvals;
+  for (int i=0;i<RES;i++)
+  {
+    t=t0+i*step;
+    double x,y;
+    alglib::pspline2calc(p,t,x,y);
+    cv::Point2f N(x,y);
+    NP.push_back(N);
+    pvals.push_back(t);
+  }
+  pvals.push_back(t+step);
+  smoothVec(NP,np,5,cv::Point2f(0,0));
+
+  curvVec(np,pvals,vcurv);
+  getBestCurvatureS(vcurv,curvatures,di,dmax);
 }
 
 void spline(std::vector<cv::Point2f> &cp,
@@ -894,25 +1225,6 @@ void fin(int n,
   }
 }
 
-void splint(std::vector<cv::Point2f> &cp,
-            std::vector<float> &x2a, 
-            std::vector<float> &y2a, 
-            std::vector<float> &d,
-            int n, 
-            float t, 
-            int khi,
-            int klo,
-            cv::Point2f &np)
-{
-  float b,a;
-  
-  double h=d[khi]-d[klo];
-  a=(d[khi]-t)/h;
-  b=(t-d[klo])/h;
-  np.x=a*cp[klo].x+b*cp[khi].x+((a*a*a-a)*x2a[klo]+(b*b*b-b)*x2a[khi])*(h*h)/6.0;
-  np.y=a*cp[klo].y+b*cp[khi].y+((a*a*a-a)*y2a[klo]+(b*b*b-b)*y2a[khi])*(h*h)/6.0;
-}
-
 /*void sspline(std::vector<cv::Point2f> &cp,
            std::vector<float> &t,
            std::vector<float> &w,
@@ -951,19 +1263,42 @@ double getPerimeter(cvb::CvBlob &blob)
   return arcLength(cntPoints, true);
 }
 
-double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob, cv::Mat &grey_frame)
+double getSurroundingSize(cv::Point2f &point, 
+    cvb::CvBlob &blob, 
+    cv::Mat &grey_frame,
+    cv::Mat &prev_frame)
 {
   cv::Mat larvaImg,lrvROI;
   unsigned int PADDING=4;
   cv::Mat rROI,ROI;
+  cv::Mat preROI;
   try{
     rROI=grey_frame(cv::Rect(blob.minx-PADDING,
           blob.miny-PADDING,
           blob.maxx-blob.minx+1+2*PADDING,
           blob.maxy-blob.miny+1+2*PADDING)
         );
-    rROI.copyTo(ROI);
+    //rROI.copyTo(ROI);
+    cvtColor(rROI,ROI,CV_BGR2GRAY);
+
+    if(!prev_frame.empty())
+    { 
+      preROI=prev_frame(cv::Rect(blob.minx,
+            blob.miny,
+            blob.maxx-blob.minx+1,
+            blob.maxy-blob.miny+1)
+          );
+
+      cv::copyMakeBorder(preROI,
+                         preROI,
+                         PADDING,
+                         PADDING,
+                         PADDING,
+                         PADDING,
+                         cv::BORDER_CONSTANT,cv::Scalar(255));
+    }
     createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
+    //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
   }
   catch(...)
   {
@@ -971,9 +1306,11 @@ double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob, cv::Mat &grey_f
     return 0;
   }
   cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-  cv::dilate(lrvROI,lrvROI,element);
+  cv::erode(lrvROI,lrvROI,element);
+  cv::erode(preROI,preROI,element);
   //lrvTrackNormalize(lrvROI, lrvROI, 0, 255, CV_MINMAX );
-  ROI=ROI&lrvROI;
+  cv::bitwise_and(ROI,lrvROI,ROI);
+  cv::bitwise_and(preROI,lrvROI,preROI);
   /*
   cv::Mat dbg;
   ROI.copyTo(dbg);
@@ -986,18 +1323,28 @@ double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob, cv::Mat &grey_f
   cv::resize(dbg,dbg,cv::Size(),8,8,cv::INTER_NEAREST);
   cv::imshow("headtail",dbg);
   cv::waitKey(1);
-*/
+  */
   cv::Mat cROI(ROI.size(),ROI.depth());
   cROI=cv::Scalar(0);
-  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),6,cv::Scalar(255),-1);
+  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),12,cv::Scalar(255),-1);
+  //cv::Mat test=ROI&cROI;
   cv::Mat area=ROI&cROI;
-/*
+  cv::Mat prearea=preROI&cROI;
+  cv::equalizeHist( area, area);
+  cv::equalizeHist( prearea, prearea);
+  lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
+  lrvTrackNormalize(prearea,prearea,0,255,cv::NORM_MINMAX);
+  //cv::adaptiveBilateralFilter(test,area,cv::Size(5,5),10);
+  //cv::bilateralFilter(test,area,4,8,2);
+  /*
   cv::resize(area,dbg,cv::Size(),8,8,cv::INTER_NEAREST);
   cv::imshow("headtail",dbg);
   cv::waitKey(1);
   */
   double nz=cv::norm(area,cv::NORM_L1);
+  double pnz=cv::norm(prearea,cv::NORM_L1);
   double nc=cv::countNonZero(area);
-  return nz/nc;
+  double pnc=cv::countNonZero(prearea);
+  return (nz+pnz)/(nc+pnc);
   //return nz;
 }

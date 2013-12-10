@@ -5,9 +5,11 @@
 #include "lrvTrackBase.hpp"
 #include "cvblob.h"
 
-#define SPINE_SEGMENTS 11
+#define SPINE_SEGMENTS 12
 
 //typedef std::unordered_map<PointPair, double> DistanceMap;
+double p2fdist(cv::Point2f &a, cv::Point2f &b);
+double p2fdist(double x1,double y1, double x2, double y2);
 
 class larvaDistanceMap
 {
@@ -31,6 +33,7 @@ public:
   double maxAngle;
   double firstHalfWidthsSum;
   double secondHalfWidthsSum;
+  double curvatureBias; // 0.0 <= Back <= 0.5 <= Front <= 1.0
   int maxAngleLocation;
   class my2ndPoint
   {
@@ -103,7 +106,10 @@ void fixContour(
     cvb::CvBlob &blob,
     larvaDistanceMap &Distances,
     unsigned int RES,
-    cv::Mat &frame);
+    cv::Mat &frame,
+    std::vector<cv::Point2f> *heads=NULL,
+    std::vector<cv::Point2f> *tails=NULL,
+    std::vector<cvb::CvBlob> *blobs=NULL);
 
 void computeSpine(
     cvb::CvBlob &blob,

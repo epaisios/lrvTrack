@@ -19,6 +19,50 @@
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
+double mh_dist(unsigned int N,unsigned int C);
+double kn_dist(unsigned int N,unsigned int C);
+
+class lrvMapping {
+
+    double dst;
+  
+  public:
+    std::pair<unsigned int,unsigned int> mapping;
+    std::vector<unsigned int> candidates;
+    unsigned int nlrv;
+    unsigned int plrv;
+    lrvMapping(unsigned int a,unsigned int b)
+    {
+      mapping=std::make_pair<unsigned int,unsigned int>(a,b);
+      nlrv=mapping.first;
+      plrv=mapping.second;
+      dst=-1;
+    }
+    void setDistance()
+    {
+       //dst=kn_dist(nlrv,plrv);
+       dst=mh_dist(nlrv,plrv);
+    }
+    void print()
+    {
+      std::cerr << "M[" << nlrv << "->" << plrv << "]" << " #" << dst << std::endl;
+    }
+    double getDistance()
+    {
+      if(dst==-1)
+        dst=mh_dist(nlrv,plrv);
+        //dst=kn_dist(nlrv,plrv);
+      
+      return dst;
+    }
+};
+
+typedef std::vector<lrvMapping> ltAssignments;
+
+void pair_powersets(std::vector<lrvMapping> &IN, 
+    std::vector<ltAssignments > &OUT);
+
+
 void correctGamma( cv::Mat& img, cv::Mat &result, double gamma ) {
   double inverse_gamma = 1.0 / gamma;
   cv::Mat res;
@@ -44,18 +88,83 @@ void verbosePrint(std::stringstream &toPrint)
 bool getNextFrame(cv::VideoCapture &capture, cv::Mat &output,cv::Mat &origFrame)
 {
   bool retval=capture.read(output);
+  origFrame=output;
   if(retval==false)
     return retval;
 
+  grey_frame.copyTo(previousFrame);
+  //cv::adabilateralFilter(grey_frame,grey_frame,5,8,2);
+
   if(LRVTRACK_INVERT==true)
   {
-    //output.copyTo(origFrame);
-    origFrame=output;
-    output=output*1.1+5;
-    addWeighted(output,1.0,output,-2.0,260,output);
-    output.convertTo(output,CV_32F);
-    cv::pow(output,1.2,output);
-    cv::convertScaleAbs(output,output,1,0);
+    cv::Mat ctout;
+    double MF=1.3;
+    unsigned int PF=0;
+    int THRESHOLD=255;
+    double cpow=1.25;
+    //while (true){
+      //output.copyTo(origFrame);
+      //cv::Mat f;
+      //origFrame.copyTo(output);
+      //output=f;
+      output=output*MF+PF;
+      addWeighted(output,1.0,output,-2.0,THRESHOLD,output);
+      //lrvTrackNormalize(output,f,0,255,cv::NORM_MINMAX);
+      output.convertTo(output,CV_32F);
+      cv::pow(output,cpow,output);
+      cv::convertScaleAbs(output,output,1,0);
+      //output=f;
+      /*cvtColor(output,ctout,CV_BGR2GRAY);
+      cv::imshow("getnextframe", ctout);
+      int k=cv::waitKey(INT_MAX);
+      if (k=='x')
+      {
+        exit(0);
+      }
+      if (k=='M')
+      {
+        MF+=0.05;
+      }
+      if (k=='m')
+      {
+        MF-=0.05;
+      }
+      if (k=='p')
+      {
+        PF+=5;
+      }
+      if (k=='P')
+      {
+        PF-=5;
+      }
+      if (k=='t')
+      {
+        THRESHOLD+=5;
+      }
+      if (k=='T')
+      {
+        THRESHOLD-=5;
+      }
+      if (k=='e')
+      {
+        cpow+=0.05;
+      }
+      if (k=='E')
+      {
+        cpow-=0.05;
+      }
+      std::cerr << "===================" << std::endl;
+      std::cerr << "Threshold: " << THRESHOLD << std::endl;
+      std::cerr << "PF: " << PF << std::endl;
+      std::cerr << "MF: " << MF << std::endl;
+      std::cerr << "cpow: " << cpow << std::endl;
+      if(k=='.')
+      { 
+        retval=capture.read(origFrame);
+        if(retval==false)
+          exit(retval);
+      }
+    }*/
   }
   else
     output=origFrame;
@@ -401,22 +510,18 @@ void findHeadTail(larvaObject &lrv,
   }
 }
 */
-void findHeadTail(std::vector<cv::Point2f> &startPoints,
-                  larvaObject &lrv,
+void findHeadTail(larvaObject &lrv,
                   cv::Point2f &Head,
                   cv::Point2f &Tail,
                   bool force_SurroundingValSearch=false)
 {
   int max=0,min=65535;
   unsigned int i=0;
-  if (startPoints.size()<2)
-    {
-      Head.x=0.0;
-      Head.y=0.0;
-      Tail.x=0.0;
-      Tail.y=0.0;
-    }
-
+  cvb::CvBlob blob=lrv.blobs.back();
+  std::vector<cv::Point2f> &spine=lrv.lrvDistances.back().Spine;
+  cv::Point2f bp(lrv.blobs.back().minx,lrv.blobs.back().miny);
+  cv::Point2f sp_front=spine[0]-bp;
+  cv::Point2f sp_back=spine.back()-bp;
   if( lrv.start_frame==CURRENT_FRAME ||
       lrv.inCluster.back()>0 ||
       force_SurroundingValSearch ||
@@ -425,50 +530,82 @@ void findHeadTail(std::vector<cv::Point2f> &startPoints,
        lrv.tails.back().x == 0 && lrv.tails.back().y==0)
     )
     {
-      for (i=0; i<startPoints.size(); ++i)
+      int BIAS=0;
+      double curvatureBias=BIAS*lrv.lrvDistances.back().curvatureBias;
+      double fsz=getSurroundingSize(sp_front,blob,origFrame,previousFrame);
+      double bsz=getSurroundingSize(sp_back,blob,origFrame,previousFrame);
+
+      if(curvatureBias==BIAS)
+      {
+        if(fsz-curvatureBias < bsz)
         {
-          cv::Point2f p=startPoints[i];
-          cvb::CvBlob blob=lrv.blobs.back();
-          double tmpsz=getSurroundingSize(p,blob,grey_frame);
-          if (tmpsz>max)
-            {
-              Tail=startPoints[i];
-              max=tmpsz;
-            }
-          if (tmpsz<min)
-            {
-              Head=startPoints[i];
-              min=tmpsz;
-            }
+          Tail=sp_back;
+          Head=sp_front;
         }
-      if (max==min)
+        else
+        {
+          Tail=sp_front;
+          Head=sp_back;
+        }
+      }
+      else if(curvatureBias==0)
+      {
+        if(fsz > bsz-BIAS)
+        {
+          Tail=sp_front;
+          Head=sp_back;
+        }
+        else
+        {
+          Tail=sp_back;
+          Head=sp_front;
+        }
+      }
+      else
         std::cerr << "PROBLEM AREAS AROUND HEAD AND TAIL ARE THE SAME" << std::endl;
-      if (Head==Tail && i!=2)
-        {
-          std::cerr << "PROBLEM HEAD AND TAIL ARE THE SAME" << std::endl;
-        }
     }
   else
     {
-      double hmin=65535;
-      double tmin=65535;
-      for (i=0; i<startPoints.size(); ++i)
-        {
-          double hdiff=diff(lrv.heads.back(),startPoints[i]);
-          double tdiff=diff(lrv.tails.back(),startPoints[i]);
-          if (hdiff<hmin)
-            {
-              Head=startPoints[i];
-              hmin=hdiff;
-            }
-          if (tdiff<tmin)
-            {
-              Tail=startPoints[i];
-              tmin=tdiff;
-            }
+      double hfdiff=diff(lrv.heads.back(),sp_front);
+      double hbdiff=diff(lrv.heads.back(),sp_back);
+      double tfdiff=diff(lrv.tails.back(),sp_front);
+      double tbdiff=diff(lrv.tails.back(),sp_back);
+      if (hfdiff+tbdiff<hbdiff+tfdiff)
+      {
+        Head=sp_front;
+        Tail=sp_back;
+      }
+      else
+      {
+        Head=sp_back;
+        Tail=sp_front;
+      }
 
-        }
     }
+  double hwavg,twavg;
+  double curvBias;
+  if(Head==lrv.lrvDistances.back().Spine[0])
+  {
+    hwavg=lrv.lrvDistances.back().firstHalfWidthsSum;
+    twavg=lrv.lrvDistances.back().secondHalfWidthsSum;
+    curvBias=lrv.lrvDistances.back().curvatureBias;
+  }
+  else
+  {
+    hwavg=lrv.lrvDistances.back().secondHalfWidthsSum;
+    twavg=lrv.lrvDistances.back().firstHalfWidthsSum;
+    curvBias=1-lrv.lrvDistances.back().curvatureBias;
+  }
+
+  /*std::cerr << CURRENT_FRAME << " , " << 
+               lrv.larva_ID <<  " , " <<
+               getSurroundingSize(Tail,lrv.blobs.back(),origFrame,previousFrame)- 
+               getSurroundingSize(Head,lrv.blobs.back(),origFrame,previousFrame) << " , " <<
+               2*curvBias-1.0 << " , " <<
+               twavg-hwavg << " , " <<
+               lrv.roundness.back() <<
+               std::endl;*/
+
 }
 
 void drawSpinePoints(cv::Mat img, larvaObject &lrv, int idx=-1)
@@ -494,7 +631,7 @@ void drawSpinePoints(cv::Mat img, larvaObject &lrv, int idx=-1)
 void updateOneLarva(cvb::CvBlobs &In,
                     cvb::CvBlobs &Prev,
                     cvb::CvBlobs::iterator it,
-                    tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW)
+                    tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW_LARVA)
 {
   unsigned int ID=(*it).first;
   cvb::CvBlob blob=*((*it).second);
@@ -514,6 +651,7 @@ void updateOneLarva(cvb::CvBlobs &In,
 
     // Give the larva the necessary ID
     newLarva.larva_ID=ID;
+    newLarva.old_ID=blob.n20;
 
     // Add the blob of the larva to its blob history
     newLarva.blobs.push_back(blob);
@@ -537,6 +675,11 @@ void updateOneLarva(cvb::CvBlobs &In,
     // Initialize the speed to 0
     newLarva.midpoint_speed_x.push_back(0);
     newLarva.midpoint_speed_y.push_back(0);
+    newLarva.max_midpoint_speed=0;
+
+    newLarva.centroid_speed_x.push_back(0);
+    newLarva.centroid_speed_y.push_back(0);
+    newLarva.max_centroid_speed=0;
 
     newLarva.centroids.push_back(centroid);
     newLarva.centroids_full.push_back(centroidf);
@@ -583,7 +726,7 @@ void updateOneLarva(cvb::CvBlobs &In,
       blobToPointVector(blob,cntPoints);
       larvaDistanceMap Distances(cntPoints);
       //computeSpine(blob,Distances,frame);
-      fixContour(blob,Distances,200,frame);
+      fixContour(blob,Distances,LRVTRACK_CONTOUR_RESOLUTION,frame);
       newLarva.lrvDistances.push_back(Distances);
       newLarva.length.push_back(Distances.MaxDist);
       newLarva.length_mean = Distances.MaxDist;
@@ -594,17 +737,17 @@ void updateOneLarva(cvb::CvBlobs &In,
 
       cv::Point2f Head,Tail;
       std::vector<cv::Point2f> startPoints;
-      startPoints.push_back(cv::Point2f(
+      /*startPoints.push_back(cv::Point2f(
             MAXPair.first.x-blob.minx+ROI_PADDING,
             MAXPair.first.y-blob.miny+ROI_PADDING)
           );
       startPoints.push_back(cv::Point2f(
             MAXPair.second.x-blob.minx+ROI_PADDING,
             MAXPair.second.y-blob.miny+ROI_PADDING)
-          );
+          );*/
       newLarva.angular_speed.push_back(0);
 
-      findHeadTail(startPoints,newLarva,Head,Tail);
+      findHeadTail(newLarva,Head,Tail);
       //findHeadTail(newLarva,Distances,Head,Tail);
       newLarva.heads.push_back(Head);
       newLarva.tails.push_back(Tail);
@@ -625,25 +768,47 @@ void updateOneLarva(cvb::CvBlobs &In,
 
       if(LRVTRACK_CSV_OUTPUT)
       {
-        csvfile << CURRENT_FRAME <<
-          " , " << newLarva.larva_ID <<
-          " , " << newLarva.area.back() <<
-          " , " << newLarva.perimeter.back() <<
-          " , " << newLarva.length.back() <<
-          " , " << newLarva.width.back() <<
-          " , " << newLarva.headBodyAngle.back() <<
-          " , " << newLarva.midpoint_speed_x.back() <<
-          " , " << newLarva.midpoint_speed_y.back() <<
-          " , " << newLarva.centroids.back().x + blob.minx <<
-          " , " << newLarva.centroids.back().y + blob.miny <<
-          " , " << Distances.MidPoint.x <<
-          " , " << Distances.MidPoint.y <<
-          " , " << Distances.maxAngle <<
-          " , " << Distances.maxAngleLocation <<
-          " , " << newLarva.inCluster.back() <<
-          " , " << newLarva.isCluster <<
-          std::endl;
+        csvfile << CURRENT_FRAME/VIDEO_FPS <<
+          " , " << newLarva.larva_ID;
+          std::vector<cv::Point2f> &spine=newLarva.lrvDistances.back().Spine;
+          if(newLarva.heads.back() == spine.back())
+          {
+            cv::Point2f &t=spine[0];
+            csvfile << " , " << (t.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << 
+                       " , " << (t.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            std::vector<cv::Point2f>::iterator it=spine.begin();
+            it+=2;
+            for(;it!=spine.end();it++)
+            {
+              //cv::Point2f cp=*it-t;
+              cv::Point2f cp=*it;
+              csvfile << " , " << (cp.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << " , " 
+                               << (cp.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            }
+
+          }
+          else
+          {
+            cv::Point2f &t=spine.back();
+            csvfile << " , " << (t.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << 
+                       " , " << (t.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            std::vector<cv::Point2f>::reverse_iterator it=spine.rbegin();
+            it+=2;
+            for(;it!=spine.rend();it++)
+            {
+              //cv::Point2f cp=*it-t;
+              cv::Point2f cp=*it;
+              csvfile << " , " << (cp.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << " , " 
+                               << (cp.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            }
+
+          }
+          //csvfile << " , " << newLarva.centroids.back().x + blob.minx <<
+          //" , " << newLarva.centroids.back().y + blob.miny <<
+          //" , " << newLarva.inCluster.back() <<
+          csvfile << std::endl;
       }
+      newLarva.lastFrameWithStats=CURRENT_FRAME;
     }
     else
     {
@@ -696,7 +861,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     //detected_larvae[ID]=newLarva;
     //NEW[ID]=newLarva;
     tbb::concurrent_hash_map<unsigned int,larvaObject>::accessor a;
-    NEW.insert(a,ID);
+    NEW_LARVA.insert(a,ID);
     a->second=newLarva;
   }
   // UPDATED LARVA OBJECT!
@@ -709,6 +874,7 @@ void updateOneLarva(cvb::CvBlobs &In,
 
     // Set the ID of the larvaObject to the ID found TODO:Probably unnecessary
     cur_larva.larva_ID=ID;
+    cur_larva.old_ID=blob.n20;
 
     // Add the current blob to the blobs history of the larva
     cur_larva.blobs.push_back(blob);
@@ -777,27 +943,67 @@ void updateOneLarva(cvb::CvBlobs &In,
       // Compute all the inner distances for the larva
       //computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
       //computeSpine(blob,Distances,frame);
-      fixContour(blob,Distances,200,frame);
+      fixContour(blob,
+                 Distances,
+                 LRVTRACK_CONTOUR_RESOLUTION,
+                 frame,
+                 &cur_larva.heads,
+                 &cur_larva.tails,
+                 &cur_larva.blobs);
 
       if(cur_larva.inCluster.back()==0)
       {
         cur_larva.midpoint_speed_x.push_back(
             (Distances.MidPoint.x - cur_larva.lrvDistances.back().MidPoint.x)
-            /FrameEllapsedSeconds);
+            /(1/VIDEO_FPS));
         cur_larva.midpoint_speed_y.push_back(
             (Distances.MidPoint.y - cur_larva.lrvDistances.back().MidPoint.y)
-            /FrameEllapsedSeconds);
+            /(1/VIDEO_FPS));
+
+        cur_larva.centroid_speed_x.push_back(
+            (blob.centroid.x - cur_larva.blobs[cur_larva.blobs.size()-2].centroid.x)
+            /(1/VIDEO_FPS));
+        cur_larva.centroid_speed_y.push_back(
+            (blob.centroid.y - cur_larva.blobs[cur_larva.blobs.size()-2].centroid.y)
+            /(1/VIDEO_FPS));
       }
       else
       {
         cur_larva.midpoint_speed_x.push_back(
             (Distances.MidPoint.x - cur_larva.lrvDistances.back().MidPoint.x)
-            /(CurrentTime.wall - cur_larva.capture_times.back())
+            /((CURRENT_FRAME-cur_larva.lastFrameWithStats)/VIDEO_FPS)
             );
         cur_larva.midpoint_speed_y.push_back(
             (Distances.MidPoint.y - cur_larva.lrvDistances.back().MidPoint.y)
-            /(CurrentTime.wall - cur_larva.capture_times.back())
+            /((CURRENT_FRAME-cur_larva.lastFrameWithStats)/VIDEO_FPS)
             );
+
+        cur_larva.centroid_speed_x.push_back(
+            (blob.centroid.x - cur_larva.blobs[cur_larva.blobs.size()-2].centroid.x)
+            /((CURRENT_FRAME-cur_larva.lastFrameWithStats)/VIDEO_FPS)
+          );
+        cur_larva.centroid_speed_y.push_back(
+            (blob.centroid.y - cur_larva.blobs[cur_larva.blobs.size()-2].centroid.y)
+            /((CURRENT_FRAME-cur_larva.lastFrameWithStats)/VIDEO_FPS)
+          );
+      }
+      
+      double mspeed=sqrt(cur_larva.midpoint_speed_x.back()*
+                      cur_larva.midpoint_speed_x.back() +
+                      cur_larva.midpoint_speed_y.back()*
+                      cur_larva.midpoint_speed_y.back());
+      if(fabs(cur_larva.max_midpoint_speed) < fabs(mspeed))
+      {
+        cur_larva.max_midpoint_speed=mspeed;
+      }
+
+      double cspeed=sqrt(cur_larva.centroid_speed_x.back()*
+                      cur_larva.centroid_speed_x.back() +
+                      cur_larva.centroid_speed_y.back()*
+                      cur_larva.centroid_speed_y.back());
+      if(fabs(cur_larva.max_centroid_speed) < fabs(cspeed))
+      {
+        cur_larva.max_centroid_speed=cspeed;
       }
 
       cur_larva.lrvDistances.push_back(Distances);
@@ -859,17 +1065,17 @@ void updateOneLarva(cvb::CvBlobs &In,
       std::vector<cv::Point2f> startPoints;
 
       // Points must be corrected to match the ROI including the padding set
-      startPoints.push_back(cv::Point2f(
+      /*startPoints.push_back(cv::Point2f(
             MAXPair.first.x-blob.minx+ROI_PADDING,
             MAXPair.first.y-blob.miny+ROI_PADDING)
           );
       startPoints.push_back(cv::Point2f(
             MAXPair.second.x-blob.minx+ROI_PADDING,
             MAXPair.second.y-blob.miny+ROI_PADDING)
-          );
+          );*/
       //execute the function to find which is which and assign appropriately
       //to Head/Tail.
-      findHeadTail(startPoints,cur_larva,Head,Tail);
+      findHeadTail(cur_larva,Head,Tail);
       //findHeadTail(cur_larva,Distances,Head,Tail);
 
       //Add head and tail to the history
@@ -897,25 +1103,47 @@ void updateOneLarva(cvb::CvBlobs &In,
 
       if(LRVTRACK_CSV_OUTPUT)
       {
-        csvfile << CURRENT_FRAME <<
-          " , " << cur_larva.larva_ID <<
-          " , " << cur_larva.area.back() <<
-          " , " << cur_larva.perimeter.back() <<
-          " , " << cur_larva.length.back() <<
-          " , " << cur_larva.width.back() <<
-          " , " << cur_larva.headBodyAngle.back() <<
-          " , " << cur_larva.midpoint_speed_x.back() <<
-          " , " << cur_larva.midpoint_speed_y.back() <<
-          " , " << cur_larva.centroids.back().x + blob.minx <<
-          " , " << cur_larva.centroids.back().y + blob.miny <<
-          " , " << Distances.MidPoint.x <<
-          " , " << Distances.MidPoint.y <<
-          " , " << Distances.maxAngle <<
-          " , " << Distances.maxAngleLocation <<
-          " , " << cur_larva.inCluster.back() <<
-          " , " << cur_larva.isCluster <<
-          std::endl;
+        csvfile << CURRENT_FRAME/VIDEO_FPS <<
+          " , " << cur_larva.larva_ID;
+          std::vector<cv::Point2f> &spine=cur_larva.lrvDistances.back().Spine;
+          if(cur_larva.heads.back() == spine.back())
+          {
+            cv::Point2f &t=spine[0];
+            csvfile << " , " << (t.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << 
+                       " , " << (t.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            std::vector<cv::Point2f>::iterator it=spine.begin();
+            it+=2;
+            for(;it!=spine.end();it++)
+            {
+              //cv::Point2f cp=*it-t;
+              cv::Point2f cp=*it;
+              csvfile << " , " << (cp.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << " , " 
+                               << (cp.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            }
+
+          }
+          else
+          {
+            cv::Point2f &t=spine.back();
+            csvfile << " , " << (t.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << 
+                       " , " << (t.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            std::vector<cv::Point2f>::reverse_iterator it=spine.rbegin();
+            it+=2;
+            for(;it!=spine.rend();it++)
+            {
+              //cv::Point2f cp=*it-t;
+              cv::Point2f cp=*it;
+              csvfile << " , " << (cp.x-circles[bestCircle][0])*PIXEL_SIZE_IN_MM << " , " 
+                               << (cp.y-circles[bestCircle][1])*PIXEL_SIZE_IN_MM;
+            }
+
+          }
+          //csvfile << " , " << cur_larva.centroids.back().x + blob.minx <<
+          //" , " << cur_larva.centroids.back().y + blob.miny <<
+          //" , " << cur_larva.inCluster.back() <<
+          csvfile << std::endl;
       }
+      cur_larva.lastFrameWithStats=CURRENT_FRAME;
     }
     else
     {
@@ -976,7 +1204,7 @@ class larvaeUpdateBody : public cv::ParallelLoopBody
 private:
   cvb::CvBlobs &In;
   cvb::CvBlobs &Prev;
-  tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW;
+  tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW_LARVA;
   cvb::CvBlobs::iterator it;
 
 public:
@@ -986,7 +1214,7 @@ public:
       ): 
     In(IIn),
     Prev(IPrev),
-    NEW(n)
+    NEW_LARVA(n)
   {}
     void operator ()(const cv::Range& range) const
     {
@@ -994,7 +1222,16 @@ public:
         {
           cvb::CvBlobs::iterator it=In.begin();
           std::advance(it,i);
-            updateOneLarva(In,Prev,it,NEW);
+            updateOneLarva(In,Prev,it,NEW_LARVA);
+        }
+    }
+    void operator ()(const cv::BlockedRange& range) const
+    {
+        for (int i = range.begin(); i < range.end(); ++i)
+        {
+          cvb::CvBlobs::iterator it=In.begin();
+          std::advance(it,i);
+            updateOneLarva(In,Prev,it,NEW_LARVA);
         }
     }
 };
@@ -1003,18 +1240,20 @@ public:
 void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 {
   cvb::CvBlobs::iterator it=In.begin();
-  tbb::concurrent_hash_map<unsigned int, larvaObject> NEW;
-  larvaeUpdateBody body(In,Prev,NEW);
+  tbb::concurrent_hash_map<unsigned int, larvaObject> NEW_LARVA;
+  larvaeUpdateBody body(In,Prev,NEW_LARVA);
   //cv::parallel_for_(cv::Range(0, In.size()), body);
+  //cv::parallel_for(cv::BlockedRange(0, In.size()), body);
   
   for(;it!=In.end();++it)
   {
-    updateOneLarva(In,Prev,it,NEW);
+    updateOneLarva(In,Prev,it,NEW_LARVA);
   }
+  //std::cerr << std::endl;
 
   tbb::concurrent_hash_map<unsigned int, larvaObject>::iterator nit=
-    NEW.begin();
-  while (nit!=NEW.end())
+    NEW_LARVA.begin();
+  while (nit!=NEW_LARVA.end())
   {
     detected_larvae[nit->first]=nit->second;
     ++nit;
@@ -1027,11 +1266,9 @@ void is_larva(larvaObject &lrv)
   std::cout << "ISLARVA: " << lrv.larva_ID << " , " << lrv.blobs.back().internalContours.size() << std::endl;
 }
 */
-
-double is_larva(cvb::CvBlob *blob,bool out=false)
+void is_larva(cvb::CvBlob *blob,unsigned int &Ndefects,double &defectsSUM)
 {
   
-  /*
   std::stringstream DEBUG;
   std::vector<cv::Point2f> cntPointsF;
   std::vector<cv::Point> cntPoints;
@@ -1040,7 +1277,7 @@ double is_larva(cvb::CvBlob *blob,bool out=false)
   std::vector<int> hullPoints;
   double defectSUM=0;
   blobToPointVector(*blob,cntPointsF);
-  double perimeter=getPerimeter(*blob);
+  //double perimeter=getPerimeter(*blob);
   std::vector<cv::Point2f>::iterator f=cntPointsF.begin();
   while(f!=cntPointsF.end())
   {
@@ -1051,7 +1288,7 @@ double is_larva(cvb::CvBlob *blob,bool out=false)
     ++f;
   }
 
-  cv::approxPolyDP(cntPoints,SimplePoints,0.8,true);
+  cv::approxPolyDP(cntPoints,SimplePoints,1.0,true);
   cv::convexHull(SimplePoints,hullPoints);
   cv::convexHull(SimplePoints,hull);
   
@@ -1063,8 +1300,8 @@ double is_larva(cvb::CvBlob *blob,bool out=false)
     defectSUM+=(defects[i][3]/256.0);
   }
 
-  double ret=pow(defectSUM,defects.size()) + 10*blob->area;
-  if(out)
+  //double ret=pow(defectSUM,defects.size()) + 10*blob->area;
+  /*
     std::cout << CURRENT_FRAME << ", " << blob->label << ", " << defectSUM << ", " << defects.size() << ", " << blob->area << ", " << perimeter << std::endl;
   if ( ret > 1300 )
   {
@@ -1082,8 +1319,32 @@ double is_larva(cvb::CvBlob *blob,bool out=false)
     verbosePrint(DEBUG);
   }
   */
+  defectsSUM=defectSUM;
+  Ndefects=defects.size();
   //return ret;
-  return blob->area; 
+  //return blob->area; 
+}
+
+double is_larva(cvb::CvBlob *blob,bool out=false)
+{
+  std::vector<cv::Point2f> newLarvaPoints;
+  blobToPointVector(*blob,newLarvaPoints);
+  larvaDistanceMap dstLarva(newLarvaPoints);
+  fixContour(*blob,dstLarva,LRVTRACK_CONTOUR_RESOLUTION,frame);
+  cv::Mat larvaROI;
+  createLarvaContour(larvaROI,*blob);
+  double greyVal=getGreyValue(larvaROI,*blob,grey_frame);
+  double perimeter=getPerimeter(*blob);
+  double a,l,w,p;
+  a=blob->area;
+  l=dstLarva.MaxDist;
+  w=dstLarva.WidthDist;
+  p=getPerimeter(*blob);
+  std::cout << CURRENT_FRAME << ", " << blob->label << ", " << blob->area << " ," << l << ", " << w << ", " << greyVal << ", " << perimeter << std::endl;
+  return 1.09*pow(a,0.4)
+         -4.3*pow(l,0.8)
+         +12*w
+         +3*p; 
 }
 
 inline double SQUARE(double n)
@@ -1108,33 +1369,30 @@ inline void vmin(std::vector<double>& vals, std::vector<int>& seq)
     }
 }
 
-namespace std
+bool speedMatch(cvb::CvBlob &blobP, 
+                cvb::CvBlob &blobN,
+                double duration,
+                double max_speed)
 {
-  template <typename number >
-    std::string printVector(std::vector<number> vec,int position=0)
-    {
-      if (vec.size()==0)
-        return "";
-      std::stringstream sstm;
-      //bool const is_number= std::is_arithmetic<number>::value;
-      //static_assert( is_number, "Provided type is not an arithmetic type");
-      sstm << "[" ;
-      typename std::vector<number>::const_iterator i=vec.begin()+position;
-      sstm << *i ;
-      ++i;
-      for( ; i != vec.end(); ++i)
-        sstm << ","<< *i;
-      sstm << "]";
-      return sstm.str();
-    }
+  double frames=(CURRENT_FRAME-detected_larvae[blobP.label].lastFrameWithStats);
+  double mduration=frames/VIDEO_FPS;
+  double uduration=max_speed*(1.0-(0.25-1/(frames+3)));
+  double speedx = (blobP.centroid.x - blobN.centroid.x)/mduration;
+  double speedy = (blobP.centroid.y - blobN.centroid.y)/mduration;
+  double speed = sqrt(speedx*speedx + speedy*speedy);
+  //std::cerr << "SpeedMatch: P:" << blobP.label << " N:" << blobN.label << 
+  //  " M/S: " << uduration << "," << speed << std::endl;
+  if(uduration> speed)
+    return true;
+  else
+    return false;
 }
 
 double calculate_MH_sum(std::map<unsigned int, unsigned int> &AM,
   std::map<unsigned int, cv::Mat> &candidateCovarMat,
   std::map<unsigned int, cv::Mat> &candidateMeanMat,
-  std::map<unsigned int, cv::Mat> &newMeanMat,
-  cvb::CvBlobs &NEW
-                        )
+  std::map<unsigned int, cv::Mat> &newMeanMat
+  )
 {
   /*
   std::cout << "Duration threshold: " << COLLISION_DURATION_THRESHOLD << std::endl;
@@ -1155,7 +1413,7 @@ double calculate_MH_sum(std::map<unsigned int, unsigned int> &AM,
     newMeanMat[mIT->first].copyTo(nm);
     //nm.push_back(speed_x);
     //nm.push_back(speed_y);
-    std::cout << nm.type() << " " << candidateMeanMat[mIT->second].type() << " " << candidateCovarMat[mIT->second].type() << std::endl;
+    //std::cout << nm.type() << " " << candidateMeanMat[mIT->second].type() << " " << candidateCovarMat[mIT->second].type() << std::endl;
     SUM+=cv::Mahalanobis(nm,
         candidateMeanMat[mIT->second],
         candidateCovarMat[mIT->second]);
@@ -1175,40 +1433,38 @@ double calculate_MH_sum(std::map<unsigned int, unsigned int> &AM,
 }
 
 
-void assign_combinations(std::vector<unsigned int> &NEW,
+void assign_combinations(std::vector<unsigned int> &NEWCombs,
     std::map <unsigned int, unsigned int> &oldAssignments,
     std::map <unsigned int, unsigned int> &AMcur,
     std::map <unsigned int, unsigned int> &AMmin,
     std::map<unsigned int, cv::Mat> &candidateCovarMat,
     std::map<unsigned int, cv::Mat> &candidateMeanMat,
     std::map<unsigned int, cv::Mat> &newMeanMat,
-    float &minSUM,
-    cvb::CvBlobs &NEWBlobs
+    float &minSUM
     )
 {
   std::stringstream DEBUG;
-  if(NEW.size()==1)
+  if(NEWCombs.size()==1)
   {
     std::map <unsigned int, unsigned int>::iterator c=oldAssignments.begin();
     while(c!=oldAssignments.end())
     {
       if(c->second==0)
       {
-        AMcur[NEW[0]]=c->first;
-        c->second=NEW[0];
+        AMcur[NEWCombs[0]]=c->first;
+        c->second=NEWCombs[0];
         
         float curSUM = calculate_MH_sum(AMcur, 
             candidateCovarMat,
             candidateMeanMat,
-            newMeanMat,
-            NEWBlobs
+            newMeanMat
             );
 
-        if (curSUM<minSUM)
+        if(curSUM<minSUM)
         {
-          std::cerr << "Minimum SUM found: " << curSUM << " with assignment " <<
-            printUIMap(AMcur);
-          std::cerr << std::endl;
+          //std::cerr << "Minimum SUM found: " << curSUM << " with assignment " <<
+          //  printUIMap(AMcur);
+          //std::cerr << std::endl;
           //verbosePrint(DEBUG);
           minSUM=curSUM;
           AMmin=AMcur;
@@ -1220,16 +1476,16 @@ void assign_combinations(std::vector<unsigned int> &NEW,
     }
   }
 
-  if(NEW.size()>1)
+  if(NEWCombs.size()>1)
   {
     std::map <unsigned int, unsigned int>::iterator c=oldAssignments.begin();
     while(c!=oldAssignments.end())
     {
       if(c->second==0)
       {
-        AMcur[NEW[0]]=c->first;
-        c->second=NEW[0];
-        std::vector<unsigned int> sub(NEW.begin()+1,NEW.end());
+        AMcur[NEWCombs[0]]=c->first;
+        c->second=NEWCombs[0];
+        std::vector<unsigned int> sub(NEWCombs.begin()+1,NEWCombs.end());
 
         assign_combinations(
             sub,
@@ -1239,8 +1495,7 @@ void assign_combinations(std::vector<unsigned int> &NEW,
             candidateCovarMat,
             candidateMeanMat,
             newMeanMat,
-            minSUM,
-            NEWBlobs
+            minSUM
             );
         
         c->second=0;
@@ -1249,55 +1504,404 @@ void assign_combinations(std::vector<unsigned int> &NEW,
 
     }
   }
-
 }
 
 int diverge_match_short(
   std::vector<unsigned int> &candidateLarvae,
   std::vector<unsigned int> &newLarvae,
   std::map<unsigned int, unsigned int> &newAssignments,
-  cvb::CvBlobs &NEW)
+  double duration)
 {
   std::vector<unsigned int>::iterator NewIT=newLarvae.begin();
-  int matched=0;
+  std::vector<unsigned int> matches(newLarvae.size(),0);
+  int idx=0;
   while(NewIT!=newLarvae.end())
   {
     std::vector<unsigned int>::iterator PreIT=candidateLarvae.begin();
+    if(is_larva(NEW[*NewIT])>IS_LARVA_THRESHOLD)
+    {
+        ++NewIT;
+        continue;
+    }
     while(PreIT!=candidateLarvae.end())
     {
       unsigned int lastIdx=detected_larvae[*PreIT].lastBlobWithStats;
       cvb::CvBlob &blobP=detected_larvae[*PreIT].blobs[lastIdx];
-      double v;
-      if(centresMatch(&blobP,NEW[*NewIT],v,0.20) && 
+      cvb::CvBlob &blobN=*NEW[*NewIT];
+      if(speedMatch(
+            blobP,
+            blobN,
+            duration,
+            detected_larvae[*PreIT].max_centroid_speed) && 
           blobSizeIsRelevant(&blobP,NEW[*NewIT]))
       {
-        newAssignments[*NewIT]=*PreIT;
-        matched++;
+        if(matches[idx]==0)
+        {
+          newAssignments[*NewIT]=*PreIT;
+          ++matches[idx];
+        }
+        else
+        {
+          newAssignments.erase(*NewIT);
+        }
       }
       ++PreIT;
     }
     ++NewIT;
+    ++idx;
   }
-  return matched;
+  if(newAssignments.size()>0)
+    return true;
+  else
+    return false;
 }
 
-void diverge_match_new(
+/*void find_larvae_from_group(
+    std::vector<unsigned int> &larvaeAndBlobs,
+    cvb::CvBlobs &NEW,
+    std::vector<unsigned int> &larvae,
+    bool candidates)
+{
+  if(candidates)
+  {
+    
+  }
+}*/
+
+double kn_dist(unsigned int N,
+               unsigned int C
+              )
+{
+  std::stringstream DEBUG;
+  cv::Mat candidateCovarMat;
+  cv::Mat candidateMeanMat;
+
+  cv::Mat newMeanMat;
+
+  cv::Mat Responses;
+  cv::Mat TrainArray;
+
+  cv::Mat InputArray;
+  cv::hconcat(cv::Mat(detected_larvae[C].area),
+      cv::Mat(detected_larvae[C].grey_value),
+      InputArray);
+
+  cv::hconcat(InputArray,
+      cv::Mat(detected_larvae[C].length),
+      InputArray);
+
+  cv::hconcat(InputArray,
+      cv::Mat(detected_larvae[C].perimeter),
+      InputArray);
+
+  cv::hconcat(InputArray,
+      cv::Mat(detected_larvae[C].width),
+      InputArray);
+
+  cv::Mat lrvClasses(InputArray.rows,1,CV_32SC1,cv::Scalar(C));
+  InputArray.convertTo(InputArray,CV_32F);
+  CvKNearest knnRegress( InputArray, lrvClasses, cv::Mat(), true);
+
+  //Setup of new larva
+  cv::Mat larvaROI;
+  std::vector<cv::Point2f> newLarvaPoints;
+  blobToPointVector(*NEW[N],newLarvaPoints);
+  createLarvaContour(larvaROI,(*NEW[N]));
+  larvaDistanceMap dstLarva(newLarvaPoints);
+  cv::Point2f centroid;
+  centroid.x=NEW[N]->centroid.x;
+  centroid.y=NEW[N]->centroid.y;
+  //computeSpine(*NEW[N],dstLarva,grey_frame);
+  fixContour(*NEW[N],dstLarva,LRVTRACK_CONTOUR_RESOLUTION,grey_frame);
+
+  float newSize=NEW[N]->area;
+  float newGreyval=getGreyValue(larvaROI,*NEW[N],grey_frame);
+  float newLength=dstLarva.MaxDist;
+  float newPerimeter=getPerimeter(*NEW[N]);
+  float newWidth=dstLarva.WidthDist;
+
+  std::vector<float> meanVec;
+  meanVec.push_back(newSize);
+  meanVec.push_back(newGreyval);
+  meanVec.push_back(newLength);
+  meanVec.push_back(newPerimeter);
+  meanVec.push_back(newWidth);
+
+  newMeanMat=cv::Mat(meanVec);
+  cv::Mat meanTMat;
+  int k=knnRegress.get_max_k();
+  newMeanMat.convertTo(newMeanMat,CV_32F);
+  cv::transpose(newMeanMat,meanTMat);
+  cv::Mat ret;
+  cv::Mat dst,dstT;
+  knnRegress.find_nearest(meanTMat,k,&ret,0,0,&dst);
+  cv::transpose(dst,dstT);
+  cv::Scalar retval=cv::mean(dstT);
+
+  return retval[0];
+}
+
+double mh_dist(unsigned int N,unsigned int C)
+{
+  std::stringstream DEBUG;
+  cv::Mat candidateCovarMat;
+  cv::Mat candidateMeanMat;
+
+  cv::Mat newMeanMat;
+
+  cv::Mat Responses;
+  cv::Mat TrainArray;
+  /*float size_avg=detected_larvae[C].area_sum/
+    detected_larvae[C].area.size();
+  float grey_value_avg=detected_larvae[C].grey_value_sum/
+    detected_larvae[C].grey_value.size();
+  float length_avg=detected_larvae[C].length_sum/
+    detected_larvae[C].length.size();
+  float perimeter_avg=detected_larvae[C].perimeter_sum/
+    detected_larvae[C].perimeter.size();
+  float width_avg=detected_larvae[C].width_sum/
+    detected_larvae[C].width.size();*/
+
+  float size_avg=avgNVec(detected_larvae[C].area);
+  float grey_value_avg=avgNVec(detected_larvae[C].grey_value);
+  float length_avg=avgNVec(detected_larvae[C].length);
+  float perimeter_avg=avgNVec(detected_larvae[C].perimeter);
+  float width_avg=avgNVec(detected_larvae[C].width);
+
+  //float speed_x=avgNVec(detected_larvae[C].midpoint_speed_x);
+  //float speed_y=avgNVec(detected_larvae[C].midpoint_speed_y);
+
+
+  cv::Mat InputArray;
+  cv::hconcat(cv::Mat(detected_larvae[C].area),
+      cv::Mat(detected_larvae[C].grey_value),
+      InputArray);
+
+  cv::hconcat(InputArray,
+      cv::Mat(detected_larvae[C].length),
+      InputArray);
+
+  cv::hconcat(InputArray,
+      cv::Mat(detected_larvae[C].perimeter),
+      InputArray);
+
+  cv::hconcat(InputArray,
+      cv::Mat(detected_larvae[C].width),
+      InputArray);
+
+  //cv::hconcat(InputArray,
+  //    cv::Mat(detected_larvae[C].midpoint_speed_x),
+  //    InputArray);
+
+  //cv::hconcat(InputArray,
+  //    cv::Mat(detected_larvae[C].midpoint_speed_y),
+  //    InputArray);
+
+  std::vector<float> meanVec;
+  meanVec.push_back(size_avg);
+  meanVec.push_back(grey_value_avg);
+  meanVec.push_back(length_avg);
+  meanVec.push_back(perimeter_avg);
+  meanVec.push_back(width_avg);
+
+  cv::Mat(meanVec).copyTo(candidateMeanMat);
+  cv::Mat meanTMat;
+  cv::transpose(candidateMeanMat,meanTMat);
+
+
+  cv::calcCovarMatrix(InputArray, candidateCovarMat,meanTMat,CV_COVAR_ROWS|CV_COVAR_NORMAL|CV_COVAR_USE_AVG);
+  candidateCovarMat.convertTo(candidateCovarMat,CV_32F);
+  cv::invert(candidateCovarMat,candidateCovarMat,cv::DECOMP_SVD);
+
+  cv::Mat newSamplesMat;
+
+  //Setup of new larva
+  cv::Mat larvaROI;
+  std::vector<cv::Point2f> newLarvaPoints;
+  blobToPointVector(*NEW[N],newLarvaPoints);
+  createLarvaContour(larvaROI,(*NEW[N]));
+  larvaDistanceMap dstLarva(newLarvaPoints);
+  cv::Point2f centroid;
+  centroid.x=NEW[N]->centroid.x;
+  centroid.y=NEW[N]->centroid.y;
+  //computeSpine(*NEW[N],dstLarva,grey_frame);
+  fixContour(*NEW[N],dstLarva,LRVTRACK_CONTOUR_RESOLUTION,grey_frame);
+
+  float newSize=NEW[N]->area;
+  float newGreyval=getGreyValue(larvaROI,*NEW[N],grey_frame);
+  float newLength=dstLarva.MaxDist;
+  float newPerimeter=getPerimeter(*NEW[N]);
+  float newWidth=dstLarva.WidthDist;
+
+  meanVec.clear();
+  meanVec.push_back(newSize);
+  meanVec.push_back(newGreyval);
+  meanVec.push_back(newLength);
+  meanVec.push_back(newPerimeter);
+  meanVec.push_back(newWidth);
+
+  newMeanMat=cv::Mat(meanVec);
+
+ // std::cerr << candidateMeanMat << std::endl;
+ // std::cerr << "==============================" << std::endl;
+ // std::cerr << newMeanMat << std::endl;
+ // std::cerr << "==============================" << std::endl;
+ // std::cerr << candidateCovarMat << std::endl;
+
+  double ret=cv::Mahalanobis(candidateMeanMat,newMeanMat,candidateCovarMat);
+  return ret;
+
+}
+
+bool isMappingReasonable(lrvMapping &p,double duration)
+{
+      unsigned int lastIdx=detected_larvae[p.plrv].lastBlobWithStats;
+      cvb::CvBlob &blobP=detected_larvae[p.plrv].blobs[lastIdx];
+      cvb::CvBlob &blobN=*NEW[p.nlrv];
+      if(!speedMatch(
+            blobP,
+            blobN,
+            duration,
+            detected_larvae[p.plrv].max_centroid_speed) || 
+          !blobSizeIsRelevant(&blobP,&blobN))
+       return false;
+      else
+        return true;
+}
+
+bool isMappingReasonable(ltAssignments &m,double duration)
+{
+  for(unsigned int i=0;i<m.size();i++)
+  {
+      lrvMapping &p=m[i];
+      unsigned int lastIdx=detected_larvae[p.plrv].lastBlobWithStats;
+      cvb::CvBlob &blobP=detected_larvae[p.plrv].blobs[lastIdx];
+      cvb::CvBlob &blobN=*NEW[p.nlrv];
+      if(!speedMatch(
+            blobP,
+            blobN,
+            duration,
+            detected_larvae[p.plrv].max_centroid_speed) ||
+          !blobSizeIsRelevant(&blobP,&blobN))
+        return false;
+  }
+  return true;
+}
+
+unsigned int countMappingsWSize(unsigned int n, std::vector<ltAssignments> &M)
+{
+  unsigned int c;
+  for(unsigned int i=0;i<M.size();i++)
+  {
+    if(M[i].size()==n)
+      c++;
+  }
+  return c;
+}
+
+bool mappingContainsNewOld(ltAssignments &m,unsigned int n,unsigned int o)
+{
+  for(unsigned int i=0;i<m.size();i++)
+  {
+    if(m[i].nlrv==n || m[i].plrv==o)
+      return true;
+  }
+  return false;
+}
+
+void assignMapping(ltAssignments &m, 
+                   std::map<unsigned int,unsigned int> &newAssignments)
+{
+  for(unsigned int i=0;i<m.size();i++)
+  {
+    //std::cerr << "Assigning : N,O (" << m[i].nlrv << "," << m[i].plrv << ")" << std::endl;
+    newAssignments[m[i].nlrv]=m[i].plrv;
+  }
+}
+
+double mappingAccuracy(ltAssignments &a)
+{
+  double SUM=0;
+  for(unsigned int i=0;i<a.size();i++)
+  {
+    SUM+=a[i].getDistance();
+  }
+  return SUM/(1*(1+(a.size()-1)*1.5));
+}
+
+void createReasonableMappings(
+  std::vector<unsigned int> &candidateLarvae,
+  std::vector<unsigned int> &newLarvae,
+  double duration,
+  std::vector<ltAssignments> &accepted_mappings)
+{
+    ltAssignments initial_pairs;
+    std::vector<lrvMapping> valid_pairs;
+    std::map<unsigned int,unsigned int> mappable_new;
+    for(unsigned int i=0;i<candidateLarvae.size();i++)
+    {
+      for(unsigned int j=0;j<newLarvae.size();j++)
+      {
+        lrvMapping n(newLarvae[j],candidateLarvae[i]);
+        n.candidates=candidateLarvae;
+        if(isMappingReasonable(n,duration))
+        {
+          n.setDistance();
+          valid_pairs.push_back(n);
+        }
+      }
+    }
+  pair_powersets(valid_pairs,accepted_mappings);
+}
+
+void diverge_match(
   std::vector<unsigned int> &candidateLarvae,
   std::vector<unsigned int> &newLarvae,
   std::map<unsigned int, unsigned int> &newAssignments,
-  double duration,
-  cvb::CvBlobs &NEW)
+  double duration
+  )
+{
+  std::vector<ltAssignments> valid_mappings;
+  createReasonableMappings(
+    candidateLarvae,
+    newLarvae,
+    duration,
+    valid_mappings);
+
+  std::map<double,unsigned int> mapping_accuracy;
+  for(unsigned int i=0;i<valid_mappings.size();i++)
+  {
+    double acc=mappingAccuracy(valid_mappings[i]);
+    //std::cerr << "=========================" << std::endl;
+    //std::cerr << "Mapping " << i << ": " << std::endl;
+    //for(unsigned int j=0;j<valid_mappings[i].size();j++)
+    //{
+    //  valid_mappings[i][j].print();
+    //}
+    //std::cerr << "Total: " << acc << std::endl;
+    //std::cerr << "=========================" << std::endl;
+    mapping_accuracy[acc]=i;
+  }
+  
+  if(valid_mappings.size()!=0)
+    assignMapping(valid_mappings[mapping_accuracy.begin()->second],
+                newAssignments);
+}
+
+/*void diverge_match_new(
+  std::vector<unsigned int> &candidateLarvae,
+  std::vector<unsigned int> &newLarvae,
+  std::map<unsigned int, unsigned int> &newAssignments,
+  double duration)
 {
 
-  if(duration<0.51)
+  int matched=
+    diverge_match_short(candidateLarvae,newLarvae,newAssignments,duration);
+  if(matched>0)
   {
-    int matched=
-      diverge_match_short(candidateLarvae,newLarvae,newAssignments,NEW);
-    if(matched>0)
-    {
-      std::cerr << printUIMap(newAssignments) << std::endl;
+    std::cerr << printUIMap(newAssignments) << std::endl;
+    if(newAssignments.size()==newLarvae.size())
       return;
-    }
   }
 
   std::stringstream DEBUG;
@@ -1308,8 +1912,8 @@ void diverge_match_new(
 
   std::vector<unsigned int>::iterator cIT=candidateLarvae.begin();
 
-  /* Test normalBayesClassifier */
-  cv::NormalBayesClassifier NBC;
+  // Test normalBayesClassifier
+  //cv::NormalBayesClassifier NBC;
   cv::Mat Responses;
   cv::Mat TrainArray;
 
@@ -1326,13 +1930,13 @@ void diverge_match_new(
       detected_larvae[*cIT].perimeter.size();
     float width_avg=detected_larvae[*cIT].width_sum/
       detected_larvae[*cIT].width.size();
-    /*
-    float size_avg=avgNVec(detected_larvae[*cIT].area);
-    float grey_value_avg=avgNVec(detected_larvae[*cIT].grey_value);
-    float length_avg=avgNVec(detected_larvae[*cIT].length);
-    float perimeter_avg=avgNVec(detected_larvae[*cIT].perimeter);
-    float width_avg=avgNVec(detected_larvae[*cIT].width);
-*/
+    
+    //float size_avg=avgNVec(detected_larvae[*cIT].area);
+    //float grey_value_avg=avgNVec(detected_larvae[*cIT].grey_value);
+    //float length_avg=avgNVec(detected_larvae[*cIT].length);
+    //float perimeter_avg=avgNVec(detected_larvae[*cIT].perimeter);
+    //float width_avg=avgNVec(detected_larvae[*cIT].width);
+    
     //float speed_x=avgNVec(detected_larvae[*cIT].midpoint_speed_x);
     //float speed_y=avgNVec(detected_larvae[*cIT].midpoint_speed_y);
 
@@ -1354,13 +1958,13 @@ void diverge_match_new(
         cv::Mat(detected_larvae[*cIT].width),
         InputArray);
 
-    /*cv::hconcat(InputArray,
-        cv::Mat(detected_larvae[*cIT].midpoint_speed_x),
-        InputArray);
+    //cv::hconcat(InputArray,
+    //    cv::Mat(detected_larvae[*cIT].midpoint_speed_x),
+    //    InputArray);
 
-    cv::hconcat(InputArray,
-        cv::Mat(detected_larvae[*cIT].midpoint_speed_y),
-        InputArray);*/
+    //cv::hconcat(InputArray,
+    //    cv::Mat(detected_larvae[*cIT].midpoint_speed_y),
+    //    InputArray);
     
     cv::Mat temparray;
     cv::Mat tempResp=cv::Mat(InputArray.rows,1,CV_32SC1,*cIT);
@@ -1392,7 +1996,7 @@ void diverge_match_new(
     ++cIT;
   }
 
-  NBC.train(TrainArray,Responses);
+  //NBC.train(TrainArray,Responses);
 
   verbosePrint("Setting up new larvae data");
   cIT=newLarvae.begin();
@@ -1451,7 +2055,6 @@ void diverge_match_new(
       newLarvaeVec.push_back(newLarvae[i]);
     }
   }
-
   
   assign_combinations(
       newLarvaeVec,
@@ -1461,14 +2064,13 @@ void diverge_match_new(
       candidateCovarMat,
       candidateMeanMat,
       newMeanMat,
-      minSUM,
-      NEW
+      minSUM
       );
   
   cv::Mat results;
-  std::cout << newSamplesMat << std::endl;
-  NBC.predict(newSamplesMat, &results);
-  std::cout << results << std::endl;
+  //std::cout << newSamplesMat << std::endl;
+  //NBC.predict(newSamplesMat, &results);
+  //std::cout << results << std::endl;
 
   //if(newLarvaeVec.size()>1 || minSUM/newLarvaeVec.size()<LARVA_MAHALANOBIS_THRESHOLD)
   DEBUG << "Fitting sum value: " << minSUM/AMmin.size();
@@ -1488,7 +2090,7 @@ void diverge_match_new(
   }
 
 }
-
+*/
 /*
 void diverge_match(
   unsigned int &candidate_larva_a,
@@ -1666,8 +2268,8 @@ void getNearbyLarvae(cvb::CvBlobs &Blobs, cvb::CvBlob *Blob,
         cBlob->centroid.x > (Blob->minx - MaxDist/2) &&
         cBlob->centroid.y < (Blob->maxy + MaxDist/2) &&
         cBlob->centroid.y > (Blob->miny - MaxDist/2) &&
-        ( pre==false && assignedNew[It->first].size()<=0 || 
-          pre==true  && assignedPrevious[It->first].size()<=0)
+        ( ((pre==false) && (assignedNew[It->first].size()<=0)) || 
+          ((pre==true)  && (assignedPrevious[It->first].size()<=0)))
         )
     {
       double DIST=cv::fast_abs(Blob->centroid.x - cBlob->centroid.x) +
@@ -1822,7 +2424,6 @@ void assign_diverging(cvb::CvBlobs &New,
     verbosePrint(DEBUG);
     assign_one(CLUSTER_ID,IDs);
     detected_larvae[CLUSTER_ID].isCluster=true;
-    //TODO: IDs is the labels as returned by CvBlob we need to fix this!!
   }
   else
   {
@@ -1832,14 +2433,15 @@ void assign_diverging(cvb::CvBlobs &New,
     // [ NEW_ID -> OLD_ID ]
     std::map<unsigned int, unsigned int> newAssignments;
     /*
-    std::cout << "Callgin diverge match: CF: " << CURRENT_FRAME <<
+    std::cout << "Calling diverge match: CF: " << CURRENT_FRAME <<
       " BLOB SF: " << detected_larvae[dcIT->first].start_frame << std::endl;
       */
-    diverge_match_new(candidateLarvae,
+    unsigned int FRAMEDIFF=CURRENT_FRAME - detected_larvae[dcIT->first].start_frame;
+    diverge_match(candidateLarvae,
         IDs,
         newAssignments,
-        (CURRENT_FRAME - detected_larvae[dcIT->first].start_frame)/24.0,
-        New);
+        FRAMEDIFF/VIDEO_FPS
+        );
 
     DEBUG << "New assignments returned by diverge matching: " << std::endl << printUIMap(newAssignments);
     verbosePrint(DEBUG);
@@ -2037,6 +2639,46 @@ unsigned int kofn(unsigned int k, unsigned int n)
   return factorial(n)/(factorial(k)*factorial(n-k));
 }
 
+void pair_powersets(std::vector<lrvMapping> &IN, 
+    std::vector<ltAssignments > &OUT){
+
+  for (unsigned int i=1 ; i<=IN.size();i++)
+  {
+    std::vector<unsigned int> pointers;
+    for(unsigned int k=0;k<i;k++)
+    {
+      pointers.push_back(k);
+    }
+    for (unsigned int j=0 ; j<kofn(i,IN.size());j++)
+    {
+      ltAssignments cvec;
+      for(unsigned int idx=0;idx<i;idx++)
+      {
+        if(!mappingContainsNewOld(cvec,
+                                  IN[pointers[idx]].nlrv,
+                                  IN[pointers[idx]].plrv))
+          cvec.push_back(IN[pointers[idx]]);
+      }
+      if(cvec.size()==i)
+        OUT.push_back(cvec);
+      for(unsigned int inc=i;inc>0;inc--)
+      {
+        if(pointers[inc-1]<IN.size()-1-(i-inc))
+        {
+          pointers[inc-1]++;
+          unsigned int add=0;
+          for(unsigned int res=inc;res<i;res++)
+          {
+            add++;
+            pointers[res]=pointers[inc-1]+add;
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
 //This is not exactly the powerset.
 //We do not need the sets of 1 element and the complete SET in there
 void powersets(std::vector<unsigned int> &IN, std::vector<std::vector<unsigned int> > &OUT){
@@ -2204,6 +2846,53 @@ bool checkLarvae()
   return true;
 }
 
+//Test if larva contour is touching the outer ring
+bool larvaToRing(cvb::CvBlob &blob)
+{
+  cv::Point2f cntr(circles[bestCircle][0],circles[bestCircle][1]);
+  if(p2fdist(blob.centroid.x,blob.centroid.y,circles[bestCircle][0],circles[bestCircle][1])
+      >
+      circles[bestCircle][2]*0.95)
+  {
+    std::vector<cv::Point2f> p;
+    blobToPointVector(blob,p);
+    for(unsigned int i=0;i<p.size();i+=3)
+    {
+      double dst=p2fdist(p[i],cntr);
+      if(dst>=circles[bestCircle][2])
+        return true;
+    }
+  }
+  return false;
+}
+
+//Match lost larvae
+unsigned int matchLostLarvae(unsigned int newLabel)
+{
+  for(std::vector<unsigned int>::iterator lIT=lost_larvae.begin();
+      lIT!=lost_larvae.end();lIT++)
+  {
+      cvb::CvBlob &blobN=*NEW[newLabel];
+      if(detected_larvae[*lIT].blobs.size()==0)
+        return 0;
+      cvb::CvBlob &blobP=detected_larvae[*lIT].blobs.back();
+      double duration=(CURRENT_FRAME 
+             - detected_larvae[*lIT].lastFrameWithStats)/VIDEO_FPS;
+      if(speedMatch(
+            blobP,
+            blobN,
+            duration,
+            detected_larvae[*lIT].max_centroid_speed) && 
+          blobSizeIsRelevant(&blobP,&blobN))
+      {
+        unsigned int ret=*lIT;
+        lost_larvae.erase(lIT);
+        return ret;
+      }
+  }
+  return 0;
+}
+
 // TODO:
 // IMPORTANT NOTE!!
 //  We have essentially three mappings:
@@ -2226,12 +2915,13 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
   assignedPreMap.clear();
   newInFrame.clear();
   newClusters.clear();
+
   cvb::CvBlobs::iterator prevIt=Prev.begin();
   while (prevIt!=Prev.end())
-    {
-			assignedPreMap[prevIt->first]=0;
-			++prevIt;
-		}
+  {
+    assignedPreMap[prevIt->first]=0;
+    ++prevIt;
+  }
 
   verbosePrint("Starting Tracking loop");
 
@@ -2388,6 +3078,7 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
       else
       {
         DEBUG << prI->first << " -> []" ;
+        lost_larvae.push_back(prI->first);
         verbosePrint(DEBUG);
       }
       prI++;
@@ -2405,6 +3096,7 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
       else
       {
         DEBUG << prI->first << " -> []" ;
+        
         verbosePrint(DEBUG);
       }
       prI++;
@@ -2417,21 +3109,34 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
   {
     if (assignedNew[bIT->first].size()>0)
     {
+      bIT->second->n20=bIT->second->label;
       bIT->second->label=assignedNew[bIT->first][0];
       out[assignedNew[bIT->first][0]]=bIT->second;
     }
     else
     {
-      unsigned int NEWID=++LARVAE_COUNT;
-      verbosePrint("Extra Assignment:");
-      DEBUG << bIT->first << " -> " << NEWID;
-      newInFrame.push_back(NEWID);
-      verbosePrint(DEBUG);
-      bIT->second->label=NEWID;
-      out[NEWID]=bIT->second;
+      unsigned int Match=matchLostLarvae(bIT->first);
+      if(Match==0)
+      {
+        unsigned int NEWID=++LARVAE_COUNT;
+        verbosePrint("Extra Assignment:");
+        DEBUG << bIT->first << " -> " << NEWID;
+        newInFrame.push_back(NEWID);
+        verbosePrint(DEBUG);
+        bIT->second->n20=bIT->second->label;
+        bIT->second->label=NEWID;
+        out[NEWID]=bIT->second;
+      }
+      else
+      {
+        bIT->second->n20=bIT->second->label;
+        bIT->second->label=Match;
+        out[Match]=bIT->second;
+      }
     }
     bIT++;
   }
+
   updateLarvae(out,Prev);
 }
 
@@ -3421,7 +4126,6 @@ void printBlobFile(larvaObject &lrv)
 
 void updateBG(cv::Mat &oldbgFrame, 
               cv::Mat &defbgFrame,
-              std::vector<cv::Vec3f> &circles, 
               cvb::CvBlobs &blobs)
 {
   std::vector<cv::Vec3f>::
@@ -3460,20 +4164,15 @@ void updateBG(cv::Mat &oldbgFrame,
   }
   if(circles.size()>0)
     {
-      while (itc!=circles.end())
-        {
-          cv::circle(newbgFrame,
-                     cv::Point2f((*itc)[0], (*itc)[1]), // circle centre
-                     (*itc)[2]/1.1,       // circle radius
-                     cv::Scalar(), // color
-                     -1);              // thickness
-          ++itc;
-          break;
-        }
+      cv::circle(newbgFrame,
+          cv::Point2f(circles[bestCircle][0], circles[bestCircle][1]), // circle centre
+          circles[bestCircle][2]/1.1,       // circle radius
+          cv::Scalar(), // color
+          -1);              // thickness
     }
   
   oldbgFrame=newbgFrame;
-  cv::imshow("Background",oldbgFrame);
+  //cv::imshow("Background",oldbgFrame);
 }
 
 
@@ -3481,99 +4180,176 @@ void processFrame(cv::Mat &origFrame,
                   cv::Mat &outFrame, 
                   cv::Mat &grey_bgFrame,
                   cv::Mat &showFrame,
-                  std::vector<cv::Vec3f> &circles,
                   std::vector<cv::Vec3f> &cups,
                   int thresholdlow, 
                   int thresholdhigh,
-                  int mode)
+                  int mode,
+                  int loop=0)
 {
-
-  cv::Mat fg_frame,fg_image,fgROI;
-  // Captured frame to BW (necessary for various filters and speed)
-  if(origFrame.channels()>1)
-  {
-    cvtColor(origFrame,grey_frame,CV_BGR2GRAY);
-  }
-  else
-  {
-    origFrame.copyTo(grey_frame);
-    cvtColor(grey_frame,origFrame,CV_GRAY2BGR);
-  }
-
-  cv::absdiff(grey_frame,grey_bgFrame,fg_frame);
-  //cv::addWeighted(fg_frame, 1.0, test, -2.0, 0.0, test);
-
-  fgROI=cv::Mat::zeros(fg_frame.rows , fg_frame.cols,fg_frame.depth());
-
-  if(circles.size()>0)
-  {
-    cv::circle(fgROI, 
-               cv::Point2f(circles[0][0],circles[0][1]),
-               int(circles[0][2]/0.99),cv::Scalar(255),-1);
-
-    cv::circle(showFrame,
-               cv::Point2f(circles[0][0],circles[0][1]),
-               int(circles[0][2]/0.99),
-               cv::Scalar(0,255,0),1);
-  }
-  else
-  {
-    fgROI=cv::Mat(grey_bgFrame.rows ,
-                  grey_bgFrame.cols,
-                  grey_bgFrame.depth(),
-                  cv::Scalar(255));
-  }
-
-  if(cups.size()>0)
-  {
-    for(unsigned int i=0; i<cups.size(); ++i)
+    int THRESH=cv::THRESH_BINARY;
+    unsigned int CMAX=255;
+    unsigned int NB=137;
+    int THRESHOLD=-30;
+    int METHOD=cv::ADAPTIVE_THRESH_MEAN_C;
+    int l=1;
+  /*while (l==1)
+  {*/
+    cv::Mat fg_frame,fg_image,fgROI;
+    // Captured frame to BW (necessary for various filters and speed)
+    if(origFrame.channels()>1)
     {
-      cv::circle(fgROI,
-                 cv::Point2f(cups[i][0],cups[i][1]),
-                 int(cups[i][2]),
-                 cv::Scalar(0),
-                 -1);
-      cv::circle(frame, 
-                 cv::Point2f(cups[i][0],cups[i][1]),
-                 int(cups[i][2]),
-                 cv::Scalar(0,0,255),
-                 1);
+      cvtColor(origFrame,grey_frame,CV_BGR2GRAY);
     }
-  }
+    else
+    {
+      origFrame.copyTo(grey_frame);
+      cvtColor(grey_frame,origFrame,CV_GRAY2BGR);
+    }
 
-  fg_image=fg_frame&fgROI;
+    cv::absdiff(grey_frame,grey_bgFrame,fg_frame);
+    //cv::addWeighted(fg_frame, 1.0, test, -2.0, 0.0, test);
 
-  cv::Mat fg_image_norm;
-  //cv::GaussianBlur(fg_image, fg_image_norm , cv::Size(0, 0), 3);
-  //cv::addWeighted(fg_image, 1.5, fg_image_norm, -0.5, 0, fg_image); 
-  if (LRVTRACK_NORMALIZE)
-    lrvTrackNormalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
-  /*
-     cv::threshold(fg_image,
-     thresholded_frame,
-     thresholdlow,
-     thresholdhigh,
-     cv::THRESH_BINARY|cv::THRESH_OTSU);
-     */
-  cv::threshold(fg_image,
+    fgROI=cv::Mat(fg_frame.rows , fg_frame.cols,fg_frame.depth(),cv::Scalar(0));
+
+    if(circles.size()>0)
+    {
+      cv::circle(fgROI, 
+          cv::Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+          int(circles[bestCircle][2]),cv::Scalar(255),-1);
+
+      cv::circle(showFrame,
+          cv::Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+          int(circles[bestCircle][2]),
+          cv::Scalar(0,255,0),1);
+    }
+    else
+    {
+      fgROI=cv::Mat(grey_bgFrame.rows ,
+          grey_bgFrame.cols,
+          grey_bgFrame.depth(),
+          cv::Scalar(255));
+    }
+
+    if(cups.size()>0)
+    {
+      for(unsigned int i=0; i<cups.size(); ++i)
+      {
+        cv::circle(fgROI,
+            cv::Point2f(cups[i][0],cups[i][1]),
+            int(cups[i][2]),
+            cv::Scalar(0),
+            -1);
+        cv::circle(frame, 
+            cv::Point2f(cups[i][0],cups[i][1]),
+            int(cups[i][2]),
+            cv::Scalar(0,0,255),
+            1);
+      }
+    }
+
+    fg_image=fg_frame&fgROI;
+
+    cv::Mat fg_image_norm;
+    //cv::GaussianBlur(fg_image, fg_image_norm , cv::Size(0, 0), 3);
+    //cv::addWeighted(fg_image, 1.5, fg_image_norm, -0.5, 0, fg_image); 
+    //if (LRVTRACK_NORMALIZE)
+    //lrvTrackNormalize(fg_image,fg_image_norm,0,255,cv::NORM_MINMAX);
+    cv::adaptiveThreshold(fg_image,
+        outFrame,
+        CMAX,
+        METHOD,
+        THRESH,
+        NB,
+        THRESHOLD);
+    //cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(5, 5));
+    //cv::dilate(outFrame,outFrame,element,cv::Point(-1,-1),3);
+    /*cv::threshold(fg_image,
+      outFrame,
+      thresholdlow,
+      thresholdhigh,
+      cv::THRESH_BINARY|cv::THRESH_OTSU);
+    if(loop==1)*/
+      //cv::imshow("thresholded",outFrame);
+
+    /*cv::threshold(fg_image,
       outFrame,
       thresholdlow,
       thresholdhigh,
       mode);
-  /*
-     cv::adaptiveThreshold(fg_image,
-     thresholded_frame,
-     255,
-     cv::ADAPTIVE_THRESH_GAUSSIAN_C,
-     cv::THRESH_BINARY,
-     9,
-     0.6);a
-     cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-     cv::dilate(thresholded_frame,thresholded_frame,element);
-     */
+      */
+    /*
+       cv::adaptiveThreshold(fg_image,
+       thresholded_frame,
+       255,
+       cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+       cv::THRESH_BINARY,
+       9,
+       0.6);a*/
 
-  outFrame=fg_image&outFrame;
+      cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+      cv::dilate(outFrame,outFrame,element);
 
+    outFrame=fg_image&outFrame;
+    /*if(loop==1)
+    {
+      int k=cv::waitKey(INT_MAX);
+      if (k=='x')
+      {
+        exit(0);
+      }
+      if (k=='t')
+      {
+        THRESHOLD+=5;
+      }
+      if (k=='T')
+      {
+        THRESHOLD-=5;
+      }
+      if (k=='n')
+      {
+        NB+=6;
+      }
+      if (k=='N')
+      {
+        NB-=6;
+      }
+      if (k=='i')
+      {
+        if(THRESH==cv::THRESH_BINARY_INV)
+          THRESH=cv::THRESH_BINARY;
+        else
+          THRESH=cv::THRESH_BINARY_INV;
+      }
+      if (k=='m')
+      {
+        if(METHOD==cv::ADAPTIVE_THRESH_MEAN_C)
+          METHOD=cv::ADAPTIVE_THRESH_GAUSSIAN_C;
+        else
+          METHOD=cv::ADAPTIVE_THRESH_MEAN_C;
+      }
+      if(k=='.')
+      {
+        getNextFrame(capture,bgFrame,origFrame);
+          if(bgFrame.channels()>1)
+          {
+          cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
+          }
+          else
+          {
+          bgFrame.copyTo(grey_bgFrame);
+          }
+      }
+      std::cerr << "Threshold: " << THRESHOLD << std::endl;
+      std::cerr << "SIZE: " << NB << std::endl;
+      if(METHOD==cv::ADAPTIVE_THRESH_MEAN_C)
+        std::cerr << "METHOD: MEAN" << std::endl;
+      else
+        std::cerr << "METHOD: GAUSSIAN" << std::endl;
+
+    }
+    if(loop!=1)
+      l=0;
+  }*/
 }
 
 void findFurthestLarva(cv::Mat &fgimg, cv::Point2f centre,double &dist)
@@ -3611,7 +4387,6 @@ int main(int argc, char* argv[])
   bool TRACK=false;
   bool STEP=true;
 
-
 #ifdef LRVTRACK_WITH_CUDA
   cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());
 #elif defined(LRVTRACK_WITH_OPENCL)
@@ -3620,8 +4395,12 @@ int main(int argc, char* argv[])
   std::cout << "Found " << oclinfo.size() << " OpenCL devices. Using: ";
   std::cout << oclinfo[0].DeviceName[0] << std::endl;
 #endif
+  // Initialize video capture device
   cv::VideoCapture capture;
+  // Handle command line arguments
   handleArgs(argc,argv);
+
+  // Check whether we have camera input or file
   if(LRVTRACK_CAMERA_INPUT != -2)
     {
       //capture.open(CV_CAP_DC1394);
@@ -3654,7 +4433,7 @@ int main(int argc, char* argv[])
         }
     }
 
-  cv::Mat grey_bgFrame,origFrame;
+  cv::Mat grey_bgFrame;
   //unsigned int fg_threshold=10;
   unsigned int thresholdlow=35;
   unsigned int thresholdhigh=255;
@@ -3671,32 +4450,128 @@ int main(int argc, char* argv[])
 
   
   cv::VideoWriter vidOut,vidPOut;
- if(bgFrame.channels()>1)
-    {
-      cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
-    }
+  if(bgFrame.channels()>1)
+  {
+    cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
+  }
   else
-    {
-      bgFrame.copyTo(grey_bgFrame);
-    }
+  {
+    bgFrame.copyTo(grey_bgFrame);
+  }
 
   //std::cout << bgFrame.rows << "," << bgFrame.cols << std::endl;
-  std::vector<cv::Vec3f> circles;
-  int votes=180;
+  int votes=30;
   cv::Mat opened;
-  cv::morphologyEx(grey_bgFrame,opened,cv::MORPH_OPEN,cv::Mat(),cv::Point2f(-1,-1),9);
-  while (circles.size()==0 && votes >= 100)
+  //cv::morphologyEx(grey_bgFrame,opened,cv::MORPH_OPEN,cv::Mat(),cv::Point2f(-1,-1),1);
+  //cv::GaussianBlur(grey_bgFrame,opened,cv::Size(9,9),2,2);
+  std::vector<std::vector<cv::Point> > contours;
+  int THRESH=cv::THRESH_BINARY;
+
+  cv::Mat ctout;
+  unsigned int CMAX=255;
+  unsigned int NB=275;
+  int THRESHOLD=0;
+  int METHOD=cv::ADAPTIVE_THRESH_MEAN_C;
+  /*while (true){*/
+    cv::adaptiveThreshold(grey_bgFrame,
+        ctout,
+        CMAX,
+        METHOD,
+        THRESH,
+        NB,
+        THRESHOLD);
+    /*cv::imshow("adaptive threshold", ctout);
+    int k=cv::waitKey(INT_MAX);
+    if (k==120)
+    {
+      exit(0);
+    }
+    if (k==116)
+    {
+      THRESHOLD+=CSTEP;
+    }
+    if (k==84)
+    {
+      THRESHOLD-=CSTEP;
+    }
+    if (k==110)
+    {
+      NB+=CSTEP;
+    }
+    if (k==78)
+    {
+      NB-=CSTEP;
+    }
+    if (k==105)
+    {
+      if(THRESH==cv::THRESH_BINARY_INV)
+        THRESH=cv::THRESH_BINARY;
+      else
+        THRESH=cv::THRESH_BINARY_INV;
+    }
+    if (k==109)
+    {
+      if(METHOD==cv::ADAPTIVE_THRESH_MEAN_C)
+        METHOD=cv::ADAPTIVE_THRESH_GAUSSIAN_C;
+      else
+        METHOD=cv::ADAPTIVE_THRESH_MEAN_C;
+    }
+    if(k=='.')
+    {
+      getNextFrame(capture,bgFrame,origFrame);
+      if(bgFrame.channels()>1)
+      {
+        cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
+      }
+      else
+      {
+        bgFrame.copyTo(grey_bgFrame);
+      }
+    }
+    std::cerr << "Threshold: " << THRESHOLD << std::endl;
+    std::cerr << "SIZE: " << NB << std::endl;
+    if(METHOD==cv::ADAPTIVE_THRESH_MEAN_C)
+      std::cerr << "METHOD: MEAN" << std::endl;
+    else
+      std::cerr << "METHOD: GAUSSIAN" << std::endl;
+
+  }*/
+  
+  while (circles.size()==0 && votes >= 10)
   {
-    cv::HoughCircles(opened, circles, CV_HOUGH_GRADIENT,
-        10,   // accumulator resolution (size of the image / 2)
-        850,  // minimum distance between two circles
-        50, // Canny high threshold
+    cv::HoughCircles(ctout, circles, CV_HOUGH_GRADIENT,
+        4,   // accumulator resolution (size of the image / 2)
+        2,  // minimum distance between two circles
+        2, // Canny high threshold
         votes, // minimum number of votes
-        bgFrame.rows/3, bgFrame.rows/1.95); // min and max radiusV
-
+        bgFrame.rows/2.1, bgFrame.rows/1.95); // min and max radiusV
     votes-=10;
-
   }
+
+  double cutlim;
+  cutlim=DBL_MAX;
+  unsigned int mysz=circles.size();
+  for(unsigned int i=0; i<circles.size();i++)
+  {
+    cv::Mat cutout=cv::Mat::zeros(ctout.rows,ctout.cols, ctout.type());
+    cv::circle(cutout,
+               cv::Point2f(circles[i][0],circles[i][1]),
+               circles[i][2],
+               cv::Scalar(255),-1);
+    cutout=cutout&grey_bgFrame;
+    double val=cv::norm(cutout,cv::NORM_L1)/
+      (CV_PI*circles[i][2]*circles[i][2]);
+    if(val<cutlim)
+    {
+      cutlim=val;
+      bestCircle=i;
+    }
+  }
+  /*cv::circle(grey_bgFrame,
+      cv::Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+      circles[bestCircle][2],
+      cv::Scalar(0),-1);*/
+
   std::vector<cv::Vec3f> cups;
   if (LRVTRACK_ODOUR_CUPS>0 || LRVTRACK_ODOUR_CUPS==-1)
     {
@@ -3708,8 +4583,8 @@ int main(int argc, char* argv[])
       if(circles.size()>0)
         {
           cv::circle(fgROI, 
-                     cv::Point2f(circles[0][0],circles[0][1]),
-                     int(circles[0][2]),
+                     cv::Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+                     int(circles[bestCircle][2]),
                      cv::Scalar(255),
                      -1);
         }
@@ -3724,7 +4599,6 @@ int main(int argc, char* argv[])
                     thresholdlow,
                     thresholdhigh,
                     cv::THRESH_BINARY|cv::THRESH_OTSU);
-
       cv::HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
                        2,   // accumulator resolution (size of the image / 2)
                        1,  // minimum distance between two circles
@@ -3740,10 +4614,10 @@ int main(int argc, char* argv[])
   if(circles.size()>0)
   {
     cv::circle(grey_bgFrame,
-        cv::Point2f(circles[0][0], circles[0][1]), // circle centre
-        circles[0][2]/1.1,       // circle radius
-        cv::Scalar(), // color
-        -1);              // thickness
+        cv::Point2f(circles[bestCircle][0], circles[bestCircle][1]),
+        circles[bestCircle][2],
+        cv::Scalar(),
+        -1);
   }
   else
   {
@@ -3757,17 +4631,18 @@ int main(int argc, char* argv[])
                tempFrame,
                grey_bgFrame,
                origFrame,
-               circles,
                cups,
                thresholdlow,
                thresholdhigh,
                cv::THRESH_BINARY|cv::THRESH_OTSU);
 
+  cv::Vec3f &mc=circles[bestCircle];
   double radius;
   findFurthestLarva(tempFrame,
-                    cv::Point2f(circles[0][0],circles[0][1]),
+                    cv::Point2f(circles[bestCircle][0],circles[bestCircle][1]),
                     radius);
-
+  if(radius>circles[bestCircle][2]*0.9)
+    radius=circles[bestCircle][2]*0.9;
   if(bgFrame.channels()>1)
     {
       cvtColor(bgFrame,grey_bgFrame,CV_BGR2GRAY);
@@ -3779,7 +4654,7 @@ int main(int argc, char* argv[])
   if(circles.size()>0)
   {
     cv::circle(grey_bgFrame,
-        cv::Point2f(circles[0][0], circles[0][1]), // circle centre
+        cv::Point2f(circles[bestCircle][0], circles[bestCircle][1]), // circle centre
         radius,       // circle radius
         cv::Scalar(), // color
         -1);              // thickness
@@ -3827,254 +4702,297 @@ int main(int argc, char* argv[])
       //cv::addWeighted(frame, 1.7, image, -0.7, 0, image);
       
       if(TRACK)
+      {
+        if(START_FRAME==0)
         {
-          if(START_FRAME==0)
-            {
-              setupTracker();
-              if(!summary.is_open() && LRVTRACK_CHOREOGRAPHY_OUTPUT)
-                {
-                  summary.open(summaryFilePath.c_str());
-                }
-              if(!csvfile.is_open() && LRVTRACK_CSV_OUTPUT)
-              {
-                csvfile.open(csvFilePath.c_str());
-                csvfile << "FRAME," <<
-                           "ID,SIZE," <<
-                           "PERIMETER," <<
-                           "LENGTH,WIDTH," <<
-                           "HEADANGLE," <<
-                           "SPEEDX,SPEEDY," <<
-                           "CENTROIDX," << 
-                           "CENTROIDY," << 
-                           "MIDPOINTX," << 
-                           "MIDPOINTY," <<
-                           "MAXANGLE," <<
-                           "MAXANGLELOCATION," <<
-                           "INBLOB,ISBLOB" << std::endl;
-              }
-              tS.start();
-              START_FRAME=CURRENT_FRAME;
-            }
-
-          if (LRVTRACK_SAVE_VIDEO!="" && !vidOut.isOpened())
-            {
-              vidOut.open((experimentFolderPath / LRVTRACK_SAVE_VIDEO).string(),
-                          VIDEO_CODEC,
-                          VIDEO_FPS,
-                          bgFrame.size());
-              if (!vidOut.isOpened())
-                {
-                  std::cerr << "Error opening video output file. " << 
-                    "Problems with video codec. Exiting..." << std::endl;
-                  exit(5);
-                }
-            }
-
-          if (LRVTRACK_SAVE_VIDEO!="")
-            {
-              vidOut << frame;
-            }
-
-          if (LRVTRACK_SAVE_PROCESSED_VIDEO!="" && !vidPOut.isOpened())
-            {
-              vidPOut.open((experimentFolderPath / LRVTRACK_SAVE_PROCESSED_VIDEO).string(),
-                           VIDEO_CODEC,
-                           VIDEO_FPS,
-                           frame.size());
-              if (!vidPOut.isOpened())
-                {
-                  std::cerr << "Error opening video output file. " <<
-                    "Problems with video codec. Exiting..." << std::endl;
-                  exit(5);
-                }
-            }
-
-          CURRENT_FRAME=capture.get(CV_CAP_PROP_POS_FRAMES);
-          cv::Mat image;
-          cv::Mat processed_frame;
-          cv::Mat working_frame;
-          cv::Mat fgROI;
-          cv::Mat fg_image;
-          cv::Mat mask;
-
-          //Background subtraction is done by eliminating areas outside of the
-          //detected petri-dish
-          // Here we subtract from the BW captured frame the background frame.
-          processFrame(frame,
-                       processed_frame,
-                       grey_bgFrame,
-                       origFrame,
-                       circles,
-                       cups,
-                       thresholdlow,
-                       thresholdhigh,
-                       cv::THRESH_BINARY);
-          cvb::CvBlobs blobs;
-          IplImage ipl_thresholded = processed_frame;
-          labelImg=cvCreateImage(
-              cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
-
-          cvLabel(&ipl_thresholded, labelImg, blobs);
-          cvb::cvFilterByArea(blobs, 40, 900);
-          //updateBG(grey_bgFrame,circles,blobs);
-          cvb::CvBlobs tracked_blobs;
-          cvb::CvBlobs blob1;
-          cvb::CvBlobs::iterator it=blobs.begin();
-
-          if(preBlobs.size()>0)
-            {
-              FrameEllapsedTime = tP.elapsed();
-              CurrentTime= tS.elapsed();
-              //larvae_track(blobs,preBlobs,tracked_blobs);
-              newLarvaeTrack(blobs,preBlobs,tracked_blobs);
-              tP.start();
-
-              if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
-              {
-                printSummary(preBlobs,blobs,false);
-              }
-
-              preBlobs=tracked_blobs;
-            }
-          else
-            {
-              preBlobs.clear();
-              //normalize blobs for next use
-              cvb::CvBlobs::iterator it=blobs.begin();
-              int i=1;
-              while (it!=blobs.end())
-                {
-                  preBlobs[i]=(*it).second;
-                  preBlobs[i]->label=i;
-                  it++;
-                  i++;
-                }
-
-              tP.start();
-
-              if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
-              {
-                printSummary(preBlobs,blobs,true);
-              }
-
-              LARVAE_COUNT=preBlobs.size();
-            }
-
-          if (SHOWTAGS!=0)
+          setupTracker();
+          if(!summary.is_open() && LRVTRACK_CHOREOGRAPHY_OUTPUT)
           {
-            it=tracked_blobs.begin();
-            while (it!=tracked_blobs.end())
-            {
+            summary.open(summaryFilePath.c_str());
+          }
+          if(!csvfile.is_open() && LRVTRACK_CSV_OUTPUT)
+          {
+            csvfile.open(csvFilePath.c_str());
+            csvfile << "FRAME," <<
+              "ID," <<
+              "SP0x," <<
+              "SP0y," <<
+              "SP1x," <<
+              "SP1y," <<
+              "SP2x," <<
+              "SP2y," <<
+              "SP3x," <<
+              "SP3y," <<
+              "SP4x," <<
+              "SP4y," <<
+              "SP5x," <<
+              "SP5y," <<
+              "SP6x," <<
+              "SP6y," <<
+              "SP7x," <<
+              "SP7y," <<
+              "SP8x," <<
+              "SP8y," <<
+              "SP9x," <<
+              "SP9y," <<
+              "SP10x," <<
+              "SP10y," <<
+              "CENTROIDX," << 
+              "CENTROIDY," << 
+              "INBLOB" << std::endl;
+          }
+          tS.start();
+          START_FRAME=CURRENT_FRAME;
+        }
 
-              std::stringstream sstm;
-              cvb::CvBlob *blob=it->second;
-              //std::cout << blob->label << ", " << is_larva(blob) << std::endl;
-              //is_larva(blob,true);
-              //fixContour(*blob,200,origFrame);
-              if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
-              {
-                printBlobFile(detected_larvae[it->first]);
-              }
-              try
-              {
-                std::vector<unsigned int> &clusterMBs=
-                  detected_clusters.at(it->first);
-                sstm << it->first << printVector(clusterMBs,1);
-                cv::putText(origFrame,
-                    sstm.str(),
-                    cv::Point2f(blob->centroid.x+12,blob->centroid.y+12),
-                    cv::FONT_HERSHEY_PLAIN,
-                    0.7,
-                    cv::Scalar(255,255,255),
-                    1,
-                    CV_AA);
-              }
-              catch (const std::out_of_range& oor)
-              {
-                //out of range. i.e. it's not there :)
-                sstm << (*it).first;
-                cv::putText(origFrame,
-                    sstm.str(),
-                    cv::Point2f(blob->centroid.x+12,blob->centroid.y+12),
-                    cv::FONT_HERSHEY_PLAIN,
-                    0.8,
-                    cv::Scalar(255,255,255),
-                    1,
-                    CV_AA);
-              }
+        if (LRVTRACK_SAVE_VIDEO!="" && !vidOut.isOpened())
+        {
+          vidOut.open((experimentFolderPath / LRVTRACK_SAVE_VIDEO).string(),
+              VIDEO_CODEC,
+              VIDEO_FPS,
+              bgFrame.size());
+          if (!vidOut.isOpened())
+          {
+            std::cerr << "Error opening video output file. " << 
+              "Problems with video codec. Exiting..." << std::endl;
+            exit(5);
+          }
+        }
 
-              /*
-                 cv::putText(frame,
-                 "*",
-                 cv::Point2f(blob->centroid.x+12,blob->centroid.y-12),
-                 cv::FONT_HERSHEY_PLAIN,
-                 0.8,
-                 cv::Scalar(100,100,255),
-                 1,
-                 CV_AA);
-                 */
-              // Here we define an extra PADDING
-              int PAD=0;
-              cv::Mat larvaROI;
-              try{
-                larvaROI=cv::Mat(origFrame,
-                    cv::Rect(blob->minx-ROI_PADDING-PAD,
-                      blob->miny-ROI_PADDING-PAD,
-                      blob->maxx-blob->minx+1+2*(ROI_PADDING+PAD),
-                      blob->maxy-blob->miny+1+2*(ROI_PADDING+PAD))
-                    );
-              }
-              catch(...)
-              {
-                std::cerr << "larvaROI failed. continuing" << std::endl;
-                break;
-              }
-              cv::Point2f cr(blob->centroid.x-blob->minx,blob->centroid.y-blob->miny);
-              //larvaSkel testSkel(larvaROI,cr);
-              //testSkel.drawSkeleton(larvaROI,cv::Scalar(0,0,255));
-              //cv::imshow("ROI",larvaROI);
-              //cv::waitKey(1);
-              //if(is_larva(blob)<IS_LARVA_THRESHOLD)
-              //{
-              //createLarvaContour(larvaROI,*blob,CV_8UC3,0,false,
-              //    cv::Scalar(0,255,0),8);
-              drawSpinePoints(origFrame,detected_larvae[it->first]);
-              /*
-                 cv::circle(frame,
-                 cv::Point2f(blob->centroid.x,blob->centroid.y),
-                 0,
-                 cv::Scalar(255,0,0),
-                 -1);
-                 */
-              //}
+        if (LRVTRACK_SAVE_VIDEO!="")
+        {
+          vidOut << frame;
+        }
 
-              if(detected_larvae[it->first].isCluster==false)
-              {
-                cv::circle(larvaROI,
-                    cv::Point2f(
-                      detected_larvae[it->first].heads.back().x+PAD,
-                      detected_larvae[it->first].heads.back().y+PAD),
-                    0,
-                    cv::Scalar(255,0,0),
-                    -1);
+        if (LRVTRACK_SAVE_PROCESSED_VIDEO!="" && !vidPOut.isOpened())
+        {
+          vidPOut.open((experimentFolderPath / LRVTRACK_SAVE_PROCESSED_VIDEO).string(),
+              VIDEO_CODEC,
+              VIDEO_FPS,
+              frame.size());
+          if (!vidPOut.isOpened())
+          {
+            std::cerr << "Error opening video output file. " <<
+              "Problems with video codec. Exiting..." << std::endl;
+            exit(5);
+          }
+        }
 
-                cv::circle(larvaROI,
-                    cv::Point2f(
-                      detected_larvae[it->first].tails.back().x+PAD,
-                      detected_larvae[it->first].tails.back().y+PAD),
-                    0,
-                    cv::Scalar(0,0,255),
-                    -1);
+        CURRENT_FRAME=capture.get(CV_CAP_PROP_POS_FRAMES);
+        cv::Mat image;
+        cv::Mat processed_frame;
+        cv::Mat working_frame;
+        cv::Mat fgROI;
+        cv::Mat fg_image;
+        cv::Mat mask;
 
-                //plotAngle(blob,larvaROI,PAD);
-              }
-              it++;
-            }
+        processFrame(frame,
+            processed_frame,
+            grey_bgFrame,
+            origFrame,
+            cups,
+            thresholdlow,
+            thresholdhigh,
+            cv::THRESH_BINARY,1);
+        IplImage ipl_thresholded = processed_frame;
+        labelImg=cvCreateImage(
+            cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
+        NEW.clear();
+        cvLabel(&ipl_thresholded, labelImg, NEW);
+        cvb::cvFilterByArea(NEW, 40, 900);
+        cvb::CvBlobs::iterator blIT=NEW.begin();
+        for(;blIT!=NEW.end();)
+        {
+          if(larvaToRing(*blIT->second))
+          {
+            NEW.erase(blIT++);
+          }
+          else
+            blIT++;
+        }
+
+        //updateBG(grey_bgFrame,circles,NEW);
+        cvb::CvBlobs tracked_blobs;
+        cvb::CvBlobs blob1;
+        cvb::CvBlobs::iterator it=NEW.begin();
+
+        if(preBlobs.size()>0)
+        {
+          FrameEllapsedTime = tP.elapsed();
+          CurrentTime= tS.elapsed();
+          //larvae_track(blobs,preBlobs,tracked_blobs);
+          newLarvaeTrack(NEW,preBlobs,tracked_blobs);
+          tP.start();
+
+          if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
+          {
+            printSummary(preBlobs,NEW,false);
           }
 
-          cvReleaseImage(&labelImg);
-
+          preBlobs=tracked_blobs;
         }
+        else
+        {
+          preBlobs.clear();
+          //normalize blobs for next use
+          cvb::CvBlobs::iterator it=NEW.begin();
+          int i=1;
+          while (it!=NEW.end())
+          {
+            preBlobs[i]=(*it).second;
+            preBlobs[i]->label=i;
+            it++;
+            i++;
+          }
+
+          tP.start();
+
+          if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
+          {
+            printSummary(preBlobs,NEW,true);
+          }
+
+          LARVAE_COUNT=preBlobs.size();
+        }
+
+        if (SHOWTAGS!=0)
+        {
+          it=tracked_blobs.begin();
+          while (it!=tracked_blobs.end())
+          {
+            std::stringstream sstm;
+            cvb::CvBlob *blob=it->second;
+            //is_larva(blob,true);
+            //std::cout << blob->label << ", " << is_larva(blob,0,0) << std::endl;
+            /*if(!detected_larvae[blob->label].isCluster)
+              {
+              double defectsSUM;
+              unsigned int ndefects;
+              is_larva(blob,ndefects,defectsSUM);
+              double compL,compW;
+              double perimeter=getPerimeter(*blob);
+              double grey_val=getGreyValue(*blob);
+              lengthAreaPerimeter(blob->area,
+              perimeter,
+              compL, compW);
+              std::cout << 1000 + blob->label << " , " << blob->area << " , " <<
+              detected_larvae[blob->label].length.back() << " , " <<
+              compL/2 << " , " <<
+              detected_larvae[blob->label].width.back() << " , " <<
+              compW/2 <<  " , " <<
+              perimeter << " , " <<
+              ndefects << " , " <<
+              defectsSUM  << " , " <<
+              grey_val << 
+              std::endl;
+              }*/
+            //fixContour(*blob,200,origFrame);
+            if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
+            {
+              printBlobFile(detected_larvae[it->first]);
+            }
+            try
+            {
+              std::vector<unsigned int> &clusterMBs=
+                detected_clusters.at(it->first);
+              sstm << it->first << printVector(clusterMBs,1);
+              /*sstm << "(" << detected_larvae[it->first].old_ID <<")";*/
+              cv::putText(origFrame,
+                  sstm.str(),
+                  cv::Point2f(blob->centroid.x+12,blob->centroid.y+12),
+                  cv::FONT_HERSHEY_PLAIN,
+                  0.7,
+                  cv::Scalar(255,255,255),
+                  1,
+                  CV_AA);
+            }
+            catch (const std::out_of_range& oor)
+            {
+              //out of range. i.e. it's not there :)
+              sstm << (*it).first;
+              /*sstm << "(" << detected_larvae[it->first].old_ID <<")";*/
+              cv::putText(origFrame,
+                  sstm.str(),
+                  cv::Point2f(blob->centroid.x+12,blob->centroid.y+12),
+                  cv::FONT_HERSHEY_PLAIN,
+                  0.8,
+                  cv::Scalar(255,255,255),
+                  1,
+                  CV_AA);
+            }
+
+            /*
+               cv::putText(frame,
+               "*",
+               cv::Point2f(blob->centroid.x+12,blob->centroid.y-12),
+               cv::FONT_HERSHEY_PLAIN,
+               0.8,
+               cv::Scalar(100,100,255),
+               1,
+               CV_AA);
+               */
+            // Here we define an extra PADDING
+            int PAD=2;
+            cv::Mat larvaROI;
+            try{
+              larvaROI=cv::Mat(origFrame,
+                  cv::Rect(blob->minx-ROI_PADDING-PAD,
+                    blob->miny-ROI_PADDING-PAD,
+                    blob->maxx-blob->minx+1+2*(ROI_PADDING+PAD),
+                    blob->maxy-blob->miny+1+2*(ROI_PADDING+PAD))
+                  );
+            }
+            catch(...)
+            {
+              std::cerr << "larvaROI failed. continuing" << std::endl;
+              break;
+            }
+            cv::Point2f cr(blob->centroid.x-blob->minx,blob->centroid.y-blob->miny);
+            //larvaSkel testSkel(larvaROI,cr);
+            //testSkel.drawSkeleton(larvaROI,cv::Scalar(0,0,255));
+            //cv::imshow("ROI",larvaROI);
+            //cv::waitKey(1);
+            //if(is_larva(blob)<IS_LARVA_THRESHOLD)
+            //{
+            //createLarvaContour(larvaROI,*blob,CV_8UC3,0,false,
+            //    cv::Scalar(0,255,0),8);
+            drawSpinePoints(origFrame,detected_larvae[it->first]);
+            /*
+               cv::circle(frame,
+               cv::Point2f(blob->centroid.x,blob->centroid.y),
+               0,
+               cv::Scalar(255,0,0),
+               -1);
+               */
+            //}
+
+            if(detected_larvae[it->first].isCluster==false)
+            {
+              cv::circle(larvaROI,
+                  cv::Point2f(
+                    detected_larvae[it->first].heads.back().x+PAD,
+                    detected_larvae[it->first].heads.back().y+PAD),
+                  1,
+                  cv::Scalar(0,255,0),
+                  -1);
+
+              cv::circle(larvaROI,
+                  cv::Point2f(
+                    detected_larvae[it->first].tails.back().x+PAD,
+                    detected_larvae[it->first].tails.back().y+PAD),
+                  1,
+                  cv::Scalar(0,0,255),
+                  -1);
+
+              //plotAngle(blob,larvaROI,PAD);
+            }
+            it++;
+          }
+        }
+
+        cvReleaseImage(&labelImg);
+
+      }
 
       cv::imshow("Extracted Frame",origFrame);
       if (LRVTRACK_SAVE_PROCESSED_VIDEO!="")

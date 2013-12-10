@@ -13,7 +13,7 @@
                float ***a );
 }*/
 
-void spline2(std::vector<cv::Point2f> &cp,
+void spline3(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
            std::vector<float> &w,
            int n,
@@ -21,8 +21,33 @@ void spline2(std::vector<cv::Point2f> &cp,
            std::vector<cv::Point2f> &np,
            std::vector<unsigned int> &di);
 
+void spline4(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<unsigned int> &di,
+           std::map<float,unsigned int> &cm);
+
+void spline2(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<unsigned int> &di,
+           std::map<float,unsigned int> &cm,
+           std::vector<float> &vcurv);
+
 double diff(cv::Point2f &a, cv::Point2f &b);
 void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points);
+
+void pointsToContourVector(cvb::CvBlob &blob,
+                         std::vector<cv::Point2f> &kpoints,
+                         cv::Mat &frame, 
+                         int PAD,
+                         std::vector<cv::Point2f> &points);
 
 void blobToContourVector(cvb::CvBlob &p,
                          cv::Mat &frame, 
@@ -37,7 +62,8 @@ void createLarvaContour(cv::Mat &lrvROI,
                         int PADDING=0,
                         bool FILL=true,
                         cv::Scalar color=cv::Scalar(255),
-                        int connectivity=4
+                        int connectivity=4,
+                        cv::Scalar bg=cv::Scalar(0)
                         );
 
 /*
@@ -114,7 +140,7 @@ double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame);
 
 double getPerimeter(cvb::CvBlob &blob);
 
-double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob,cv::Mat &grey_frame);
+double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob,cv::Mat &grey_frame,cv::Mat &preFrame);
 double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD=0);
 double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
 double angleD( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
@@ -138,6 +164,7 @@ void getBestCurvature(std::vector<float> &c,
                       std::vector<float> &dmax
                       );
 void getBestCurvatureS(std::vector<float> &c,
+                      std::map<float,unsigned int> &curvatures,
                       std::vector<unsigned int> &di,
                       std::vector<float> &dmax
                       );
@@ -157,6 +184,22 @@ template<typename data>
     }
     data retval=sum*(1.0/range);
     return retval;
+  }
+
+template<typename data>
+  void smoothVecMap(std::vector<data> &in,
+                 std::map<data,unsigned int> &out,
+                 std::vector<data> &out2,
+                 int range, 
+                 data initval)
+  {
+    for(unsigned int i=0;i<in.size();i++)
+    {
+      data ret;
+      ret=getNeighboursAvg(in,i,range,initval);
+      out[ret]=i;
+      out2.push_back(ret);
+    }
   }
 
 template<typename data>

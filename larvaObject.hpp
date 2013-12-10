@@ -13,7 +13,9 @@ public:
   unsigned int start_frame;
   unsigned int lifetimeWithStats;
   unsigned int lastBlobWithStats;
+  unsigned int lastFrameWithStats;
   unsigned int larva_ID;
+  unsigned int old_ID;
   unsigned int parentBlobID;
   bool isCluster;
   std::vector<double> capture_times;
@@ -58,6 +60,13 @@ public:
   std::vector<cv::Point2f> centroids_full;
   std::vector<double> midpoint_speed_x;
   std::vector<double> midpoint_speed_y;
+  double max_midpoint_speed;
+  double min_midpoint_speed;
+
+  std::vector<double> centroid_speed_x;
+  std::vector<double> centroid_speed_y;
+  double max_centroid_speed;
+  double min_centroid_speed;
 
   std::vector<double> centroid_distance_x;
   std::vector<double> centroid_distance_y;

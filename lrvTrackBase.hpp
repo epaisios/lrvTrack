@@ -3,6 +3,7 @@
 #include <utility>
 #include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #ifdef LRVTRACK_WITH_CUDA
 #include "opencv2/gpu/gpu.hpp"
@@ -95,6 +96,27 @@ inline void lrvTrackNormalize(cv::InputArray src,
   cv::normalize(src,dst,alpha,beta,norm_type);
 }
 #endif
+
+namespace std
+{
+  template <typename number >
+    std::string printVector(std::vector<number> vec,int position=0)
+    {
+      if (vec.size()==0)
+        return "";
+      std::stringstream sstm;
+      //bool const is_number= std::is_arithmetic<number>::value;
+      //static_assert( is_number, "Provided type is not an arithmetic type");
+      sstm << "[" ;
+      typename std::vector<number>::const_iterator i=vec.begin()+position;
+      sstm << *i ;
+      ++i;
+      for( ; i != vec.end(); ++i)
+        sstm << ","<< *i;
+      sstm << "]";
+      return sstm.str();
+    }
+}
 
 #endif
 
