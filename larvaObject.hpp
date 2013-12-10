@@ -5,6 +5,64 @@
 #include "larvaDistanceMap.hpp"
 
 /*
+ * Class containing information about each blob
+ * The class contains a bunch of synchronized vectors.
+ */
+
+class blobObject_OL{
+  private:
+    // ID of the larva
+    unsigned int ID;
+
+    // ID of the originating blob of the larva.
+    //  if the blob was there from the begining then
+    //    originating_ID=ID
+    //  if the blob is comming after dissapearing
+    //    originating_ID=0
+    unsigned int originating_ID;
+
+    // ID where the blob entered before it dissappeared
+    //  if the blob ends without a collision or dissapearing
+    //  ending_ID=ID
+    //  if the blob dissapears
+    //  ending_ID=0
+    
+    unsigned int ending_ID;
+
+    // Frame number of Nth data instance
+    std::vector<unsigned int> FRAME;
+
+    // Frames of existence until the Nth data instance
+    std::vector<unsigned int> FRAMES_COUNT;
+
+    //Vectors of length, width,size, perimeter, grey_value,various speeds etc.
+    std::vector<double> length;
+    std::vector<double> width;
+    std::vector<double> size;
+    std::vector<double> perimeter;
+    std::vector<double> greyvalue;
+    std::vector<double> spine0_speedx;
+    std::vector<double> spine0_speedy;
+    std::vector<double> spineM_speedx;
+    std::vector<double> spineM_speedy;
+    std::vector<double> spineL_speedx;
+    std::vector<double> spineL_speedy;
+    std::vector<double> centroid_speedx;
+    std::vector<double> centroid_speedy;
+
+    //Vector of centroids
+    std::vector<double> centroids;
+
+    //Vector of detailed Contour, spine reconstructions
+    std::vector<larvaDistanceMap> larvaDistances;
+
+    //Vector of original blobs
+    std::vector<cvb::CvBlob> blobs;
+
+    bool collisionObject;
+};
+
+/*
  * Class containing information about each larva and its history on the plate.
  */
 class larvaObject

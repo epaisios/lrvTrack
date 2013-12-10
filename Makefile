@@ -35,7 +35,9 @@ all:
 	@g++ $(GCCFLAGS) -g -O0 -ansi $(INCLUDES) -c larvaSkel.cpp -o larvaSkel.o
 	@g++ $(GCCFLAGS) -g -O0 -ansi $(INCLUDES) -c larvaDistanceMap.cpp -o larvaDistanceMap.o
 	@g++ $(GCCFLAGS) -g -O0 -ansi $(INCLUDES) -c larvaObject.cpp -o larvaObject.o
-	@g++ $(GCCFLAGS) -g -O0 -ansi $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib main.cpp $(LIBS) -o lrvTrack *.o alglib/*.o
+	@g++ $(GCCFLAGS) -g -O0 -ansi $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib lrvTrackOL.cpp $(LIBS) -o lrvTrack *.o alglib/*.o
+#@g++ $(GCCFLAGS) -g -O0 -ansi $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib main.cpp $(LIBS) -o lrvTrack *.o alglib/*.o
+
 
 gpu:
 	g++ $(GCCFLAGS_GPU) -g -Wall -ansi $(INCLUDES) -c alglib/alglibinternal.cpp -o alglibinternal.o

@@ -4437,7 +4437,6 @@ int main(int argc, char* argv[])
   //unsigned int fg_threshold=10;
   unsigned int thresholdlow=35;
   unsigned int thresholdhigh=255;
-  LARVAE_COUNT=0;
 
   if (!capture.isOpened())
     return 1;

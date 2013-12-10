@@ -69,7 +69,7 @@ unsigned int HISTORY_SIZE=10;
 
 double VIDEO_FPS=24.1;
 static unsigned int CURRENT_FRAME=0;
-unsigned int LARVAE_COUNT;
+unsigned int LARVAE_COUNT=0;
 
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
 //std::map<unsigned int,larvaObject> detected_larvae;
