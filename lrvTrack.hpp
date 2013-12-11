@@ -77,6 +77,7 @@ std::map<unsigned int,larvaObject> detected_larvae;
 std::vector<unsigned int> lost_larvae;
 
 std::vector<cv::Vec3f> circles;
+std::vector<cv::Vec3f> cups;
 
 cvb::CvBlobs NEW;
 
