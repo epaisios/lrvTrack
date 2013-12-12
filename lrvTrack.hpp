@@ -113,8 +113,8 @@ double PIXEL_SIZE_IN_MM=0.14450867052023;
 
 cv::Mat frame;
 cv::Mat thresholded_frame;
-cv::Mat grey_frame;
-cv::Mat origFrame;
+cv::Mat greyFrame;
+cv::Mat colorFrame;
 cv::Mat bgFrame;
 cv::Mat previousFrame;
 IplImage *labelImg;

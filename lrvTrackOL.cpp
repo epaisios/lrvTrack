@@ -21,6 +21,36 @@ namespace fs = boost::filesystem;
 using namespace cv;
 using namespace std;
 
+void bg_without_larvae(cv::Mat &fgImg)
+{
+  IplImage *fflabelImg;
+
+  cvb::CvBlobs blobs;
+  IplImage ipl_thresholded = fgImg;
+
+  fflabelImg=cvCreateImage(
+      cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
+
+  cvLabel(&ipl_thresholded, fflabelImg, blobs);
+  cvb::cvFilterByArea(blobs, 40, 1000);
+  cvb::CvBlobs::iterator it=blobs.begin();
+  double c,max=0.0;
+  while (it!=blobs.end())
+  {
+    Mat ROI;
+    cvb::CvBlob &blob=*(it->second);
+    createLarvaROI(fgImg, ROI, blob);
+    createLarvaContour(ROI,
+                        blob,
+                        CV_8UC1,
+                        0,
+                        true,
+                        cv::Scalar(0),
+                        8);
+    
+    ++it;
+  }
+}
 
 //The function removes the background from the new frame
 //and applies thresholding to derive the image in which we look
@@ -68,11 +98,14 @@ void process_frame(Mat &newFrame, //origFrame,
           Point2f(circles[bestCircle][0],circles[bestCircle][1]),
           int(circles[bestCircle][2]),Scalar(255),-1);
 
-      // Add the circle as a marker to the showFrame
-      circle(showFrame,
-          Point2f(circles[bestCircle][0],circles[bestCircle][1]),
-          int(circles[bestCircle][2]),
-          Scalar(0,255,0),1);
+      if(!showFrame.empty())
+      {
+        // Add the circle as a marker to the showFrame
+        circle(showFrame,
+            Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+            int(circles[bestCircle][2]),
+            Scalar(0,255,0),1);
+      }
     }
     else
     {
@@ -132,14 +165,12 @@ void process_frame(Mat &newFrame, //origFrame,
 bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput)
 {
   bool retval=capture.read(output);
+  Mat xchange;
   if(output.channels()==3)
   {
-    output.copyTo(colorOutput);
-    cvtColor(output,output,CV_BGR2GRAY);
-  }
-  else
-  {
-    cvtColor(output,colorOutput,CV_GRAY2BGR);
+    colorOutput=output;
+    output=xchange;
+    cvtColor(colorOutput,output,CV_BGR2GRAY);
   }
   if(retval==false)
     return retval;
@@ -156,6 +187,12 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput)
     output.convertTo(output,CV_32F);
     pow(output,cpow,output);
     convertScaleAbs(output,output,1,0);
+    cvtColor(output,colorOutput,CV_GRAY2BGR);
+  }
+  else
+  {
+    if(!xchange.empty())
+      cvtColor(output,colorOutput,CV_GRAY2BGR);
   }
 
   return retval;
@@ -168,7 +205,7 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput)
 //     * capture: the video capture device
 //   Output:
 //     * greyBgFrame: the Suggested background
-void extractBackground(VideoCapture &capture,
+void extract_background(VideoCapture &capture,
                        Mat &greyBgFrame)
 {
   Mat origFrame;
@@ -178,7 +215,7 @@ void extractBackground(VideoCapture &capture,
     //TODO: Error handling
     exit(1);
   }
-  
+  greyBgFrame.copyTo(origFrame);
   int votes=60; //For the HoughCircles call
   int THRESH=THRESH_BINARY;
 
@@ -250,7 +287,7 @@ void extractBackground(VideoCapture &capture,
 
       Mat thr;
       thr=greyBgFrame&fgROI;
-
+      double thresholdlow,thresholdhigh=0;
       morphologyEx(thr,thr,MORPH_OPEN,Mat(),Point2f(-1,-1),9);
       threshold(thr,
                     thr,
@@ -265,14 +302,14 @@ void extractBackground(VideoCapture &capture,
                        3, 40); // min and max radiusV
     }
 
-  //Initialize the background frame. Everything that is in the circle
+  //Initialize a first background frame. Everything that is in the circle
   //is black (i.e. will be excluded from the background). 
   //Outside the circle is white.
   if(circles.size()>0)
   {
     circle(greyBgFrame,
         Point2f(circles[bestCircle][0], circles[bestCircle][1]),
-        circles[bestCircle][2],
+        circles[bestCircle][2]*0.9,
         Scalar(),
         -1);
   }
@@ -284,49 +321,20 @@ void extractBackground(VideoCapture &capture,
         Scalar(0));
   }
   Mat tempFrame;
-  process_frame(greyBgFrame,
-               tempFrame,
+  Mat showFrame;
+  process_frame(origFrame,
                greyBgFrame,
-               origFrame,
-               cups,
-               thresholdlow,
-               thresholdhigh,
+               showFrame,
+               tempFrame,
                THRESH_BINARY|THRESH_OTSU);
+  // We remove the larvae from the background
+  bg_without_larvae(tempFrame);
 
-  Vec3f &mc=circles[bestCircle];
-  double radius;
-  findFurthestLarva(tempFrame,
-                    Point2f(circles[bestCircle][0],circles[bestCircle][1]),
-                    radius);
-  if(radius>circles[bestCircle][2]*0.9)
-    radius=circles[bestCircle][2]*0.9;
-  if(bgFrame.channels()>1)
-    {
-      cvtColor(bgFrame,greyBgFrame,CV_BGR2GRAY);
-    }
-  else
-    {
-      bgFrame.copyTo(greyBgFrame);
-    }
-  if(circles.size()>0)
-  {
-    circle(greyBgFrame,
-        Point2f(circles[bestCircle][0], circles[bestCircle][1]), // circle centre
-        radius,       // circle radius
-        Scalar(), // color
-        -1);              // thickness
-  }
-  else
-  {
-    circle(greyBgFrame,
-        Point2f(greyBgFrame.rows/2, greyBgFrame.cols/2), // circle centre
-        radius,       // circle radius
-        Scalar(), // color
-        -1);              // thickness
-
-  }
-  Mat greyBgFrameDefault;
-  greyBgFrame.copyTo(greyBgFrameDefault);
+  // We add the greyBgFrame with the tempFrame to get the full
+  // background image
+  add(greyBgFrame,tempFrame,greyBgFrame);
+ return;
+  
 }
 
 // Function to take care of the various input possibilities. 
@@ -654,5 +662,10 @@ int main(int argc, char* argv[])
     cerr << "Error setting up the capture device (camera or video file)" << endl;
     exit(1);
   }
+  extract_background(capture,bgFrame);
 
+  while(get_next_frame(capture,greyFrame,colorFrame))
+  {
+
+  }
 }
