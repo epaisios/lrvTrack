@@ -19,7 +19,6 @@
 #define ROUNDNESS_THRESHOLD 230000
 
 typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
-
 #ifndef NO_SSE
 #define ltsqrt SSESqrt_Recip_Times_X
 

@@ -92,7 +92,7 @@ bool getNextFrame(cv::VideoCapture &capture, cv::Mat &output,cv::Mat &origFrame)
   if(retval==false)
     return retval;
 
-  grey_frame.copyTo(previousFrame);
+  greyFrame.copyTo(previousFrame);
   //cv::adabilateralFilter(grey_frame,grey_frame,5,8,2);
 
   if(LRVTRACK_INVERT==true)
@@ -246,7 +246,7 @@ void principalAxes(cvb::CvBlob &blob,
   cv::Mat cROI,ROI,lrvROI;
 
   try{
-    cROI=grey_frame(cv::Rect(blob.minx,
+    cROI=greyFrame(cv::Rect(blob.minx,
           blob.miny,
           blob.maxx-blob.minx+1,
           blob.maxy-blob.miny+1)
@@ -532,8 +532,8 @@ void findHeadTail(larvaObject &lrv,
     {
       int BIAS=0;
       double curvatureBias=BIAS*lrv.lrvDistances.back().curvatureBias;
-      double fsz=getSurroundingSize(sp_front,blob,origFrame,previousFrame);
-      double bsz=getSurroundingSize(sp_back,blob,origFrame,previousFrame);
+      double fsz=getSurroundingSize(sp_front,blob,colorFrame,previousFrame);
+      double bsz=getSurroundingSize(sp_back,blob,colorFrame,previousFrame);
 
       if(curvatureBias==BIAS)
       {
@@ -699,7 +699,7 @@ void updateOneLarva(cvb::CvBlobs &In,
       newLarva.area_max=newLarva.area_min=blob.area;
       newLarva.area_min=newLarva.area_min=blob.area;
 
-      double greyVal=getGreyValue(larvaROI,blob,grey_frame);
+      double greyVal=getGreyValue(larvaROI,blob,greyFrame);
       newLarva.grey_value.push_back(greyVal);
       newLarva.grey_value_mean = greyVal;
       newLarva.grey_value_sum= greyVal;
@@ -1032,7 +1032,7 @@ void updateOneLarva(cvb::CvBlobs &In,
         cur_larva.width_min=Distances.WidthDist;
       }
 
-      double greyVal=getGreyValue(larvaROI,blob,grey_frame);
+      double greyVal=getGreyValue(larvaROI,blob,greyFrame);
       cur_larva.grey_value.push_back(greyVal);
       cur_larva.grey_value_mean=(cur_larva.grey_value_mean+greyVal)/2;
       cur_larva.grey_value_sum=cur_larva.grey_value_sum+greyVal;
@@ -1333,7 +1333,7 @@ double is_larva(cvb::CvBlob *blob,bool out=false)
   fixContour(*blob,dstLarva,LRVTRACK_CONTOUR_RESOLUTION,frame);
   cv::Mat larvaROI;
   createLarvaContour(larvaROI,*blob);
-  double greyVal=getGreyValue(larvaROI,*blob,grey_frame);
+  double greyVal=getGreyValue(larvaROI,*blob,greyFrame);
   double perimeter=getPerimeter(*blob);
   double a,l,w,p;
   a=blob->area;
@@ -1612,10 +1612,10 @@ double kn_dist(unsigned int N,
   centroid.x=NEW[N]->centroid.x;
   centroid.y=NEW[N]->centroid.y;
   //computeSpine(*NEW[N],dstLarva,grey_frame);
-  fixContour(*NEW[N],dstLarva,LRVTRACK_CONTOUR_RESOLUTION,grey_frame);
+  fixContour(*NEW[N],dstLarva,LRVTRACK_CONTOUR_RESOLUTION,greyFrame);
 
   float newSize=NEW[N]->area;
-  float newGreyval=getGreyValue(larvaROI,*NEW[N],grey_frame);
+  float newGreyval=getGreyValue(larvaROI,*NEW[N],greyFrame);
   float newLength=dstLarva.MaxDist;
   float newPerimeter=getPerimeter(*NEW[N]);
   float newWidth=dstLarva.WidthDist;
@@ -1725,10 +1725,10 @@ double mh_dist(unsigned int N,unsigned int C)
   centroid.x=NEW[N]->centroid.x;
   centroid.y=NEW[N]->centroid.y;
   //computeSpine(*NEW[N],dstLarva,grey_frame);
-  fixContour(*NEW[N],dstLarva,LRVTRACK_CONTOUR_RESOLUTION,grey_frame);
+  fixContour(*NEW[N],dstLarva,LRVTRACK_CONTOUR_RESOLUTION,greyFrame);
 
   float newSize=NEW[N]->area;
-  float newGreyval=getGreyValue(larvaROI,*NEW[N],grey_frame);
+  float newGreyval=getGreyValue(larvaROI,*NEW[N],greyFrame);
   float newLength=dstLarva.MaxDist;
   float newPerimeter=getPerimeter(*NEW[N]);
   float newWidth=dstLarva.WidthDist;
@@ -4131,7 +4131,7 @@ void updateBG(cv::Mat &oldbgFrame,
   std::vector<cv::Vec3f>::
   const_iterator itc= circles.begin();
   cv::Mat newbgFrame;
-  grey_frame.copyTo(newbgFrame);
+  greyFrame.copyTo(newbgFrame);
   //std::cout << circles.size() << std::endl;
   cvb::CvBlobs::iterator f=blobs.begin();
   for(;f!=blobs.end();++f)
@@ -4198,15 +4198,15 @@ void processFrame(cv::Mat &origFrame,
     // Captured frame to BW (necessary for various filters and speed)
     if(origFrame.channels()>1)
     {
-      cvtColor(origFrame,grey_frame,CV_BGR2GRAY);
+      cvtColor(origFrame,greyFrame,CV_BGR2GRAY);
     }
     else
     {
-      origFrame.copyTo(grey_frame);
-      cvtColor(grey_frame,origFrame,CV_GRAY2BGR);
+      origFrame.copyTo(greyFrame);
+      cvtColor(greyFrame,colorFrame,CV_GRAY2BGR);
     }
 
-    cv::absdiff(grey_frame,grey_bgFrame,fg_frame);
+    cv::absdiff(greyFrame,grey_bgFrame,fg_frame);
     //cv::addWeighted(fg_frame, 1.0, test, -2.0, 0.0, test);
 
     fgROI=cv::Mat(fg_frame.rows , fg_frame.cols,fg_frame.depth(),cv::Scalar(0));
@@ -4445,7 +4445,7 @@ int main(int argc, char* argv[])
   cv::namedWindow("Extracted Frame");
 
   //capture.read(bgFrame);
-  getNextFrame(capture,bgFrame,origFrame);
+  getNextFrame(capture,bgFrame,colorFrame);
 
   
   cv::VideoWriter vidOut,vidPOut;
@@ -4629,7 +4629,7 @@ int main(int argc, char* argv[])
   processFrame(bgFrame,
                tempFrame,
                grey_bgFrame,
-               origFrame,
+               colorFrame,
                cups,
                thresholdlow,
                thresholdhigh,

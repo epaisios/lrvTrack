@@ -107,6 +107,7 @@ void fixContour(
     larvaDistanceMap &Distances,
     unsigned int RES,
     cv::Mat &frame,
+    cv::Mat &previousFrame,
     std::vector<cv::Point2f> *heads=NULL,
     std::vector<cv::Point2f> *tails=NULL,
     std::vector<cvb::CvBlob> *blobs=NULL);

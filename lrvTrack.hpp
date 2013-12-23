@@ -4,8 +4,11 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/ml/ml.hpp>
-//#include <opencv2/superres/superres.hpp>
-//#include <opencv2/superres/optical_flow.hpp>
+#ifdef LRVTRACK_WITH_CUDA
+#include <opencv2/gpu/gpu.hpp>
+#elif defined(LRVTRACK_WITH_OPENCL)
+#include <opencv2/ocl/ocl.hpp>
+#endif
 #include <tbb/concurrent_hash_map.h>
 #include <fstream>
 #include "larvaObject.hpp"
@@ -72,7 +75,6 @@ static unsigned int CURRENT_FRAME=0;
 unsigned int LARVAE_COUNT=0;
 
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
-//std::map<unsigned int,larvaObject> detected_larvae;
 std::map<unsigned int,larvaObject> detected_larvae;
 std::vector<unsigned int> lost_larvae;
 
@@ -101,9 +103,6 @@ std::map<unsigned int, std::vector<unsigned int> > assignedNew;
 std::vector<unsigned int> newInFrame;
 //**********************************************************************
 
-std::vector<unsigned int> current_new;
-std::vector<unsigned int> current_gone;
-
 cpu_timer tS;
 cpu_timer tP;
 cpu_times FrameEllapsedTime;
@@ -111,8 +110,7 @@ cpu_times CurrentTime;
 
 double PIXEL_SIZE_IN_MM=0.14450867052023;
 
-cv::Mat frame;
-cv::Mat thresholded_frame;
+cv::Mat processedFrame;
 cv::Mat greyFrame;
 cv::Mat colorFrame;
 cv::Mat bgFrame;

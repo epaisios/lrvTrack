@@ -4,6 +4,47 @@
 #include "boost/dynamic_bitset.hpp"
 #include "alglib/interpolation.h"
 
+std::string printVector(alglib::real_1d_array &vec)
+{
+  if (vec.length()==0)
+    return "";
+  std::stringstream sstm;
+  //bool const is_number= std::is_arithmetic<number>::value;
+  //static_assert( is_number, "Provided type is not an arithmetic type");
+  unsigned int i=0;
+  sstm << "[" ;
+  sstm << vec[i] ;
+  ++i;
+  for( ; i < vec.length(); ++i)
+    sstm << ","<< vec[i];
+  sstm << "]";
+  return sstm.str();
+}
+
+double p2fdist(double x1,double y1, double x2, double y2)
+{
+  if(x1==x2 && y1==y2)
+    return 0;
+  float xdiff=x1 - x2;
+  float ydiff=y1 - y2;
+  float sqDst=xdiff*xdiff + ydiff*ydiff;
+  float res;
+  ltsqrt(&res,&sqDst);
+  return (double) res;
+}
+
+double p2fdist(cv::Point2f &a, cv::Point2f &b)
+{
+  if(a==b)
+    return 0;
+  float xdiff=a.x - b.x;
+  float ydiff=a.y - b.y;
+  float sqDst=xdiff*xdiff + ydiff*ydiff;
+  float res;
+  ltsqrt(&res,&sqDst);
+  return (double) res;
+}
+
 //cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c)
 cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &e, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d)
 {
@@ -671,13 +712,13 @@ void getBestCurvatureS(std::vector<float> &curv,
   //std::map<float,unsigned int> c;
   std::vector<float> c;
   std::vector<float> c_tmp;
-  int sf=21;
+  int sf=11;
   //std::vector<double> idx;
   //for(unsigned int i=0;i<curv.size();i++)
   //{
   //  idx.push_back(i);
   //}
-  curv[0]=(curv.back()+curv[1])/2;
+  //curv[0]=(curv.back()+curv[1])/2;
   //Gnuplot g1("linespoints");
   //Gnuplot g2("linespoints");
   //g1.plot_xy(idx,curv,"curvature");
@@ -734,7 +775,7 @@ void getBestCurvatureS(std::vector<float> &curv,
   float m1=10.0;
   int i1;
   unsigned int sz1;
-  while(m1>(float) 1.1)
+  while(m1>(float) 3.3)
   {
     if(f==maxima.rend())
       return;
@@ -892,6 +933,35 @@ void getBestCurvature(std::vector<float> &c,
   }
 }
 
+void extractCentripetal(
+    alglib::real_1d_array &x,
+    alglib::real_1d_array &y,
+    alglib::real_1d_array &ad)
+{
+  unsigned int step=1;
+  float csqrt=0.0;
+  for(unsigned int i=step;i<x.length();i+=step)
+  {
+      csqrt+=sqrt(p2fdist(x[i],y[i],x[i-1],y[i-1]));
+      if(csqrt!=csqrt)
+        std::cerr << "csqrt: ["<<x[i]<<","<<y[i]<<"], "<<x[i-1]<<","<<y[i-1]<<std::endl;
+  }
+  csqrt+=sqrt(p2fdist(x[x.length()-1],y[y.length()-1],x[0],y[0]));
+  if(csqrt!=csqrt)
+    std::cerr << "csqrt: ["<<x[x.length()-1]<<","<<y[y.length()-1]<<"], "<<x[0]<<","<<y[0]<<std::endl;
+  ad[0]=0;
+  unsigned int i=1;
+  for(i=1;i<x.length()-1;i++)
+  {
+    float newD = ad[i-1] + sqrt(p2fdist(x[i-1],y[i-1],x[i],y[i]))/csqrt;
+    ad[i]=newD;
+    if(newD!=newD)
+      std::cerr << "newD: ["<<x[i]<<","<<y[i]<<"], "<<x[i-1]<<","<<y[i-1]<<std::endl;
+  }
+  i=x.length()-1;
+  ad[i]=1.0;
+}
+
 void splint(std::vector<cv::Point2f> &cp,
             std::vector<float> &x2a, 
             std::vector<float> &y2a, 
@@ -973,88 +1043,76 @@ void spline4(std::vector<cv::Point2f> &cp,
            int RES,
            std::vector<cv::Point2f> &np,
            std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &curvatures)
+           std::map<float,unsigned int> &curvatures,
+           std::vector<float> &vcurv)
 {
-  /*std::cerr << printVector(cp) << std::endl; 
-  std::cerr << std::endl; 
-  std::cerr << printVector(d) << std::endl; 
-  std::cerr << std::endl; 
-  std::cerr << printVector(w) << std::endl; 
-  std::cerr << std::endl; */
   alglib::real_1d_array x,y;                 
-  alglib::real_2d_array xy;                  
   alglib::real_1d_array ad,aw;               
-  alglib::real_1d_array dummy;               
-  alglib::integer_1d_array dummyint;         
   alglib::ae_int_t info;                     
-  alglib::ae_int_t m=n-2;
+  alglib::ae_int_t m=n;
   unsigned int extra=5;
-  x.setlength(m+extra);                          
-  y.setlength(m+extra);                          
-  xy.setlength(n,2);                         
-  ad.setlength(m+extra);                         
-  aw.setlength(m+extra);                         
+  x.setlength(m+2*extra);                          
+  y.setlength(m+2*extra);                          
+  ad.setlength(m+2*extra);                         
+  aw.setlength(m+2*extra);                         
   alglib::spline1dinterpolant sx;            
   alglib::spline1dinterpolant sy;            
   alglib::spline1dfitreport rep;             
-  double rho=-2.9;
+  double rho=2.5;
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
+  for(int i=0;i<extra;i++)
+  {
+    x[i]=cp[cp.size()-extra+i].x;
+    y[i]=cp[cp.size()-extra+i].y;
+  }
   for(int i=0;i<m;i++)
   {
-    x[i]=cp[i].x;
-    y[i]=cp[i].y;
-    xy[i][0]=cp[i].x;
-    xy[i][1]=cp[i].y;
-    ad[i]=d[i]/(1+d[4]);
-    aw[i]=w[i];
+    x[i+extra]=cp[i].x;
+    y[i+extra]=cp[i].y;
   }
   for(int i=0;i<extra;i++)
   {
-    x[m+i]=cp[i].x;
-    y[m+i]=cp[i].y;
-    ad[m+i]=(1+d[i])/(1+d[4]);
-    aw[m+i]=w[i];
+    x[extra+m+i]=cp[i].x;
+    y[extra+m+i]=cp[i].y;
   }
-
-  alglib::spline1dfitpenalizedw(ad,x,aw,m+extra,rho,info,sx,rep);
-  alglib::spline1dfitpenalizedw(ad,y,aw,m+extra,rho,info,sy,rep);
-  //alglib::spline1dfitpenalized(ad,x,m+extra,rho,info,sx,rep);
-  //alglib::spline1dfitpenalized(ad,y,m+extra,rho,info,sy,rep);
+  //alglib::spline1dfitpenalizedw(ad,x,aw,m+extra,rho,info,sx,rep);
+  //alglib::spline1dfitpenalizedw(ad,y,aw,m+extra,rho,info,sy,rep);
+  try{
+    alglib::spline1dfitpenalized(ad,x,m+extra,rho,info,sx,rep);
+    alglib::spline1dfitpenalized(ad,y,m+extra,rho,info,sy,rep);
+  }
+  catch(alglib::ap_error &e)
+  {
+    std::cerr << "Spline Error:" << e.msg << std::endl;
+    std::cerr << printVector(x) << std::endl;
+    std::cerr << printVector(y) << std::endl;
+    std::cerr << printVector(ad) << std::endl;
+    return;
+  }
   //alglib::spline1dfithermite(ad,x,m+extra,info,sx,rep);
   //alglib::spline1dfithermite(ad,y,m+extra,info,sy,rep);
   
-  double t0=ad[4];
+  double t0=ad[extra];
+  double tn=ad[extra+m];
   double t;
-  double step=(1.0-t0)/(RES);
+  double step=(tn-t0)/(RES);
   std::vector<float> dmax(di.size(),0);
   std::vector<float> curvature;
   std::vector<float> pvals;
   for (int i=0;i<RES;i++)
   {
     t=t0+i*step;
-    //double x,y;
     double vx,vy;
-    //double dx,dy;
-    //double d2x,d2y;
-    //alglib::pspline2calc(p,t,x,y);
     vx = spline1dcalc(sx, t);
     vy = spline1dcalc(sy, t);
     cv::Point2f N(vx,vy);
-    NP.push_back(N);
+    np.push_back(N);
     pvals.push_back(t);
-    //alglib::pspline2diff2( p, t, x, dx, d2x, y, dy, d2y);
-
-    //dp.push_back(cv::Point2f(d2x,d2y));
-    //double val=(dx*d2y-dy*d2x)/pow(dx*dx+dy*dy,1.5);
-    //curvature.push_back(val);
   }
   pvals.push_back(t+step);
-  smoothVec(NP,np,5,cv::Point2f(0,0));
-  //np=NP;
-  std::vector<float> scurvature;
-  curvVec(np,pvals,scurvature);
-  getBestCurvatureS(scurvature,curvatures,di,dmax);
+  curvVec(np,pvals,vcurv);
+  getBestCurvatureS(vcurv,curvatures,di,dmax);
 }
 
 void spline2(std::vector<cv::Point2f> &cp,
@@ -1062,31 +1120,21 @@ void spline2(std::vector<cv::Point2f> &cp,
            std::vector<float> &w,
            int n,
            int RES,
-           /*int d0,
-           int dm,*/
            std::vector<cv::Point2f> &np,
            std::vector<unsigned int> &di,
            std::map<float,unsigned int> &curvatures,
            std::vector<float> &vcurv)
 {
-  //alglib::real_1d_array x,y;
   alglib::real_2d_array xy;
-  alglib::real_1d_array ad,aw;
-  alglib::real_1d_array dummy;
-  alglib::integer_1d_array dummyint;
   xy.setlength(n+2,2);
   int rot=10;
   //xyrot.setlength(n+2,2);
-  ad.setlength(n);
-  aw.setlength(n);
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
   for(int i=0;i<n;i++)
   {
     xy[i][0]=cp[i].x;
     xy[i][1]=cp[i].y;
-    ad[i]=d[i];
-    aw[i]=w[i];
   }
   xy[n][0]=xy[0][0];
   xy[n][1]=xy[0][1];

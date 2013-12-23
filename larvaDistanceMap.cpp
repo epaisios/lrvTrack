@@ -64,30 +64,6 @@ void lBFS(int p1,
     }
 }
 
-double p2fdist(double x1,double y1, double x2, double y2)
-{
-  if(x1==x2 && y1==y2)
-    return 0;
-  float xdiff=x1 - x2;
-  float ydiff=y1 - y2;
-  float sqDst=xdiff*xdiff + ydiff*ydiff;
-  float res;
-  ltsqrt(&res,&sqDst);
-  return (double) res;
-}
-
-double p2fdist(cv::Point2f &a, cv::Point2f &b)
-{
-  if(a==b)
-    return 0;
-  float xdiff=a.x - b.x;
-  float ydiff=a.y - b.y;
-  float sqDst=xdiff*xdiff + ydiff*ydiff;
-  float res;
-  ltsqrt(&res,&sqDst);
-  return (double) res;
-}
-
 void pointWithDist(
                    cv::Point2f &a, 
                    cv::Point2f &b, 
@@ -788,7 +764,7 @@ void smoothAndExtractCentripetal(cv::Mat &frame,
                            ppoints[1],
                            ppoints[2]); 
   xpoints.push_back(NP);
-  for(unsigned int i=1;i<ppoints.size();i+=3)
+  for(unsigned int i=1;i<ppoints.size();i++)
   {
     if(ppoints[i-1]!=ppoints[i])
     {
@@ -836,6 +812,7 @@ void fixContour(
     larvaDistanceMap &Distances,
     unsigned int RES,
     cv::Mat &frame,
+    cv::Mat &previousFrame,
     std::vector<cv::Point2f> *heads,
     std::vector<cv::Point2f> *tails,
     std::vector<cvb::CvBlob> *blobs)
@@ -847,11 +824,79 @@ void fixContour(
   std::vector<float> x2;
   std::vector<float> y2;
   std::vector<float> d;
+  cv::Point2f bp(blob.minx,blob.miny);
   //blobToPointVector(blob,cntPoints);
   //cv::approxPolyDP(cntPoints,ppoints,0.9,true);
   std::vector<cv::Point2f> xpoints;
-  int PAD=2;
+  int PAD=3;
   blobToContourVector(blob,frame,PAD,cntPoints);
+  cv::Point2f nh(0,0),nt(0,0);
+  if(heads==(std::vector<cv::Point2f> *) -14)
+  {
+    cvb::CvBlob &pblob=blobs->back();
+    cv::Point2f ph=heads->back();
+    cv::Point2f pt=tails->back();
+    cv::Mat cROI=cv::Mat(frame,
+        cv::Rect(pblob.minx-PAD,
+          pblob.miny-PAD,
+          pblob.maxx-pblob.minx+1+2*PAD,
+          pblob.maxy-pblob.miny+1+2*PAD
+          )
+        );
+  cv::Mat ROI;
+  cvtColor(cROI,ROI,CV_BGR2GRAY);
+    cv::Mat pROI=cv::Mat(previousFrame,
+        cv::Rect(pblob.minx-PAD,
+          pblob.miny-PAD,
+          pblob.maxx-pblob.minx+1+2*PAD,
+          pblob.maxy-pblob.miny+1+2*PAD
+          )
+        );
+    cv::Mat d1,d2;
+    double diff1,diff2;
+    double total1, total2;
+    d1=ROI-pROI;
+    d2=pROI-ROI;
+    cv::Mat pcROI;
+    cvtColor(pROI,pcROI,CV_GRAY2BGR);
+    cv::circle(pcROI, 
+      (ph)+cv::Point2f(PAD,PAD),
+      0,
+      cv::Scalar(0,255,0),-1);
+    cv::circle(pcROI, 
+      (pt)+cv::Point2f(PAD,PAD),
+      0,
+      cv::Scalar(0,255,0),-1);
+    std::vector<uchar> status;
+    std::vector<float> err;
+    std::vector<cv::Point2f> pp;
+    std::vector<cv::Point2f> pn;
+    pp.push_back(ph);
+    pp.push_back(pt);
+
+    cv::TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 200, 0.000000003);
+    cv::Mat flow;
+    calcOpticalFlowSF(pROI, ROI, flow,3,8,3);
+    //calcOpticalFlowFarneback(pROI, ROI, flow, 0.8, 4, 4, 100,3,0.6,cv::OPTFLOW_FARNEBACK_GAUSSIAN);
+    const cv::Point2f& fhxy = flow.at<cv::Point2f>(ph.y, ph.x);
+    const cv::Point2f& ftxy = flow.at<cv::Point2f>(pt.y, pt.x);
+    nh=cv::Point2f(ph.x+fhxy.x,ph.y+fhxy.y);
+    nt=cv::Point2f(pt.x+ftxy.x,pt.y+ftxy.y);
+    pn.push_back(nh);
+    pn.push_back(nt);
+    //calcOpticalFlowPyrLK(pROI, ROI, pp, pn, status, err, cv::Size(41,41),
+    //    29,termcrit,cv::OPTFLOW_LK_GET_MIN_EIGENVALS);
+    //nh=pn[0];
+    //nt=pn[1];
+    /*cv::circle(cROI, 
+      (pn[0])+cv::Point2f(PAD,PAD),
+      0,
+      cv::Scalar(0,255,0),-1);
+    cv::circle(cROI, 
+      (pn[1])+cv::Point2f(PAD,PAD),
+      0,
+      cv::Scalar(0,255,0),-1);*/
+  }
   //expandcontour(frame,ppoints,cntPoints);
   //ppoints.clear();
   pointsToContourVector(blob,cntPoints,frame,PAD,ppoints);
@@ -859,8 +904,8 @@ void fixContour(
   //double perimeter=cv::arcLength(xpoints,true);
   float csqrt=0.0;
   //smoothPoints(cntPoints,ppoints,frame,1);
-  smoothAndExtractCentripetal(frame,ppoints,xpoints,d,csqrt);
-  //extractCentripetal(ppoints,xpoints,d,csqrt);
+  //smoothAndExtractCentripetal(frame,ppoints,xpoints,d,csqrt);
+  extractCentripetal(ppoints,xpoints,d,csqrt);
   /*csqrt+=sqrt(p2fdist(xpoints[1],xpoints[0]));
   csqrt+=sqrt(p2fdist(xpoints[2],xpoints[1]));*/
 
@@ -879,7 +924,7 @@ void fixContour(
   d2x.push_back(0);
   d2y.push_back(0);
   cvt.push_back(0);
-  for(unsigned int i=0;i<xpoints.size();i++)
+  /*for(unsigned int i=0;i<xpoints.size();i++)
   {
     float cval=frame.at<cv::Vec3b>(xpoints[i])[0];
     //float cval=255;
@@ -909,7 +954,7 @@ void fixContour(
   {
     w[i]=w[i]/AvgGrVal;
   }
-
+  */
 std::map<float,unsigned int> curvatures;
 std::vector<unsigned int> dIdx(3,0);
 
@@ -922,8 +967,7 @@ std::vector<unsigned int> dIdx(3,0);
              );
   cv::Mat cROI,final;
   ROI.copyTo(cROI);
-  cv::Point2f bp(blob.minx,blob.miny);
-  /*for(unsigned int i=0;i<ppoints.size();i++)
+  for(unsigned int i=0;i<ppoints.size();i++)
   {
     cv::Vec3b val= cROI.at<cv::Vec3b>((ppoints[i]-bp)+cv::Point2f(PAD,PAD));
     cv::Scalar sval(0,0,val[0]+val[1]+val[2]);
@@ -931,8 +975,8 @@ std::vector<unsigned int> dIdx(3,0);
       (ppoints[i]-bp)+cv::Point2f(PAD,PAD),
       0,
       sval,-1);
-  }*/
-  static int MULT=32;
+  }
+  static int MULT=24;
   cv::resize(cROI,cROI,cv::Size(),MULT,MULT,cv::INTER_NEAREST);
   //cv::imshow("LRV1",cROI);
 
@@ -941,7 +985,7 @@ std::vector<unsigned int> dIdx(3,0);
 
 std::vector<float> vcurv;
 try{
-spline2(xpoints,
+spline4(xpoints,
            d,
            w,
            xpoints.size(),
@@ -985,6 +1029,16 @@ catch(...)
   k++;
   std::vector<cv::Point2f> spine;
   double maxLength=-1;
+  if(!(nh.x==0 && nh.y==0 && nt.x==0 && nt.y == 0))
+  {
+    int hi,ti;
+    cv::Point2f gnh=nh+bp;
+    cv::Point2f gnt=nt+bp;
+    hi=findContourPointClosestTo(gnh,newPoints);
+    ti=findContourPointClosestTo(gnt,newPoints);
+    dIdx[0]=hi;
+    dIdx[1]=ti;
+  }
   for (unsigned int i=0; i<dIdx.size()-1;i++)
   {
     for(unsigned int j=i+1; j<dIdx.size();j++)
@@ -1148,7 +1202,7 @@ else
       5,
       cv::Scalar(0,0,255),-1);
 
-  if(blob.label==6)
+  if(blob.label==0)
   {
     unsigned int i;
     /*std::vector<float> c;

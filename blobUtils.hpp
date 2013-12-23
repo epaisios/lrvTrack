@@ -28,7 +28,8 @@ void spline4(std::vector<cv::Point2f> &cp,
            int RES,
            std::vector<cv::Point2f> &np,
            std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &cm);
+           std::map<float,unsigned int> &cm,
+           std::vector<float> &vcurv);
 
 void spline2(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -39,6 +40,9 @@ void spline2(std::vector<cv::Point2f> &cp,
            std::vector<unsigned int> &di,
            std::map<float,unsigned int> &cm,
            std::vector<float> &vcurv);
+
+double p2fdist(double x1,double y1, double x2, double y2);
+double p2fdist(cv::Point2f &a, cv::Point2f &b);
 
 double diff(cv::Point2f &a, cv::Point2f &b);
 void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points);
