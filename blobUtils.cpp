@@ -30,6 +30,11 @@ double p2fdist(double x1,double y1, double x2, double y2)
   float sqDst=xdiff*xdiff + ydiff*ydiff;
   float res;
   ltsqrt(&res,&sqDst);
+    if(!std::isfinite(res))
+    {
+      std::cerr << "[" << x1 << "," << y1 << "-" << x2 << "," << y2 << "] : ";
+      std::cerr << sqDst <<std::endl;
+    }
   return (double) res;
 }
 
@@ -943,20 +948,14 @@ void extractCentripetal(
   for(unsigned int i=step;i<x.length();i+=step)
   {
       csqrt+=sqrt(p2fdist(x[i],y[i],x[i-1],y[i-1]));
-      if(csqrt!=csqrt)
-        std::cerr << "csqrt: ["<<x[i]<<","<<y[i]<<"], "<<x[i-1]<<","<<y[i-1]<<std::endl;
   }
   csqrt+=sqrt(p2fdist(x[x.length()-1],y[y.length()-1],x[0],y[0]));
-  if(csqrt!=csqrt)
-    std::cerr << "csqrt: ["<<x[x.length()-1]<<","<<y[y.length()-1]<<"], "<<x[0]<<","<<y[0]<<std::endl;
   ad[0]=0;
   unsigned int i=1;
   for(i=1;i<x.length()-1;i++)
   {
     float newD = ad[i-1] + sqrt(p2fdist(x[i-1],y[i-1],x[i],y[i]))/csqrt;
     ad[i]=newD;
-    if(newD!=newD)
-      std::cerr << "newD: ["<<x[i]<<","<<y[i]<<"], "<<x[i-1]<<","<<y[i-1]<<std::endl;
   }
   i=x.length()-1;
   ad[i]=1.0;
@@ -1076,6 +1075,7 @@ void spline4(std::vector<cv::Point2f> &cp,
     x[extra+m+i]=cp[i].x;
     y[extra+m+i]=cp[i].y;
   }
+  extractCentripetal(x,y,ad);
   //alglib::spline1dfitpenalizedw(ad,x,aw,m+extra,rho,info,sx,rep);
   //alglib::spline1dfitpenalizedw(ad,y,aw,m+extra,rho,info,sy,rep);
   try{

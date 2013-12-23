@@ -78,18 +78,19 @@ qt:
 	@g++-4.9 $(GCCFLAGS) -g $(INCLUDES_QT) -F/usr/local/lib -framework QtCore -framework QtGui  -DQT_GUI_LIB -DQT_CORE_LIB -DUNICODE -L/opt/opencv/${OPENCV_VER}-qt/lib -L/usr/local/lib main.cpp -lm -lopencv_contrib -lopencv_core -lopencv_highgui -lopencv_video -lopencv_imgproc -lcvblob -o lrvTrack *.o
 
 opt:
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/alglibinternal.cpp -o alglib/alglibinternal.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/alglibmisc.cpp -o alglib/alglibmisc.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/ap.cpp -o alglib/ap.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/integration.cpp -o alglib/integration.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/interpolation.cpp -o alglib/interpolation.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/linalg.cpp -o alglib/linalg.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/optimization.cpp -o alglib/optimization.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/solvers.cpp -o alglib/solvers.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/specialfunctions.cpp -o alglib/specialfunctions.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c alglib/statistics.cpp -o alglib/statistics.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c blobUtils.cpp -o blobUtils.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c larvaSkel.cpp -o larvaSkel.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c larvaDistanceMap.cpp -o larvaDistanceMap.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -c larvaObject.cpp -o larvaObject.o
-	@g++ $(GCCFLAGS) ${OPTFLAGS} -ansi $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib main.cpp $(LIBS) -o lrvTrack *.o alglib/*.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/alglibinternal.cpp -o alglib/alglibinternal.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/alglibmisc.cpp -o alglib/alglibmisc.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/ap.cpp -o alglib/ap.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/integration.cpp -o alglib/integration.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/interpolation.cpp -o alglib/interpolation.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/linalg.cpp -o alglib/linalg.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/optimization.cpp -o alglib/optimization.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/solvers.cpp -o alglib/solvers.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/specialfunctions.cpp -o alglib/specialfunctions.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c alglib/statistics.cpp -o alglib/statistics.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c blobUtils.cpp -o blobUtils.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c larvaSkel.cpp -o larvaSkel.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c larvaDistanceMap.cpp -o larvaDistanceMap.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -c larvaObject.cpp -o larvaObject.o
+	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib lrvTrackOL.cpp $(LIBS) -o lrvTrack *.o alglib/*.o
+#	@g++ $(GCCFLAGS) $(OPTFLAGS) -ansi $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib main.cpp $(LIBS) -o lrvTrack *.o alglib/*.o
