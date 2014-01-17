@@ -168,7 +168,8 @@ public:
     centroid_distance_x_sum(0),
     centroid_distance_y_sum(0)
   {}
-
+  
+  void dump() const;
   int switchFaultyAssignment(
     std::map<unsigned int,std::vector<unsigned int> > &detected_clusters,
     std::map<unsigned int,larvaObject> &detected_larvae

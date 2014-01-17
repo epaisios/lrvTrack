@@ -1,5 +1,5 @@
-//#ifndef __LRVTRACK_BLOBUTILS_HPP__
-//#define __LRVTRACK_BLOBUTILS_HPP__
+#ifndef __LRVTRACK_BLOBUTILS_HPP__
+#define __LRVTRACK_BLOBUTILS_HPP__
 #include <opencv2/core/core.hpp>
 #include "cvblob.h"
 
@@ -221,4 +221,4 @@ template<typename data>
   }
 }
 
-//#endif
+#endif

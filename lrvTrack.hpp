@@ -103,10 +103,10 @@ std::map<unsigned int, std::vector<unsigned int> > assignedNew;
 std::vector<unsigned int> newInFrame;
 //**********************************************************************
 
-cpu_timer tS;
+/*cpu_timer tS;
 cpu_timer tP;
 cpu_times FrameEllapsedTime;
-cpu_times CurrentTime;
+cpu_times CurrentTime;*/
 
 double PIXEL_SIZE_IN_MM=0.14450867052023;
 

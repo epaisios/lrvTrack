@@ -1355,10 +1355,10 @@ double getSurroundingSize(cv::Point2f &point,
   }
   cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
   cv::erode(lrvROI,lrvROI,element);
-  cv::erode(preROI,preROI,element);
+  //cv::erode(preROI,preROI,element);
   //lrvTrackNormalize(lrvROI, lrvROI, 0, 255, CV_MINMAX );
   cv::bitwise_and(ROI,lrvROI,ROI);
-  cv::bitwise_and(preROI,lrvROI,preROI);
+  //cv::bitwise_and(preROI,lrvROI,preROI);
   /*
   cv::Mat dbg;
   ROI.copyTo(dbg);
@@ -1377,11 +1377,11 @@ double getSurroundingSize(cv::Point2f &point,
   cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),12,cv::Scalar(255),-1);
   //cv::Mat test=ROI&cROI;
   cv::Mat area=ROI&cROI;
-  cv::Mat prearea=preROI&cROI;
+  //cv::Mat prearea=preROI&cROI;
   cv::equalizeHist( area, area);
-  cv::equalizeHist( prearea, prearea);
+  //cv::equalizeHist( prearea, prearea);
   lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
-  lrvTrackNormalize(prearea,prearea,0,255,cv::NORM_MINMAX);
+  //lrvTrackNormalize(prearea,prearea,0,255,cv::NORM_MINMAX);
   //cv::adaptiveBilateralFilter(test,area,cv::Size(5,5),10);
   //cv::bilateralFilter(test,area,4,8,2);
   /*
@@ -1390,9 +1390,9 @@ double getSurroundingSize(cv::Point2f &point,
   cv::waitKey(1);
   */
   double nz=cv::norm(area,cv::NORM_L1);
-  double pnz=cv::norm(prearea,cv::NORM_L1);
+  double pnz=0; //cv::norm(prearea,cv::NORM_L1);
   double nc=cv::countNonZero(area);
-  double pnc=cv::countNonZero(prearea);
+  double pnc=0;//cv::countNonZero(prearea);
   return (nz+pnz)/(nc+pnc);
   //return nz;
 }
