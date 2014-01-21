@@ -75,6 +75,7 @@ public:
   unsigned int larva_ID;
   unsigned int old_ID;
   unsigned int parentBlobID;
+  std::vector<unsigned int> childrenIDs;
   bool isCluster;
   std::vector<double> capture_times;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva

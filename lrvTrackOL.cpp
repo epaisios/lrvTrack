@@ -373,6 +373,33 @@ void assign_one(unsigned int preID,unsigned int postID)
  * postID: is the vector with the IDs of the larva in the new frame which
  *         diverged from preID
  */
+void assign_one_OL(unsigned int preID,
+                vector<unsigned int> postID)
+{
+  stringstream DEBUG;
+  vector<unsigned int>::iterator postIT=postID.begin();
+  assignedPreMap[preID]=postID.size();
+  while(postIT!=postID.end())
+  {
+    unsigned int NewID=++LARVAE_COUNT;
+    assignedNew[*postIT].push_back(NewID);
+    DEBUG << "Assigning: " << *postIT << " -> " << NewID;
+    verbosePrint(DEBUG);
+    assignedPrevious[preID].push_back(NewID);
+    detected_larvae[preID].childrenIDs.push_back(NewID);
+    ++postIT;
+  }
+  DEBUG << "Cluster " << preID << " diverged into new larvae: " << printVector(assignedPrevious[preID]);
+  verbosePrint(DEBUG);
+  assignedPreMap[preID]=postID.size();
+}
+
+/*
+ * Function to match an ID to several IDs
+ * preID: is the ID of the blob of the previous frame
+ * postID: is the vector with the IDs of the larva in the new frame which
+ *         diverged from preID
+ */
 void assign_one(unsigned int preID,
                 vector<unsigned int> postID)
 {
@@ -848,10 +875,11 @@ void assign_divergingOL(cvb::CvBlobs &New,
   }
   else
   {
-    assign_one(CLUSTER_ID,IDs);
+    assign_one_OL(CLUSTER_ID,IDs);
     detected_larvae[CLUSTER_ID].isCluster=true;
   }
 }
+
 void assign_diverging(cvb::CvBlobs &New,
                       unsigned int CLUSTER_ID,
                       vector<unsigned int> &IDs
@@ -871,7 +899,8 @@ void assign_diverging(cvb::CvBlobs &New,
   {
     //Not found new cluster NEW IDs to be given to the vector
     //elements
-    DEBUG << "Cluster " << CLUSTER_ID << " is new. Assigning new IDs for diverged larvae";
+    DEBUG << "Cluster " << CLUSTER_ID << 
+      " is new. Assigning new IDs for diverged larvae";
     verbosePrint(DEBUG);
     assign_one(CLUSTER_ID,IDs);
     detected_larvae[CLUSTER_ID].isCluster=true;
@@ -1025,7 +1054,7 @@ int detect_diverging(vector<unsigned int> &preLarvaeNearby,
       // cluster contains all. We can return
       DEBUG << "Node " << *pIT << " matches " << printVector(newLarvaeNearby);
       verbosePrint(DEBUG);
-      assign_diverging(New,*pIT,newLarvaeNearby);
+      assign_divergingOL(New,*pIT,newLarvaeNearby);
       break;
     }
     if(newLarvaeNearby.size()>2)
@@ -1041,7 +1070,7 @@ int detect_diverging(vector<unsigned int> &preLarvaeNearby,
         {
           // Centres of all candidates match with new blob
           // cluster contains all. We can return
-          assign_diverging(New,*pIT,*pSIT);
+          assign_divergingOL(New,*pIT,*pSIT);
           break;
         }
         ++pSIT;
@@ -1297,7 +1326,7 @@ void updateOneLarva(cvb::CvBlobs &In,
       newLarva.centroid_distance_y_sum=0;
 
       newLarva.roundness.push_back((perimeter*perimeter)/(2*CV_PI*blob.area));
-
+      cerr << newLarva.larva_ID << ": " << newLarva.roundness.back() << endl;
       // In this block we compute the inner spine for the larva
       vector<Point2f> cntPoints;
       blobToPointVector(blob,cntPoints);
@@ -1324,7 +1353,7 @@ void updateOneLarva(cvb::CvBlobs &In,
           );*/
       newLarva.angular_speed.push_back(0);
 
-      findHeadTail(newLarva,Head,Tail);
+      //findHeadTail(newLarva,Head,Tail);
       //findHeadTail(newLarva,Distances,Head,Tail);
       newLarva.heads.push_back(Head);
       newLarva.tails.push_back(Tail);
@@ -1621,7 +1650,15 @@ void updateOneLarva(cvb::CvBlobs &In,
       }
 
       cur_larva.roundness.push_back((perimeter*perimeter)/(2*CV_PI*blob.area));
-
+      /*if(cur_larva.roundness.back() >= 2.7 || 
+         cur_larva.length.back() > cur_larva.length_max/1.8)
+        cerr << cur_larva.larva_ID << ": " << cur_larva.roundness.back() << endl;
+      else
+      {
+        cerr<< "\033[1;31m";
+        cerr <<"ROUND "<<cur_larva.larva_ID<<": "<< cur_larva.roundness.back();
+        cerr << "\033[0m" << endl;
+      }*/
       // Construct a vector of points including both
       // head and tail to decide which is which
       vector<Point2f> startPoints;
@@ -2945,4 +2982,5 @@ int main(int argc, char* argv[])
       }
     }
   }
+
 }
