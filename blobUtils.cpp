@@ -1049,6 +1049,11 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::real_1d_array ad,aw;               
   alglib::ae_int_t info;                     
   alglib::ae_int_t m=n;
+  alglib::real_1d_array nu;
+  alglib::integer_1d_array inu;
+  inu.setlength(0);
+  nu.setlength(0);
+  alglib::ae_int_t ink=0;                     
   unsigned int extra=5;
   x.setlength(m+2*extra);                          
   y.setlength(m+2*extra);                          
@@ -1057,30 +1062,35 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::spline1dinterpolant sx;            
   alglib::spline1dinterpolant sy;            
   alglib::spline1dfitreport rep;             
-  double rho=2.5;
+  double rho=2.3;
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
   for(int i=0;i<extra;i++)
   {
     x[i]=cp[cp.size()-extra+i].x;
     y[i]=cp[cp.size()-extra+i].y;
+    aw[i]=1e-10;
   }
   for(int i=0;i<m;i++)
   {
     x[i+extra]=cp[i].x;
     y[i+extra]=cp[i].y;
+    aw[i+extra]=1e-15;
   }
   for(int i=0;i<extra;i++)
   {
     x[extra+m+i]=cp[i].x;
     y[extra+m+i]=cp[i].y;
+    aw[i+m+extra]=1e-15;
   }
   extractCentripetal(x,y,ad);
   //alglib::spline1dfitpenalizedw(ad,x,aw,m+extra,rho,info,sx,rep);
   //alglib::spline1dfitpenalizedw(ad,y,aw,m+extra,rho,info,sy,rep);
   try{
-    alglib::spline1dfitpenalized(ad,x,m+extra,rho,info,sx,rep);
-    alglib::spline1dfitpenalized(ad,y,m+extra,rho,info,sy,rep);
+    alglib::spline1dfitpenalized(ad,x,m+2*extra,rho,info,sx,rep);
+    alglib::spline1dfitpenalized(ad,y,m+2*extra,rho,info,sy,rep);
+    //alglib::spline1dfitcubicwc(ad,x,aw,m+extra,nu,nu,inu,ink,m+extra+2,info,sx,rep);
+    //alglib::spline1dfitcubicwc(ad,y,aw,m+extra,nu,nu,inu,ink,m+extra+2,info,sy,rep);
   }
   catch(alglib::ap_error &e)
   {
@@ -1309,6 +1319,44 @@ double getPerimeter(cvb::CvBlob &blob)
   std::vector<cv::Point2f> cntPoints;
   blobToPointVector(blob,cntPoints);
   return arcLength(cntPoints, true);
+}
+
+double getSurroundingSize(cv::Point2f &point, 
+    cvb::CvBlob &blob, 
+    cv::Mat &grey_frame)
+{
+  cv::Mat larvaImg,lrvROI;
+  unsigned int PADDING=4;
+  cv::Mat rROI,ROI;
+  try{
+    rROI=grey_frame(cv::Rect(blob.minx-PADDING,
+          blob.miny-PADDING,
+          blob.maxx-blob.minx+1+2*PADDING,
+          blob.maxy-blob.miny+1+2*PADDING)
+        );
+    rROI.copyTo(ROI);
+    //cvtColor(rROI,ROI,CV_BGR2GRAY);
+
+    createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
+    //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
+  }
+  catch(...)
+  {
+    std::cerr << "getSurroundingSize: Error creating ROI" << std::endl;
+    return 0;
+  }
+  cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+  cv::erode(lrvROI,lrvROI,element);
+  cv::bitwise_and(ROI,lrvROI,ROI);
+  cv::Mat cROI(ROI.size(),ROI.depth());
+  cROI=cv::Scalar(0);
+  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),12,cv::Scalar(255),-1);
+  cv::Mat area=ROI&cROI;
+  cv::equalizeHist( area, area);
+  lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
+  double nz=cv::norm(area,cv::NORM_L1);
+  double nc=cv::countNonZero(area);
+  return nz/nc;
 }
 
 double getSurroundingSize(cv::Point2f &point, 

@@ -16,7 +16,7 @@ void larvaObject::dump() const
   cerr << "lastFrameWithStats: " << lastFrameWithStats << endl;
   cerr << "larva_ID: " << larva_ID << endl;
   cerr << "old_ID: " << old_ID << endl;
-  cerr << "parentBlobID: " << parentBlobID << endl;
+  //cerr << "parentBlobID: " << parentBlobID << endl;
   cerr << "isCluster: " << isCluster << endl;
   cerr << "vector capture_times: " << endl;
   cerr << "  ";

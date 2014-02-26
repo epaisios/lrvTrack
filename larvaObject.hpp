@@ -74,8 +74,8 @@ public:
   unsigned int lastFrameWithStats;
   unsigned int larva_ID;
   unsigned int old_ID;
-  unsigned int parentBlobID;
-  std::vector<unsigned int> childrenIDs;
+  std::vector<unsigned int> diverged_to;
+  unsigned int collided_to;
   bool isCluster;
   std::vector<double> capture_times;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
@@ -137,14 +137,18 @@ public:
   std::vector<larvaDistanceMap> lrvDistances;
 
   std::vector<cv::Point2f> heads;
+  std::vector<double> heads_brightness;
   std::vector<cv::Point2f> tails;
+  std::vector<double> tails_brightness;
+
+  std::vector<bool> round_flag;
 
   larvaObject():
     start_frame(0),
     lifetimeWithStats(0),
     lastBlobWithStats(0),
     larva_ID(0),
-    parentBlobID(0),
+    collided_to(0),
     isCluster(false),
     area_mean(0),
     area_sum(0),
@@ -166,6 +170,7 @@ public:
     width_sum(0),
     width_max(0),
     width_min(0),
+    round_flag(false),
     centroid_distance_x_sum(0),
     centroid_distance_y_sum(0)
   {}

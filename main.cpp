@@ -3115,9 +3115,9 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
     }
     else
     {
-      unsigned int Match=matchLostLarvae(bIT->first);
-      if(Match==0)
-      {
+      //unsigned int Match=matchLostLarvae(bIT->first);
+      //if(Match==0)
+      //{
         unsigned int NEWID=++LARVAE_COUNT;
         verbosePrint("Extra Assignment:");
         DEBUG << bIT->first << " -> " << NEWID;
@@ -3126,13 +3126,13 @@ void newLarvaeTrack(cvb::CvBlobs &In, cvb::CvBlobs &Prev, cvb::CvBlobs &out)
         bIT->second->n20=bIT->second->label;
         bIT->second->label=NEWID;
         out[NEWID]=bIT->second;
-      }
-      else
+      //}
+      /*else
       {
         bIT->second->n20=bIT->second->label;
         bIT->second->label=Match;
         out[Match]=bIT->second;
-      }
+      }*
     }
     bIT++;
   }

@@ -977,7 +977,7 @@ std::vector<unsigned int> dIdx(3,0);
       sval,-1);
   }
   static int MULT=24;
-  cv::resize(cROI,cROI,cv::Size(),MULT,MULT,cv::INTER_NEAREST);
+  //cv::resize(cROI,cROI,cv::Size(),MULT,MULT,cv::INTER_NEAREST);
   //cv::imshow("LRV1",cROI);
 
 //if(heads==NULL)

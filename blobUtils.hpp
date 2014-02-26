@@ -144,6 +144,7 @@ double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame);
 
 double getPerimeter(cvb::CvBlob &blob);
 
+double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob,cv::Mat &grey_frame);
 double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob,cv::Mat &grey_frame,cv::Mat &preFrame);
 double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD=0);
 double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );

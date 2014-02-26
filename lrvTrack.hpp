@@ -39,7 +39,7 @@ std::ofstream csvfile;
 int START_FRAME=0;
 
 // *** FLAGS ***
-int LRVTRACK_VERBOSE_LEVEL=0;
+int LRVTRACK_VERBOSE_LEVEL=1;
 std::string LRVTRACK_RESULTS_FOLDER;
 std::string LRVTRACK_DATE;
 std::string LRVTRACK_NAME;
@@ -82,6 +82,15 @@ std::vector<cv::Vec3f> circles;
 std::vector<cv::Vec3f> cups;
 
 cvb::CvBlobs NEW;
+
+typedef struct {
+  unsigned int frame;
+  bool converging;
+  std::vector<unsigned int> from;
+  std::vector<unsigned int> to;
+} event;
+
+std::vector<event> events;
 
 //********* Used by the new tracking algorithm ************************
 // map of assignments of the blobs in the previous frame.

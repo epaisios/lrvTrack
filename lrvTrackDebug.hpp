@@ -1,9 +1,21 @@
 #ifndef __LRVTRACK_DEBUG_HPP__
 #define __LRVTRACK_DEBUG_HPP__
 #include <string>
+#include <boost/log/core.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
 
 using namespace std;
+namespace logging = boost::log;
+//
 //Debugging functions for output
+void log_init()
+{
+      logging::core::get()->set_filter
+            (
+                     logging::trivial::severity >= logging::trivial::debug
+                         );
+}
 void verbosePrint(stringstream &toPrint)
 {
   if(LRVTRACK_VERBOSE_LEVEL>0)
