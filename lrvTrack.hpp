@@ -23,7 +23,22 @@ using boost::timer::cpu_times;
 using boost::timer::nanosecond_type;
 
 std::string VIDEO_TYPE=".avi";
-int VIDEO_CODEC=CV_FOURCC('H','F','Y','U');
+//int VIDEO_CODEC=CV_FOURCC('Z','L','I','B');
+//int VIDEO_CODEC=CV_FOURCC('I', '4', '2', '0');
+//int VIDEO_CODEC=CV_FOURCC('Y', 'U', 'Y', '2');
+//int VIDEO_CODEC=CV_FOURCC('Y', '4', '2', '2');
+int VIDEO_CODEC=CV_FOURCC('Y', 'V', '1', '2');
+//int VIDEO_CODEC=CV_FOURCC('U', 'Y', 'V', 'Y');
+//int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
+//int VIDEO_CODEC=CV_FOURCC('Y', '8', '0', '0');
+//int VIDEO_CODEC=CV_FOURCC('H', 'D', 'Y', 'C');
+
+//int VIDEO_CODEC=CV_FOURCC('L','A','G','S');
+//int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
+//int VIDEO_CODEC=CV_FOURCC('I', '4', '2', '0');
+//int VIDEO_CODEC=CV_FOURCC('J', 'P', 'G', 'L');
+//int VIDEO_CODEC=CV_FOURCC('Y', 'U', 'V', '4');
+//int VIDEO_CODEC=CV_FOURCC('H','F','Y','U');
 //int VIDEO_CODEC=CV_FOURCC('F','F','V','1');
 //int VIDEO_CODEC=CV_FOURCC('X','2','6','4');
 //int VIDEO_CODEC=CV_FOURCC('S','V','Q','3');
@@ -72,6 +87,7 @@ unsigned int HISTORY_SIZE=10;
 
 double VIDEO_FPS=24.1;
 static unsigned int CURRENT_FRAME=0;
+static unsigned int TOTAL_FRAMES=0;
 unsigned int LARVAE_COUNT=0;
 
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;

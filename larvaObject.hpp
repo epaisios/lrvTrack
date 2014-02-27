@@ -69,6 +69,7 @@ class larvaObject
 {
 public:
   unsigned int start_frame;
+  unsigned int end_frame;
   unsigned int lifetimeWithStats;
   unsigned int lastBlobWithStats;
   unsigned int lastFrameWithStats;
@@ -145,6 +146,7 @@ public:
 
   larvaObject():
     start_frame(0),
+    end_frame(0),
     lifetimeWithStats(0),
     lastBlobWithStats(0),
     larva_ID(0),

@@ -3,11 +3,13 @@
 /*
  * Function to draw spine points of larvaObject lrv on frame img
  */
-void drawSpinePoints(Mat &img, larvaObject &lrv)
+void drawSpinePoints(Mat &img, larvaObject &lrv,unsigned int idx)
 {
   if(lrv.lrvDistances.size()==0)
     return;
-  vector<Point2f> const &spine=lrv.lrvDistances.back().Spine;
+  if(idx>lrv.lrvDistances.size())
+    return;
+  vector<Point2f> const &spine=lrv.lrvDistances[idx].Spine;
   if(spine.size()==0)
     return;
   vector<Point2f>::const_iterator it=spine.begin();
@@ -19,6 +21,11 @@ void drawSpinePoints(Mat &img, larvaObject &lrv)
         Scalar(255,0,255),
         -1);
   }
+}
+
+void drawSpinePoints(Mat &img, larvaObject &lrv)
+{
+  drawSpinePoints(img,lrv,lrv.lrvDistances.size()-1);
 }
 
 /*
@@ -189,6 +196,95 @@ void handleKeys(bool &STEP,bool &STOP, bool &TRACK, bool &SHOWTAGS)
     }
 }
 
+void showTags2()
+{
+      map<unsigned int,larvaObject>::iterator it=detected_larvae.begin();
+      while (it!=detected_larvae.end())
+      {
+        if(it->second.start_frame>CURRENT_FRAME || 
+           it->second.end_frame<CURRENT_FRAME)
+        {
+          it++;
+          continue;
+        }
+        stringstream sstm;
+        unsigned int c_index=CURRENT_FRAME-it->second.start_frame;
+        cvb::CvBlob* blob=
+                &(it->second.blobs[c_index]);
+        if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
+        {
+          //printBlobFile(detected_larvae[it->first]);
+        }
+        sstm << (*it).first;
+        /*sstm << "(" << detected_larvae[it->first].old_ID <<")";*/
+        putText(colorFrame,
+            sstm.str(),
+            Point2f(blob->centroid.x+12,blob->centroid.y+12),
+            FONT_HERSHEY_PLAIN,
+            0.8,
+            Scalar(255,255,255),
+            1,
+            CV_AA);
+
+        int PAD=2;
+        Mat larvaROI;
+        try{
+          larvaROI=Mat(colorFrame,
+              Rect(blob->minx-ROI_PADDING-PAD,
+                blob->miny-ROI_PADDING-PAD,
+                blob->maxx-blob->minx+1+2*(ROI_PADDING+PAD),
+                blob->maxy-blob->miny+1+2*(ROI_PADDING+PAD))
+              );
+        }
+        catch(...)
+        {
+          BOOST_LOG_TRIVIAL(warning) << "larvaROI failed. continuing";
+          break;
+        }
+        Point2f cr(blob->centroid.x-blob->minx,blob->centroid.y-blob->miny);
+        //larvaSkel testSkel(larvaROI,cr);
+        //testSkel.drawSkeleton(larvaROI,Scalar(0,0,255));
+        //imshow("ROI",larvaROI);
+        //waitKey(1);
+        //if(is_larva(blob)<IS_LARVA_THRESHOLD)
+        //{
+        /*
+           circle(frame,
+           Point2f(blob->centroid.x,blob->centroid.y),
+           0,
+           Scalar(255,0,0),
+           -1);
+           */
+        //}
+
+        if(it->second.isCluster==false)
+        {
+          circle(larvaROI,
+              Point2f(
+                it->second.heads[c_index].x+PAD,
+                it->second.heads[c_index].y+PAD),
+              2,
+              Scalar(255,255,0),
+              -1);
+
+          circle(larvaROI,
+              Point2f(
+                it->second.tails[c_index].x+PAD,
+                it->second.tails[c_index].y+PAD),
+              2,
+              Scalar(0,0,255),
+              -1);
+
+          createLarvaContour(larvaROI,*blob,CV_8UC3,PAD,false,
+              Scalar(0,255,0),8);
+          drawSpinePoints(colorFrame,it->second,c_index);
+
+          //plotAngle(blob,larvaROI,PAD);
+        }
+        it++;
+      }
+}
+
 void showTags(const cvb::CvBlobs &tracked_blobs)
 {
       cvb::CvBlobs::const_iterator it=tracked_blobs.begin();
@@ -233,9 +329,6 @@ void showTags(const cvb::CvBlobs &tracked_blobs)
         //waitKey(1);
         //if(is_larva(blob)<IS_LARVA_THRESHOLD)
         //{
-        createLarvaContour(larvaROI,*blob,CV_8UC3,PAD,false,
-            Scalar(0,255,0),8);
-        drawSpinePoints(colorFrame,detected_larvae[it->first]);
         /*
            circle(frame,
            Point2f(blob->centroid.x,blob->centroid.y),
@@ -252,7 +345,7 @@ void showTags(const cvb::CvBlobs &tracked_blobs)
                 detected_larvae[it->first].heads.back().x+PAD,
                 detected_larvae[it->first].heads.back().y+PAD),
               1,
-              Scalar(0,255,0),
+              Scalar(255,0,0),
               -1);
 
           circle(larvaROI,
@@ -262,6 +355,10 @@ void showTags(const cvb::CvBlobs &tracked_blobs)
               1,
               Scalar(0,0,255),
               -1);
+
+          createLarvaContour(larvaROI,*blob,CV_8UC3,PAD,false,
+              Scalar(0,255,0),8);
+          drawSpinePoints(colorFrame,detected_larvae[it->first]);
 
           //plotAngle(blob,larvaROI,PAD);
         }
@@ -543,7 +640,7 @@ void assign_one(unsigned int preID,unsigned int postID)
  * postID: is the vector with the IDs of the larva in the new frame which
  *         diverged from preID
  */
-void assign_one_OL(unsigned int preID,
+void assign_one(unsigned int preID,
                 vector<unsigned int> postID)
 {
   vector<unsigned int>::iterator postIT=postID.begin();
@@ -553,37 +650,14 @@ void assign_one_OL(unsigned int preID,
   {
     unsigned int NewID=++LARVAE_COUNT;
     assignedNew[*postIT].push_back(NewID);
+    BOOST_LOG_TRIVIAL(trace) << "Assigning: " << *postIT << " -> " << NewID;
     assignedPrevious[preID].push_back(NewID);
     detected_larvae[preID].diverged_to.push_back(NewID);
     ++postIT;
   }
-  BOOST_LOG_TRIVIAL(trace) << "Cluster " << preID 
-                           << " diverged into new larvae: "
-                           << printVector(assignedPrevious[preID]);
-  assignedPreMap[preID]=postID.size();
-}
-
-/*
- * Function to match an ID to several IDs
- * preID: is the ID of the blob of the previous frame
- * postID: is the vector with the IDs of the larva in the new frame which
- *         diverged from preID
- */
-void assign_one(unsigned int preID,
-                vector<unsigned int> postID)
-{
-  vector<unsigned int>::iterator postIT=postID.begin();
-  assignedPreMap[preID]=postID.size();
-  while(postIT!=postID.end())
-  {
-    unsigned int NewID=++LARVAE_COUNT;
-    assignedNew[*postIT].push_back(NewID);
-    BOOST_LOG_TRIVIAL(trace) << "Assigning: " << *postIT << " -> " << NewID;
-    assignedPrevious[preID].push_back(NewID);
-    ++postIT;
-  }
-  BOOST_LOG_TRIVIAL(trace) << "Cluster " << preID 
-                           << " diverged into new larvae: "
+  BOOST_LOG_TRIVIAL(debug) << CURRENT_FRAME << ", "
+                           <<  preID 
+                           << " -> "
                            << printVector(assignedPrevious[preID]);
   assignedPreMap[preID]=postID.size();
 }
@@ -599,8 +673,9 @@ void assign_one(vector<unsigned int> preID,
 {
   vector<unsigned int>::iterator preIT=preID.begin();
   assignedNew[postID].push_back(newID);
-  BOOST_LOG_TRIVIAL(trace) << "New cluster " << newID 
-                          << " from larvae: " << printVector(preID);
+  BOOST_LOG_TRIVIAL(debug) << CURRENT_FRAME << ", "
+                           << printVector(preID) << " -> "
+                           << newID;
   while(preIT!=preID.end())
   {
     assignedNew[postID].push_back(*preIT);
@@ -1176,6 +1251,7 @@ void updateOneLarva(cvb::CvBlobs &In,
 
     // Set the frame of it's existence
     newLarva.start_frame=CURRENT_FRAME;
+    newLarva.end_frame=CURRENT_FRAME;
 
     // Give the larva the necessary ID
     newLarva.larva_ID=ID;
@@ -1345,6 +1421,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     larvaObject &cur_larva=(*curLarva).second;
     //Pointer for the previous blob
     cvb::CvBlob &preBlob = cur_larva.blobs.back();
+    cur_larva.end_frame++;
 
     // Set the ID of the larvaObject to the ID found TODO:Probably unnecessary
     cur_larva.larva_ID=ID;
@@ -2317,7 +2394,7 @@ int setup_capture_input(VideoCapture &capture)
       capture.open(LRVTRACK_FILE_INPUT);
     }
   capture.set(CV_CAP_PROP_FORMAT,CV_8U);
-
+  TOTAL_FRAMES=capture.get(CV_CAP_PROP_FRAME_COUNT);
   if (capture.get(CV_CAP_PROP_FPS)==0)
     {
       VIDEO_FPS=24.1;
@@ -2617,6 +2694,7 @@ void verifyLarvae(larvaObject &f)
 void determineHeadTail(larvaObject &f)
 {
   stringstream d;
+  try{
   d << endl;
   d << "|=============== Determine head/tail of: " << f.larva_ID 
     << " ============= " << endl;
@@ -2648,7 +2726,7 @@ void determineHeadTail(larvaObject &f)
     unsigned int endBreak=breaks[i];
     unsigned int preBreak;
     if(i>0)
-      preBreak=breaks[i-1];
+      preBreak=breaks[i-1]+1;
     else
       preBreak=0;
 
@@ -2664,9 +2742,9 @@ void determineHeadTail(larvaObject &f)
       << "IHead" << f.heads[preBreak]+startbp << " "
       << "ITail" << f.tails[preBreak]+startbp 
       << endl;
-    d << "|      End[ " << endBreak-1 <<"]: Centroid" << endPos << " "
-      << "IHead" << f.heads[endBreak-1]+endbp << " "
-      << "ITail" << f.tails[endBreak-1]+endbp
+    d << "|      End[ " << endBreak <<"]: Centroid" << endPos << " "
+      << "IHead" << f.heads[endBreak]+endbp << " "
+      << "ITail" << f.tails[endBreak]+endbp
       << endl;
 
     double sumHeadDist=0.0; //Distance to endpoint
@@ -2679,7 +2757,7 @@ void determineHeadTail(larvaObject &f)
     double sumHeadCnt=0.0;  //Distance covered by endpoint
     double sumTailCnt=0.0;
 
-    for(unsigned int j=preBreak;j<endBreak;j++)
+    for(unsigned int j=preBreak;j<=endBreak;j++)
     {
       Point2f bpPoint(f.blobs[j].minx,f.blobs[j].miny);
       Point2f hPoint=f.heads[j]+bpPoint;
@@ -2719,7 +2797,7 @@ void determineHeadTail(larvaObject &f)
     else if(sumHeadDiff+sumHeadCnt+sumHeadGrey>
             sumTailDiff+sumTailCnt+sumTailGrey)
     {
-      for(unsigned int k=preBreak;k<endBreak;k++)
+      for(unsigned int k=preBreak;k<=endBreak;k++)
       {
         cv::Point2f b=f.heads[k];
         f.heads[k]=f.tails[k];
@@ -2735,7 +2813,13 @@ void determineHeadTail(larvaObject &f)
       << "RTail" << f.tails[endBreak-1]+endbp
       << endl;
     d << "|========================================= " << endl;
+  }
+  BOOST_LOG_TRIVIAL(debug) << d.str();
+  }
+  catch(...)
+  {
     BOOST_LOG_TRIVIAL(debug) << d.str();
+    exit(0);
   }
 }
 
@@ -2765,6 +2849,7 @@ int main(int argc, char* argv[])
   bool TRACK=false;
   bool STEP=true;
   bool STOP=false;
+  VideoWriter vidOut,vidPOut;
 
   log_init();
 
@@ -2789,6 +2874,19 @@ int main(int argc, char* argv[])
   }
   extract_background(capture,bgFrame);
   cvb::CvBlobs preBlobs;
+  if (LRVTRACK_SAVE_PROCESSED_VIDEO!="" && !vidPOut.isOpened())
+  {
+    vidPOut.open("result.avi",
+        VIDEO_CODEC,
+        VIDEO_FPS,
+        bgFrame.size());
+    if (!vidPOut.isOpened())
+    {
+      std::cerr << "Error opening video output file. " <<
+        "Problems with video codec. Exiting..." << std::endl;
+      exit(5);
+    }
+  }
   while (!STOP)
   {
     if (!get_next_frame(capture,greyFrame,colorFrame))
@@ -2855,9 +2953,55 @@ int main(int argc, char* argv[])
     }
 
     cvReleaseImage(&labelImg);
-    imshow("Extracted Frame",colorFrame);
-    handleKeys(STEP,STOP,TRACK,SHOWTAGS);
+    //imshow("Extracted Frame",colorFrame);
+    //vidPOut << colorFrame;
+    //handleKeys(STEP,STOP,TRACK,SHOWTAGS);
+    std::cerr << "F: " << CURRENT_FRAME << "/" << TOTAL_FRAMES << "\r";
   }
   
+  std::cerr << endl;
+
   secondPass();
+  if(setup_capture_input(capture) == -1)
+  {
+    BOOST_LOG_TRIVIAL(error) 
+      << "Error setting up the capture device (camera or video file)";
+    exit(1);
+  }
+  CURRENT_FRAME=0;
+  while (!STOP)
+  {
+    if (!get_next_frame(capture,greyFrame,colorFrame))
+      break;
+
+    if (SHOWTAGS!=0)
+    {
+      showTags2();
+    }
+    stringstream d;
+    d<<CURRENT_FRAME;
+    putText(colorFrame,
+        d.str(),
+        Point2f(20,50),
+        FONT_HERSHEY_PLAIN,
+        2.0,
+        Scalar(0,0,0),
+        2,
+        CV_AA);
+
+    stringstream n;
+    vector<int> compression_params;
+    compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+    compression_params.push_back(0);
+    n << "img/ff" << CURRENT_FRAME << ".png";
+    try {
+      imwrite(n.str(), colorFrame, compression_params);
+    }
+    catch (runtime_error& ex) {
+      fprintf(stderr, "Exception converting image to PNG format: %s\n", ex.what());
+      return 1;
+    }
+    //vidPOut << colorFrame;
+  }
+
 }
