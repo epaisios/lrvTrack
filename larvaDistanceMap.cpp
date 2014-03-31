@@ -1,6 +1,9 @@
 #include "larvaDistanceMap.hpp"
+#include "lrvTrackDebug.hpp"
 #include <queue>
-#include "gnuplot_i.hpp"
+#include <utility>
+#include <opencv2/highgui/highgui.hpp>
+//#include "gnuplot_i.hpp"
 #include "blobUtils.hpp"
 #include "alglib/ap.h"
 
@@ -44,10 +47,10 @@ void lBFS(int p1,
               if (Distances[p1][i]<0)
                 Q.push(i);
               float multres=Distances[cur][i]*Distances[p1][cur];
-              float sqrtres[1];
-              ltsqrt(sqrtres,&multres);
+              float sqrtres;
+              sqrtres=sqrt(multres);
               double newDst = Distances[cur][i]+Distances[p1][cur] +
-                              2*sqrtres[0];
+                              2*sqrtres;
               if (Distances[p1][i]>newDst)
                 {
                   Distances[p1][i]=newDst;
@@ -289,7 +292,7 @@ void getNextPointInArc(std::vector<cv::Point2f> &arc,
 {
   unsigned int i=0;
   while(distance>arcDistanceMap[i] && i<arcDistanceMap.size())
-    i++;
+    ++i;
 
   if(i>0)
   {
@@ -300,6 +303,21 @@ void getNextPointInArc(std::vector<cv::Point2f> &arc,
     r=1;
   }
 
+}
+
+double distanceBetweenSpines(larvaDistanceMap &a,larvaDistanceMap &b)
+{
+  double adist=0.0;
+  double rdist=0.0;
+  for(unsigned int i=0;i<a.Spine.size();i++)
+  {
+    adist+=p2fdist(a.Spine[i],b.Spine[i]);
+    rdist+=p2fdist(a.Spine[i],b.Spine[a.Spine.size()-1-i]);
+  }
+  if(rdist>adist)
+    return adist;
+  else
+    return rdist;
 }
 
 unsigned int findContourPointClosestTo(
@@ -320,7 +338,7 @@ unsigned int findContourPointClosestTo(
     }
   }
 
-  for(int i=retval-step;i<retval+step;i++)
+  for(int i=retval-step;i<retval+step;++i)
   {
     unsigned int j=i;
     if(i<0)
@@ -338,54 +356,11 @@ unsigned int findContourPointClosestTo(
   
 }
 
-/*void getFitSpine(cvb::CvBlob &blob,
-                       unsigned int A,
-                       unsigned int B, 
-                       std::vector<cv::Point2f> &contour,
-                       std::vector<cv::Point2f> &spine,
-                       std::vector<double> &widths,
-                       std::vector<double> &angles,
-                       std::vector<PointPair> &pPairs,
-                       double &maxAngle,
-                       int &maxAngleLocation,
-                       double &firstHalfWidthsSum,
-                       double &secondHalfWidthsSum,
-                       double &width,
-                       double &length,
-                       double &curvatureBias,
-                       std::map<float,unsigned int> &curvatures,
-                       unsigned int RESOLUTION=SPINE_SEGMENTS,
-                       std::vector<cv::Point2f> *heads=NULL,
-                       std::vector<cv::Point2f> *tails=NULL,
-                       std::vector<cvb::CvBlob> *blobs=NULL)
-{
-  for(unsigned int i=0;i<12;i++)
-  {
-    std::vector<cv::Point2f> Ap;
-    std::vector<cv::Point2f> Am;
-    for(unsigned int j=0;j<contour.size()/12;j++)
-    {
-      Ap.push_back(contour[A+j])
-    }
-  }
-}
-*/
-
 void getCandidateSpine(cvb::CvBlob &blob,
                        unsigned int A,
                        unsigned int B, 
                        std::vector<cv::Point2f> &contour,
-                       std::vector<cv::Point2f> &spine,
-                       std::vector<double> &widths,
-                       std::vector<double> &angles,
-                       std::vector<PointPair> &pPairs,
-                       double &maxAngle,
-                       int &maxAngleLocation,
-                       double &firstHalfWidthsSum,
-                       double &secondHalfWidthsSum,
-                       double &width,
-                       double &length,
-                       double &curvatureBias,
+                       larvaDistanceMap &candidateMap,
                        std::map<float,unsigned int> &curvatures,
                        unsigned int RESOLUTION=SPINE_SEGMENTS,
                        std::vector<cv::Point2f> *heads=NULL,
@@ -401,78 +376,43 @@ void getCandidateSpine(cvb::CvBlob &blob,
   
   getLeftArc(A,B,contour,leftArc,leftArcDistanceMap);
   getRightArc(A,B,contour,rightArc,rightArcDistanceMap);
-  
-  /*if((unsigned int)abs(leftArc.size()-rightArc.size())<contour.size()/4)
-  {
-    length=0;
-    return;
-  }*/
-  
   double dleft=leftArcDistanceMap.back();
   double dright=rightArcDistanceMap.back();
   /*std::cout << "P: " << cv::arcLength(contour,true) << " l: " << dleft
             << " r: " << dright << std::endl;*/
   if(dleft > 4*dright || dright > 4*dleft) 
   {
-    length=0;
+    candidateMap.MaxDist=0;
     return;
   }
-  /*if(heads!=NULL && tails!=NULL)
-  {
-    cv::Point2f bp(blob.minx,blob.miny);
-    cv::Point2f h=heads->back()+bp;
-    cv::Point2f t=tails->back()+bp;
-    cv::Point2f ch=contour[A];
-    cv::Point2f ct=contour[B];
-    if( (p2fdist(h,contour[A]) > 5 && 
-       p2fdist(t,contour[A]) > 5)     ||
-        (p2fdist(h,contour[B]) > 5 && 
-       p2fdist(t,contour[B]) > 5
-       ) )
-    {
-      length=0;
-      return;
-    }
-  }*/
   double stepLeft=dleft/(RESOLUTION-1);
   double stepRight=dright/(RESOLUTION-1);
-  spine.clear();
+  candidateMap.Spine.clear();
   wholeSpine.clear();
   wholeSpine.push_back(contour[A]);
-  //std::cout << spine.back();
-  //std::cout << std::endl;
-  length=0;
-  width=0;
-  maxAngle=0;
-  firstHalfWidthsSum=0;
-  secondHalfWidthsSum=0;
+  candidateMap.MaxDist=0;
+  candidateMap.WidthDist=0;
+  candidateMap.maxAngle=0;
+  candidateMap.WidthAvg=0;
+  candidateMap.firstHalfWidthsSum=0;
+  candidateMap.secondHalfWidthsSum=0;
 
-    /*cv::circle(FOO, 
-        contour[A],
-        1,
-        cv::Scalar(255,100,100),-1);
-
-    cv::circle(FOO, 
-        contour[B],
-        1,
-        cv::Scalar(0,255,0),-1);
-   */
   std::map<float,unsigned int>::reverse_iterator curvIT=curvatures.rbegin();
   unsigned int CURVTEST=1;
   int TOTAL=curvatures.size();
-  curvatureBias=0.0;
-  for(unsigned int i=0; i<CURVTEST;i++)
+  candidateMap.curvatureBias=0.0;
+  for(unsigned int i=0; i<CURVTEST;++i)
   {
     unsigned int dA=std::min(abs(curvIT->second-A),TOTAL-abs(curvIT->second-A));
     unsigned int dB=std::min(abs(curvIT->second-B),TOTAL-abs(curvIT->second-B));
     if(dA<dB)
     {
-      curvatureBias+=1.0/CURVTEST;
+      candidateMap.curvatureBias+=1.0/CURVTEST;
     }
     curvIT++;
   }
 
-  for(unsigned int i=1;i<RESOLUTION-1;i++)
+  for(unsigned int i=1;i<RESOLUTION-1;++i)
   {
     cv::Point2f cPointLeft;
     cv::Point2f cPointRight;
@@ -488,95 +428,86 @@ void getCandidateSpine(cvb::CvBlob &blob,
                       cPointRight);
 
     cv::Point2f newPoint=(cPointLeft+cPointRight)*0.5;
-    pPairs.push_back(std::make_pair(cPointLeft,cPointRight));
-    widths.push_back(p2fdist(cPointLeft,cPointRight));
+    candidateMap.spinePairs.push_back(std::make_pair(cPointLeft,cPointRight));
+    candidateMap.Widths.push_back(p2fdist(cPointLeft,cPointRight));
+    candidateMap.WidthAvg+=candidateMap.Widths.back();
     //cv::line(FOO,cPointLeft*2,cPointRight*2,cv::Scalar(0,0,200));
-    if(widths.back()>width)
+    if(candidateMap.Widths.back()>candidateMap.WidthDist)
     {
-      width=widths.back();
+      candidateMap.WidthDist=candidateMap.Widths.back();
     }
     if(i>0.85*RESOLUTION)
-      firstHalfWidthsSum+=widths.back();
+      candidateMap.firstHalfWidthsSum+=candidateMap.Widths.back();
 
     if(i<0.15*RESOLUTION)
-      secondHalfWidthsSum+=widths.back();
+      candidateMap.secondHalfWidthsSum+=candidateMap.Widths.back();
 
-   // std::cout << cPointLeft << " + " << cPointRight << " -> " <<  newPoint << std::endl;
     wholeSpine.push_back(newPoint);
 
-    /*if(i>=2)
-    {
-      angles.push_back(angleC(wholeSpine[i-2],wholeSpine[i-1],wholeSpine[i]));
-      if(maxAngle<angles.back())
-      {
-        maxAngle=angles.back();
-        maxAngleLocation=i-1;
-      }
-    }*/
-
   }
+  candidateMap.WidthAvg=candidateMap.WidthAvg/candidateMap.Widths.size();
+  for(unsigned int i=0;i<candidateMap.Widths.size();++i)
+  {
+    double D=(candidateMap.Widths[i]-candidateMap.WidthAvg);
+    candidateMap.WidthSD+=D*D;
+  }
+  candidateMap.WidthSD=sqrt(candidateMap.WidthSD/candidateMap.Widths.size());
+
   unsigned int i=RESOLUTION-1;
   wholeSpine.push_back(contour[B]);
-  //angles.push_back(angleC(wholeSpine[i-2],wholeSpine[i-1],wholeSpine.back()));
   if(wholeSpine.size()==0)
   {
-    length=-1;
+    candidateMap.MaxDist=-1;
     return;
   }
-  /*if(maxAngle<angles.back())
-  {
-    maxAngle=angles.back();
-    maxAngleLocation=i-1;
-  }*/
-
-  //std::cout << wholeSpine.back();
-  //std::cout << std::endl;
-  //std::cout << std::endl;
-  length=cv::arcLength(wholeSpine,false);
+  candidateMap.MaxDist=cv::arcLength(wholeSpine,false);
   std::vector<double> spineDistanceMap;
 
   spineDistanceMap.push_back(0);
   spineDistanceMap.push_back(p2fdist(wholeSpine[1],wholeSpine[0]));
-  for (unsigned int i=2;i<wholeSpine.size()-1;i++)
+  for (unsigned int i=2;i<wholeSpine.size()-1;++i)
     spineDistanceMap.push_back(spineDistanceMap.back()+
                                p2fdist(wholeSpine[i],wholeSpine[i-1]));
 
-  spineDistanceMap.push_back(length);
+  spineDistanceMap.push_back(candidateMap.MaxDist);
 
-  double stepS=length/(SPINE_SEGMENTS-1);
+  double stepS=candidateMap.MaxDist/(SPINE_SEGMENTS-1);
 
-  spine.push_back(wholeSpine[0]);
-  for(unsigned int i=1;i<SPINE_SEGMENTS-1;i++)
+  candidateMap.Spine.push_back(wholeSpine[0]);
+  for(unsigned int i=1;i<SPINE_SEGMENTS-1;++i)
   {
     cv::Point2f cPoint;
     getNextPointInArc(wholeSpine,
                       spineDistanceMap,
                       i*stepS,
                       cPoint);
-    spine.push_back(cPoint);
+    candidateMap.Spine.push_back(cPoint);
 
     if(i>=2)
     {
-      angles.push_back(angleC(spine[i-2],spine[i-1],spine[i]));
-      if(maxAngle<angles.back())
+      candidateMap.Angles.push_back(
+          angleD(
+            candidateMap.Spine[i-2],
+            candidateMap.Spine[i-1],
+            candidateMap.Spine[i]));
+      if(candidateMap.maxAngle<candidateMap.Angles.back())
       {
-        maxAngle=angles.back();
-        maxAngleLocation=i-1;
+        candidateMap.maxAngle=candidateMap.Angles.back();
+        candidateMap.maxAngleLocation=i-1;
       }
     }
   }
-  spine.push_back(wholeSpine.back());
-  angles.push_back(angleC(
-                    spine[SPINE_SEGMENTS-3],
-                    spine[SPINE_SEGMENTS-2],
-                    spine.back()));
-  if(maxAngle<angles.back())
+  candidateMap.Spine.push_back(wholeSpine.back());
+  candidateMap.Angles.push_back(angleD(
+                    candidateMap.Spine[SPINE_SEGMENTS-3],
+                    candidateMap.Spine[SPINE_SEGMENTS-2],
+                    candidateMap.Spine.back()));
+  if(candidateMap.maxAngle<candidateMap.Angles.back())
   {
-    maxAngle=angles.back();
-    maxAngleLocation=i-1;
+    candidateMap.maxAngle=candidateMap.Angles.back();
+    candidateMap.maxAngleLocation=i-1;
   }
 
-  //cv::imshow("SpineCandidate",FOO);
 }
 
 bool checkFinish(
@@ -677,7 +608,7 @@ void expandcontour(cv::Mat &frame,
                    std::vector<cv::Point2f> &points,
                    std::vector<cv::Point2f> &outpoints)
 {
-  for(unsigned int i=0;i<points.size();i++)
+  for(unsigned int i=0;i<points.size();++i)
   {
     //check points lrud
     cv::Point2f up(points[i].x,points[i].y-1);
@@ -743,7 +674,7 @@ void extractCentripetal(
   }
   csqrt+=sqrt(p2fdist(xpoints.back(),xpoints[0]));
   d.push_back(0);
-  for(unsigned int i=1;i<xpoints.size();i++)
+  for(unsigned int i=1;i<xpoints.size();++i)
   {
     float newD = d.back() + sqrt(p2fdist(xpoints[i-1],xpoints[i]))/csqrt;
     d.push_back(newD);
@@ -764,7 +695,7 @@ void smoothAndExtractCentripetal(cv::Mat &frame,
                            ppoints[1],
                            ppoints[2]); 
   xpoints.push_back(NP);
-  for(unsigned int i=1;i<ppoints.size();i++)
+  for(unsigned int i=1;i<ppoints.size();++i)
   {
     if(ppoints[i-1]!=ppoints[i])
     {
@@ -789,7 +720,7 @@ void smoothAndExtractCentripetal(cv::Mat &frame,
   }
   csqrt+=sqrt(p2fdist(xpoints.back(),xpoints[0]));
   d.push_back(0);
-  for(unsigned int i=1;i<xpoints.size();i++)
+  for(unsigned int i=1;i<xpoints.size();++i)
   {
     float newD = d.back() + sqrt(p2fdist(xpoints[i-1],xpoints[i]))/csqrt;
     d.push_back(newD);
@@ -924,37 +855,6 @@ void fixContour(
   d2x.push_back(0);
   d2y.push_back(0);
   cvt.push_back(0);
-  /*for(unsigned int i=0;i<xpoints.size();i++)
-  {
-    float cval=frame.at<cv::Vec3b>(xpoints[i])[0];
-    //float cval=255;
-    AvgGrVal+=cval;
-    w.push_back(cval);
-    unsigned int pi;
-    if(i==0)
-    {
-      pi=xpoints.size()-1;
-    }
-    double ratio=(d[i]-d[pi]);
-    dx.push_back((xpoints[i].x-xpoints[pi].x)/ratio);
-    dy.push_back((xpoints[i].y-xpoints[pi].y)/ratio);
-    if(i>0)
-    {
-      d2x.push_back((dx[i]-dx[i-1])/ratio);
-      d2y.push_back((dy[i]-dy[i-1])/ratio);
-      cvt.push_back((dx[i]-d2x[i])/pow(dx[i]*dx[i]+dy[i]*dy[i],1.5));
-    }
-  }
-  double ratio=(d[0]-d.back());
-  d2x[0]=(dx[0]-dx.back())/ratio;
-  d2y[0]=(dy[0]-dy.back())/ratio;
-  cvt[0]=(dx[0]-d2x[0])/pow(dx[0]*dx[0]+dy[0]*dy[0],1.5);
-  AvgGrVal=AvgGrVal/w.size();
-  for(unsigned int i=0;i<w.size();i++)
-  {
-    w[i]=w[i]/AvgGrVal;
-  }
-  */
 std::map<float,unsigned int> curvatures;
 std::vector<unsigned int> dIdx(3,0);
 
@@ -967,7 +867,7 @@ std::vector<unsigned int> dIdx(3,0);
              );
   cv::Mat cROI,final;
   ROI.copyTo(cROI);
-  for(unsigned int i=0;i<ppoints.size();i++)
+  for(unsigned int i=0;i<ppoints.size();++i)
   {
     cv::Vec3b val= cROI.at<cv::Vec3b>((ppoints[i]-bp)+cv::Point2f(PAD,PAD));
     cv::Scalar sval(0,0,val[0]+val[1]+val[2]);
@@ -1010,7 +910,7 @@ catch(...)
 
 
   bp=cv::Point2f(blob.minx-0.5,blob.miny-0.5);
-  for(unsigned int i=0;i<newPoints.size();i++)
+  for(unsigned int i=0;i<newPoints.size();++i)
   {
     cv::circle(cROI, 
         MULT*(newPoints[i]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
@@ -1039,7 +939,7 @@ catch(...)
     dIdx[0]=hi;
     dIdx[1]=ti;
   }
-  for (unsigned int i=0; i<dIdx.size()-1;i++)
+  for (unsigned int i=0; i<dIdx.size()-1;++i)
   {
     for(unsigned int j=i+1; j<dIdx.size();j++)
     {
@@ -1056,25 +956,30 @@ catch(...)
         continue;*/
       std::vector<cv::Point2f> cSpine;
       std::vector<PointPair> pPairs;
-
-      if(dIdx[i] == dIdx[j])
+      size_t di=dIdx[i];
+      size_t dj=dIdx[j];
+      if(blobs!=NULL && blobs->size()>0)
+      {
+        cv::Point2f bp((*blobs)[blobs->size()-1].minx,
+            (*blobs)[blobs->size()-1].miny);
+        cv::Point2f gH=heads->back()+bp;
+        if(p2fdist(newPoints[dIdx[i]],gH)
+            >
+            p2fdist(newPoints[dIdx[j]],gH)
+          )
+        {
+          di=dIdx[j];
+          dj=dIdx[i];
+        }
+      }
+      if(di == dj)
         continue;
       larvaDistanceMap candidateMap(newPoints);
       getCandidateSpine(blob,
-          dIdx[i],
-          dIdx[j],
+          di,
+          dj,
           newPoints,
-          candidateMap.Spine,
-          candidateMap.Widths,
-          candidateMap.Angles,
-          candidateMap.spinePairs,
-          candidateMap.maxAngle,
-          candidateMap.maxAngleLocation,
-          candidateMap.firstHalfWidthsSum,
-          candidateMap.secondHalfWidthsSum,
-          candidateMap.WidthDist,
-          candidateMap.MaxDist,
-          candidateMap.curvatureBias,
+          candidateMap,
           curvatures,
           50,
           heads,
@@ -1167,7 +1072,7 @@ else
 
   maxDist=maxLength;
 
-  for(unsigned int i=1;i<Distances.Spine.size();i++)
+  for(unsigned int i=1;i<Distances.Spine.size();++i)
   {
     cv::circle(cROI, 
         MULT*(Distances.Spine[i]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
@@ -1185,7 +1090,7 @@ else
       4,
       cv::Scalar(255,0,255),-1);
 
-  for(unsigned int i=0;i<dIdx.size();i++)
+  for(unsigned int i=0;i<dIdx.size();++i)
   {
     cv::circle(cROI, 
         MULT*(newPoints[dIdx[i]]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
@@ -1205,21 +1110,7 @@ else
   if(blob.label==0)
   {
     unsigned int i;
-    /*std::vector<float> c;
-    std::vector<float> c_tmp;
-    int sf=21;
-    std::vector<double> idx;
-    for(unsigned int i=0;i<vcurv.size();i++)
-    {
-      idx.push_back(i);
-    }
-    vcurv[0]=(vcurv.back()+vcurv[1])/2;
-    //Gnuplot g1("linespoints");
-    smoothVec(vcurv,c_tmp,sf,(float)0.0);
-    smoothVec(c_tmp,c,sf/2,(float)0.0);
-    g1.plot_xy(idx,c,"curvature smoothened");
-    //wait_for_key();
-    //copyMakeBorder( cROI, final, (1600-cROI.rows)/2 , (1600-cROI.rows)/2, (1600-cROI.cols)/2, (1600-cROI.cols)/2, cv::BORDER_CONSTANT , 0 );*/
+
     cv::imshow("LRV1",cROI);
     for(i=0;i<Distances.Spine.size()-1;i++)
       std::cout << Distances.Spine[i] << ", " ;
@@ -1238,10 +1129,9 @@ else
   Distances.MaxDistPoints.second=Distances.Spine.back();
   Distances.p20.x=Distances.Spine[2].x;
   Distances.p20.y=Distances.Spine[2].y;
-  Distances.p80.x=Distances.Spine[8].x;
-  Distances.p80.y=Distances.Spine[8].y;
-  Distances.MidPoint.x=Distances.Spine[5].x;
-  Distances.MidPoint.y=Distances.Spine[5].y;
+  Distances.p80.x=Distances.Spine[9].x;
+  Distances.p80.y=Distances.Spine[9].y;
+  Distances.MidPoint=0.5*(Distances.Spine[5]+Distances.Spine[6]);
   return;
 }
 

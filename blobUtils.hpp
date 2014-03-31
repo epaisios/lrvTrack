@@ -2,16 +2,9 @@
 #define __LRVTRACK_BLOBUTILS_HPP__
 #include <opencv2/core/core.hpp>
 #include "cvblob.h"
+#define ROI_PADDING 0
 
-/*extern"C" {
-  void smooth_(float **x, 
-               float **y,
-               float **dy,
-               int *i, 
-               float *s, 
-               float ***v, 
-               float ***a );
-}*/
+unsigned long long getmsofday();
 
 void spline3(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -42,6 +35,7 @@ void spline2(std::vector<cv::Point2f> &cp,
            std::vector<float> &vcurv);
 
 double p2fdist(double x1,double y1, double x2, double y2);
+
 double p2fdist(cv::Point2f &a, cv::Point2f &b);
 
 double diff(cv::Point2f &a, cv::Point2f &b);

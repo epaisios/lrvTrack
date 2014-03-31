@@ -1,9 +1,19 @@
 #include "alglib/stdafx.h"
 #include "blobUtils.hpp"
-#include "lrvTrackBase.hpp"
 #include "boost/dynamic_bitset.hpp"
 #include "alglib/interpolation.h"
+#include <sys/time.h>
 
+unsigned long long getmsofday()
+{
+  struct timeval tv;
+  gettimeofday(&tv,NULL);
+  return (long long)tv.tv_sec*1000*1000 + tv.tv_usec;
+}
+
+bool isLeft(cv::Point2f &a, cv::Point2f &b, cv::Point2f &c){
+  return ((b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x)) > 0;
+}
 std::string printVector(alglib::real_1d_array &vec)
 {
   if (vec.length()==0)
@@ -23,31 +33,16 @@ std::string printVector(alglib::real_1d_array &vec)
 
 double p2fdist(double x1,double y1, double x2, double y2)
 {
-  if(x1==x2 && y1==y2)
-    return 0;
-  float xdiff=x1 - x2;
-  float ydiff=y1 - y2;
-  float sqDst=xdiff*xdiff + ydiff*ydiff;
-  float res;
-  ltsqrt(&res,&sqDst);
-    if(!std::isfinite(res))
-    {
-      std::cerr << "[" << x1 << "," << y1 << "-" << x2 << "," << y2 << "] : ";
-      std::cerr << sqDst <<std::endl;
-    }
-  return (double) res;
+  double xdiff=x1 - x2;
+  double ydiff=y1 - y2;
+  return sqrt(xdiff*xdiff + ydiff*ydiff);
 }
 
 double p2fdist(cv::Point2f &a, cv::Point2f &b)
 {
-  if(a==b)
-    return 0;
-  float xdiff=a.x - b.x;
-  float ydiff=a.y - b.y;
-  float sqDst=xdiff*xdiff + ydiff*ydiff;
-  float res;
-  ltsqrt(&res,&sqDst);
-  return (double) res;
+  double xdiff=a.x - b.x;
+  double ydiff=a.y - b.y;
+  return sqrt(xdiff*xdiff + ydiff*ydiff);
 }
 
 //cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c)
@@ -386,8 +381,8 @@ void createLarvaContour(cv::Mat &lrvROI,
     cvb::cvConvertChainCodesToPolygon(&blob.contour);
 
   if (lrvROI.empty())
-    lrvROI=cv::Mat(blob.maxy-blob.miny+1+(2*ROI_PADDING)+(2*PADDING),
-                        blob.maxx-blob.minx+1+(2*ROI_PADDING)+(2*PADDING),
+    lrvROI=cv::Mat(blob.maxy-blob.miny+1+(2*PADDING),
+                        blob.maxx-blob.minx+1+(2*PADDING),
                         type,bg);
 
   cv::Point *ContourPoints[1];
@@ -398,8 +393,8 @@ void createLarvaContour(cv::Mat &lrvROI,
 
   for (unsigned int i=0; i<cntPoly->size(); ++i)
   {
-    ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING+PADDING;
-    ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING+PADDING;
+    ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+PADDING;
+    ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+PADDING;
     if(!FILL && i>0)
     {
       cv::line(lrvROI,ContourPoints[0][i-1],ContourPoints[0][i],color,1,connectivity);
@@ -565,74 +560,21 @@ double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 )
   double dy2 = pt2.y - pt0.y;
   return acos((dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10));
 }
-/*
-double angleD( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 )
-{
-    cv::Point2f ab = pt0-pt1;
-    cv::Point2f cb = pt0-pt2;
 
-    // dot product  
-    float dot = (ab.x * cb.x + ab.y * cb.y);
-
-    // length square of both vectors
-    float abSqr = ab.x * ab.x + ab.y * ab.y;
-    float cbSqr = cb.x * cb.x + cb.y * cb.y;
-
-    // square of cosine of the needed angle    
-    float cosSqr = dot * dot / abSqr / cbSqr;
-
-    // this is a known trigonometric equality:
-    // cos(alpha * 2) = [ cos(alpha) ]^2 * 2 - 1
-    float cos2 = 2 * cosSqr - 1;
-
-    // Here's the only invocation of the heavy function.
-    // It's a good idea to check explicitly if cos2 is within [-1 .. 1] range
-
-    const float pi = 3.141592f;
-
-    float alpha2 =
-        (cos2 <= -1) ? pi :
-        (cos2 >= 1) ? 0 :
-        acosf(cos2);
-
-    float rslt = alpha2 / 2;
-
-    float rs = rslt * 180. / pi;
-
-
-    // Now revolve the ambiguities.
-    // 1. If dot product of two vectors is negative - the angle is definitely
-    // above 90 degrees. Still we have no information regarding the sign of the angle.
-
-    // NOTE: This ambiguity is the consequence of our method: calculating the cosine
-    // of the double angle. This allows us to get rid of calling sqrt.
-
-    if (dot < 0)
-        rs = 180 - rs;
-
-    // 2. Determine the sign. For this we'll use the Determinant of two vectors.
-
-    float det = (ab.x * cb.y - ab.y * cb.y);
-    if (det < 0)
-        rs = -rs;
-
-    return (int) floor(rs + 0.5);
-}
-*/
-
-double angleD( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 )
+double angleD( cv::Point2f &pt2, cv::Point2f &pt0, cv::Point2f &pt1 )
 {
   //Absolute Tail/Head Angle
   cv::Point2f newPT1=pt1-pt0;
-  double MULVAL=180.0/CV_PI;
   double arc1=atan2(newPT1.y,newPT1.x);
   double arc2=atan2(pt2.y,pt2.x);
   cv::Point2f newPT2=pt2-pt0;
   cv::Point2f rt;
   rt.x=newPT2.x * cos(-arc1) - newPT2.y*sin(-arc1);
   rt.y=newPT2.x * sin(-arc1) + newPT2.y*cos(-arc1);
-  arc2=MULVAL*atan2(rt.y,rt.x);
-  return fabs(arc2);
+  arc2=atan2(rt.y,rt.x);
+  if(arc2<0)
+    arc2=2*CV_PI+arc2;
+  return arc2;
 }
 
 double angleC( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 )
@@ -1353,7 +1295,7 @@ double getSurroundingSize(cv::Point2f &point,
   cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),12,cv::Scalar(255),-1);
   cv::Mat area=ROI&cROI;
   cv::equalizeHist( area, area);
-  lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
+  //lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
   double nz=cv::norm(area,cv::NORM_L1);
   double nc=cv::countNonZero(area);
   return nz/nc;
@@ -1428,7 +1370,7 @@ double getSurroundingSize(cv::Point2f &point,
   //cv::Mat prearea=preROI&cROI;
   cv::equalizeHist( area, area);
   //cv::equalizeHist( prearea, prearea);
-  lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
+  //lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
   //lrvTrackNormalize(prearea,prearea,0,255,cv::NORM_MINMAX);
   //cv::adaptiveBilateralFilter(test,area,cv::Size(5,5),10);
   //cv::bilateralFilter(test,area,4,8,2);

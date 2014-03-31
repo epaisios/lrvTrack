@@ -2,6 +2,8 @@
  * Class containing information about each larva and its history on the plate.
  */
 #include "larvaObject.hpp"
+#include "lrvTrackBase.hpp"
+#include "lrvTrackDebug.hpp"
 #include <iostream>
 
 using namespace std;

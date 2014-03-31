@@ -15,6 +15,7 @@
 #include "larvaDistanceMap.hpp"
 #include "larvaSkel.hpp"
 #include "lrvTrackDebug.hpp"
+#include "lrvTrackFit.hpp"
 #include <fstream>
 #ifndef _WIN32
 #include <sys/time.h>

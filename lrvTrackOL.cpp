@@ -196,6 +196,42 @@ void handleKeys(bool &STEP,bool &STOP, bool &TRACK, bool &SHOWTAGS)
     }
 }
 
+double is_larva(larvaObject &f)
+{
+  double avg_a=0.0;
+  double avg_l=0.0;
+  double avg_w=0.0;
+  double avg_p=0.0;
+  double avg_wavg=0.0;
+  double avg_wsd=0.0;
+  double total=0.0;
+  unsigned int blen=f.blobs.size();
+  for(unsigned int i=0;i<f.blobs.size();i++)
+  {
+    avg_a+=f.blobs[i].area;
+    avg_l+=f.lrvDistances[i].MaxDist;
+    avg_w+=f.lrvDistances[i].WidthDist;
+    avg_p+=f.perimeter[i];
+    avg_wavg+=f.lrvDistances[i].WidthAvg;
+    avg_wsd+=f.lrvDistances[i].WidthSD;
+  }
+    avg_a=avg_a/blen;
+    avg_l=avg_l/blen;
+    avg_w=avg_w/blen;
+    avg_p=avg_p/blen;
+    avg_wavg=avg_wavg/blen;
+    avg_wsd=avg_wsd/blen;
+    total+=1.09*pow(avg_a,0.4)
+         -4.3*pow(avg_l,0.8)
+         +12*avg_w
+         +3*avg_p;
+    BOOST_LOG_TRIVIAL(debug) << "ISLARVA, " << f.larva_ID << ", "
+                      << avg_a << ", " << avg_l << ", "
+                      << avg_w << ", " << avg_p << ", " 
+                      << avg_wavg << ", " << avg_wsd << ", " << total;
+  return total;
+}
+
 void showTags2()
 {
       map<unsigned int,larvaObject>::iterator it=detected_larvae.begin();
@@ -467,34 +503,6 @@ bool centresMatch(
     }
 }
 
-
-/*
- * The function returns a guess on whether a blob is indeed a larva or not. The formula used
- * was optimized using optimization methods in R and real measured larvae from the Barcelona
- * data.
- *
- */
-double is_larva(cvb::CvBlob *blob,bool out=false)
-{
-  vector<Point2f> newLarvaPoints;
-  blobToPointVector(*blob,newLarvaPoints);
-  larvaDistanceMap dstLarva(newLarvaPoints);
-  fixContour(*blob,dstLarva,LRVTRACK_CONTOUR_RESOLUTION,colorFrame,previousFrame);
-  Mat larvaROI;
-  createLarvaContour(larvaROI,*blob);
-  double greyVal=getGreyValue(larvaROI,*blob,greyFrame);
-  double perimeter=getPerimeter(*blob);
-  double a,l,w,p;
-  a=blob->area;
-  l=dstLarva.MaxDist;
-  w=dstLarva.WidthDist;
-  p=getPerimeter(*blob);
-  //cout << CURRENT_FRAME << ", " << blob->label << ", " << blob->area << " ," << l << ", " << w << ", " << greyVal << ", " << perimeter << endl;
-  return 1.09*pow(a,0.4)
-         -4.3*pow(l,0.8)
-         +12*w
-         +3*p; 
-}
 
 bool larvaToRing(cvb::CvBlob &blob)
 {
@@ -1167,6 +1175,10 @@ int detect_clustering(vector<unsigned int> &preLarvaeNearby,
       //                         << ". Assigning clustering";
 
       assign_clustering(*nIT,preLarvaeNearby);
+      /* LarvaFit Test starts here: */
+      
+      /* LarvaFit Test ends here: */
+
       //continue;
       break;
     }
@@ -1336,7 +1348,6 @@ void updateOneLarva(cvb::CvBlobs &In,
     newLarva.length_sum= Distances.MaxDist;
     newLarva.length_max = Distances.MaxDist;
     newLarva.length_min = Distances.MaxDist;
-    PointPair MAXPair=Distances.MaxDistPoints;
     Point2f Head,Tail;
     Point2f bp(newLarva.blobs.back().minx,newLarva.blobs.back().miny);
     Head=Distances.Spine[0]-bp;
@@ -1555,7 +1566,6 @@ void updateOneLarva(cvb::CvBlobs &In,
     {
       cur_larva.length_min=Distances.MaxDist;
     }
-    PointPair MAXPair=Distances.MaxDistPoints;
 
     cur_larva.width.push_back(Distances.WidthDist);
     cur_larva.width_mean=(cur_larva.width_mean+Distances.WidthDist)/2;
@@ -1595,42 +1605,7 @@ void updateOneLarva(cvb::CvBlobs &In,
       cur_larva.perimeter_min=perimeter;
     }
 
-    double preRnd=cur_larva.roundness.back();
-    double preLen=cur_larva.length[cur_larva.length.size()-2];
-    cur_larva.roundness.push_back((perimeter*perimeter)/(2*CV_PI*blob.area));
-    double curRnd=cur_larva.roundness.back();
-    double curLen=cur_larva.length.back();
-    double RndRat=curRnd/preRnd;
-
-    if(cur_larva.round_flag.back()==false && curRnd <= 2.6 && RndRat<0.9)
-    {
-      cur_larva.round_flag.push_back(true);
-    }
-    else if(cur_larva.round_flag.back()==true && curRnd>=3.0 && RndRat>1.09)
-    {
-      cur_larva.round_flag.push_back(false);
-    }
-    else if(cur_larva.round_flag.back()==true)
-    {
-      cur_larva.round_flag.push_back(true);
-    }
-    else if(cur_larva.round_flag.back()==false)
-    {
-      cur_larva.round_flag.push_back(false);
-    }
-    // Construct a vector of points including both
-    // head and tail to decide which is which
-    //vector<Point2f> startPoints;
-
-    // Points must be corrected to match the ROI including the padding set
-    /*startPoints.push_back(Point2f(
-      MAXPair.first.x-blob.minx+ROI_PADDING,
-      MAXPair.first.y-blob.miny+ROI_PADDING)
-      );
-      startPoints.push_back(Point2f(
-      MAXPair.second.x-blob.minx+ROI_PADDING,
-      MAXPair.second.y-blob.miny+ROI_PADDING)
-      );*/
+    double prespDist=p2fdist(cur_larva.heads.back(),cur_larva.tails.back());
     //execute the function to find which is which and assign appropriately
     //to Head/Tail.
     Head=Distances.Spine[0];
@@ -1640,7 +1615,54 @@ void updateOneLarva(cvb::CvBlobs &In,
     cur_larva.tails.push_back(Tail);
     cur_larva.heads_brightness.push_back(getSurroundingSize(Head,blob,greyFrame));
     cur_larva.tails_brightness.push_back(getSurroundingSize(Tail,blob,greyFrame));
-    //findHeadTail(cur_larva,Distances,Head,Tail);
+
+    double preRnd=cur_larva.roundness.back();
+    double preLen=cur_larva.length[cur_larva.length.size()-2];
+    cur_larva.roundness.push_back((perimeter*perimeter)/(2*CV_PI*blob.area));
+    double curRnd=cur_larva.roundness.back();
+    double curLen=cur_larva.length.back();
+    double RndRat=curRnd/preRnd;
+    double spDist=p2fdist(cur_larva.heads.back(),cur_larva.tails.back());
+    //double spDist=distanceBetweenSpines(
+    //             Distances,
+    //             cur_larva.lrvDistances[cur_larva.lrvDistances.size()-2]);
+    if(cur_larva.round_flag.back()==false && curRnd <= 2.6 && RndRat<0.9)
+    {
+      /*BOOST_LOG_TRIVIAL(debug) << "RND, S, " << CURRENT_FRAME 
+        << ", " << cur_larva.larva_ID
+        << ", " << curRnd
+        << ", " << RndRat
+        << ", " << spDist
+        << ", " << spDist/prespDist;*/
+      cur_larva.round_flag.push_back(true);
+    }
+    else if(cur_larva.round_flag.back()==true && curRnd>=3.0 && RndRat>1.09)
+    {
+      /*BOOST_LOG_TRIVIAL(debug) << "RND, E, " << CURRENT_FRAME 
+        << ", " << cur_larva.larva_ID
+        << ", " << curRnd
+        << ", " << RndRat
+        << ", " << spDist;*/
+      cur_larva.round_flag.push_back(false);
+    }
+    else if(cur_larva.round_flag.back()==true)
+    {
+      /*BOOST_LOG_TRIVIAL(debug) << "RND, -, " << CURRENT_FRAME 
+        << ", " << cur_larva.larva_ID
+        << ", " << curRnd
+        << ", " << RndRat
+        << ", " << spDist;*/
+      cur_larva.round_flag.push_back(true);
+    }
+    else if(cur_larva.round_flag.back()==false)
+    {
+      /*BOOST_LOG_TRIVIAL(debug) << "RND, -, " << CURRENT_FRAME 
+        << ", " << cur_larva.larva_ID
+        << ", " << curRnd
+        << ", " << RndRat
+        << ", " << spDist;*/
+      cur_larva.round_flag.push_back(false);
+    }
 
     //Add head and tail to the history
 
@@ -1871,7 +1893,7 @@ unsigned int matchLostLarvae(unsigned int newLabel)
 
 void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 {
-  cvb::CvBlobs::iterator it=In.begin();
+  //cvb::CvBlobs::iterator it=In.begin();
   tbb::concurrent_hash_map<unsigned int, larvaObject> NEW_LARVA;
   larvaeUpdateBody body(In,Prev,NEW_LARVA);
   parallel_for_(Range(0, In.size()), body);
@@ -2451,6 +2473,12 @@ int handle_args(int argc, char* argv[])
       ("verbose,v",
        po::value<int>(&LRVTRACK_VERBOSE_LEVEL),
        "Verbosity (0-3).")
+      ("dstep,d",
+       po::value<int>(&LRVTRACK_DSTEP),
+       "Dstep.")
+      ("wstep,w",
+       po::value<double>(&LRVTRACK_WSTEP),
+       "Wstep.")
       ;
 
       po::options_description IOopts("Input Output Options");
@@ -2685,10 +2713,20 @@ int handle_args(int argc, char* argv[])
 */
 void verifyLarvae(larvaObject &f)
 {
+  double ilval=is_larva(f);
+  //BOOST_LOG_TRIVIAL(debug) << "Verify: L" << f.larva_ID << ": " << ilval;
   if(f.collided_to!=0)
     detected_larvae[f.collided_to].isCluster=true;
   if(f.diverged_to.empty()==false)
     f.isCluster=true;
+  double total=0;
+  if(f.isCluster==false)
+  {
+    if(ilval>310)
+    {
+      f.isCluster=true;
+    }
+  }
 }
 
 void determineHeadTail(larvaObject &f)
@@ -2808,9 +2846,9 @@ void determineHeadTail(larvaObject &f)
       << "RHead" << f.heads[preBreak]+startbp << " "
       << "RTail" << f.tails[preBreak]+startbp 
       << endl;
-    d << "|      End[ " << endBreak-1 <<"]: Centroid" << endPos << " "
-      << "RHead" << f.heads[endBreak-1]+endbp << " "
-      << "RTail" << f.tails[endBreak-1]+endbp
+    d << "|      End[ " << endBreak <<"]: Centroid" << endPos << " "
+      << "RHead" << f.heads[endBreak]+endbp << " "
+      << "RTail" << f.tails[endBreak]+endbp
       << endl;
     d << "|========================================= " << endl;
   }
@@ -2829,6 +2867,36 @@ void secondPass()
   
   std::map<unsigned int,larvaObject>::iterator dlit;
   dlit=detected_larvae.begin();
+  //quick_loop for some general values
+  unsigned int not_larva_scale_cnt=0;
+  double not_larva_scale_avg=0.0;
+  double not_larva_scale_min=0.0;
+  unsigned int larva_scale_cnt=0;
+  double larva_scale_avg=0.0;
+  for(;dlit!=detected_larvae.end();++dlit)
+  {
+    if(dlit->second.isCluster==true)
+    {
+      double nv=is_larva(dlit->second);
+      not_larva_scale_avg+=nv;
+      if(not_larva_scale_min>nv)
+        not_larva_scale_min=nv;
+      not_larva_scale_cnt++;
+    }
+    else
+    {
+      larva_scale_avg+=is_larva(dlit->second);
+      larva_scale_cnt++;
+    }
+  }
+  
+  not_larva_scale_avg=not_larva_scale_avg/not_larva_scale_cnt;
+  larva_scale_avg=larva_scale_avg/larva_scale_cnt;
+
+  BOOST_LOG_TRIVIAL(debug) << "LARVA_SCALE: NOT_LARVA_AVG[" << not_larva_scale_avg
+                           << "] NOT_LARVA_MIN[" << not_larva_scale_min
+                           << "] LARVA_AVG[" << larva_scale_avg;
+
   for(;dlit!=detected_larvae.end();++dlit)
   {
     /* Here we can run it along with the determine head since the
@@ -2865,7 +2933,6 @@ int main(int argc, char* argv[])
   VideoCapture capture;
   // Handle command line arguments
   handle_args(argc,argv);
-  
   if(setup_capture_input(capture) == -1)
   {
     BOOST_LOG_TRIVIAL(error) 
@@ -2873,6 +2940,11 @@ int main(int argc, char* argv[])
     exit(1);
   }
   extract_background(capture,bgFrame);
+
+  //Initialize the frame size
+  FRAME_COLS=bgFrame.cols;
+  FRAME_ROWS=bgFrame.rows;
+  
   cvb::CvBlobs preBlobs;
   if (LRVTRACK_SAVE_PROCESSED_VIDEO!="" && !vidPOut.isOpened())
   {
@@ -2887,6 +2959,8 @@ int main(int argc, char* argv[])
       exit(5);
     }
   }
+  larvaFit lf;
+  double totalFitError=0.0;
   while (!STOP)
   {
     if (!get_next_frame(capture,greyFrame,colorFrame))
@@ -2920,8 +2994,14 @@ int main(int argc, char* argv[])
       {
         //printSummary(preBlobs,NEW,false);
       }
-
       preBlobs=tracked_blobs;
+      //stringstream sstr;
+      //sstr<<lf;
+      //BOOST_LOG_TRIVIAL(debug) << sstr;
+      unsigned long long a=getmsofday();
+      totalFitError+=lf.optimize2(detected_larvae[15].blobs.back());
+      BOOST_LOG_TRIVIAL(debug) << "FitTime: " << getmsofday()-a << "micros";
+      //lf.showContour();
     }
     else
     {
@@ -2937,7 +3017,11 @@ int main(int argc, char* argv[])
         i++;
       }
       updateLarvae(preBlobs,preBlobs);
+      //initialize(detected_larvae[3]);
       LARVAE_COUNT=preBlobs.size();
+      lf.setup(detected_larvae[15]);
+      lf.setloops(LRVTRACK_DSTEP,LRVTRACK_WSTEP);
+      lf.optimize2(detected_larvae[15].blobs.back());
     }
 
     //dumpDetectedLarvae();
@@ -2958,9 +3042,9 @@ int main(int argc, char* argv[])
     //handleKeys(STEP,STOP,TRACK,SHOWTAGS);
     std::cerr << "F: " << CURRENT_FRAME << "/" << TOTAL_FRAMES << "\r";
   }
-  
   std::cerr << endl;
-
+  BOOST_LOG_TRIVIAL(debug) << "Total Fit Error:" << totalFitError ;
+  return 0;
   secondPass();
   if(setup_capture_input(capture) == -1)
   {

@@ -2,12 +2,12 @@
 #define __LRVTRACK_LARVADISTANCEMAP_HPP
 #include <opencv2/core/core.hpp>
 #include <vector>
-#include "lrvTrackBase.hpp"
 #include "cvblob.h"
 
 #define SPINE_SEGMENTS 12
 
-//typedef std::unordered_map<PointPair, double> DistanceMap;
+typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
+
 double p2fdist(cv::Point2f &a, cv::Point2f &b);
 double p2fdist(double x1,double y1, double x2, double y2);
 
@@ -20,6 +20,8 @@ private:
 public:
   double MaxDist;
   double WidthDist;
+  double WidthAvg;
+  double WidthSD;
   unsigned int spineSegments;
   PointPair MaxDistPoints;
   cv::Point2f MidPoint;
@@ -101,6 +103,8 @@ void lBFS(int p1,
 void computeInnerDistances(cvb::CvBlob &blob,
                            larvaDistanceMap &Distances,
                            cv::Point2f &MidPoint);
+
+double distanceBetweenSpines(larvaDistanceMap &a,larvaDistanceMap &b);
 
 void fixContour(
     cvb::CvBlob &blob,

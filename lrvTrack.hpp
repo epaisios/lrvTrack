@@ -10,6 +10,8 @@
 #include <opencv2/ocl/ocl.hpp>
 #endif
 #include <tbb/concurrent_hash_map.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
 #include <fstream>
 #include "larvaObject.hpp"
 #include <boost/timer/timer.hpp>
@@ -54,12 +56,14 @@ std::ofstream csvfile;
 int START_FRAME=0;
 
 // *** FLAGS ***
+int LRVTRACK_DSTEP=15;
+double LRVTRACK_WSTEP=0.02;
 int LRVTRACK_VERBOSE_LEVEL=1;
 std::string LRVTRACK_RESULTS_FOLDER;
 std::string LRVTRACK_DATE;
 std::string LRVTRACK_NAME;
 std::string LRVTRACK_SAVE_VIDEO;
-std::string LRVTRACK_SAVE_PROCESSED_VIDEO;
+std::string LRVTRACK_SAVE_PROCESSED_VIDEO="";
 std::string LRVTRACK_FILE_INPUT;
 int  LRVTRACK_CAMERA_INPUT;
 int  LRVTRACK_ODOUR_CUPS=0;
@@ -89,6 +93,9 @@ double VIDEO_FPS=24.1;
 static unsigned int CURRENT_FRAME=0;
 static unsigned int TOTAL_FRAMES=0;
 unsigned int LARVAE_COUNT=0;
+
+size_t FRAME_COLS;
+size_t FRAME_ROWS;
 
 std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
 std::map<unsigned int,larvaObject> detected_larvae;

@@ -1,58 +1,37 @@
 #ifndef __LRVTRACK_DEBUG_HPP__
 #define __LRVTRACK_DEBUG_HPP__
 #include <string>
+#include <sstream>
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/log/expressions.hpp>
-
-using namespace std;
-namespace logging = boost::log;
-//
 //Debugging functions for output
-void log_init()
-{
-      logging::core::get()->set_filter
-            (
-                     logging::trivial::severity >= logging::trivial::debug
-                         );
-}
-void verbosePrint(stringstream &toPrint)
-{
-  if(LRVTRACK_VERBOSE_LEVEL>0)
-    {
-      cout << "LrvTrack DEBUG: " << toPrint.str() << endl;
-      toPrint.str("");
-      toPrint.clear();
-    }
-}
+extern int LRVTRACK_VERBOSE_LEVEL;
 
-void verbosePrint(const char * toPrint)
+void log_init();
+void verbosePrint(std::stringstream &toPrint);
+void verbosePrint(const char * toPrint);
+void verbosePrint(std::string &toPrint);
+std::string printUIMap(std::map<unsigned int, unsigned int> &A);
+namespace std
 {
-  if(LRVTRACK_VERBOSE_LEVEL>0)
+  template <typename number >
+    std::string printVector(std::vector<number> vec,int position=0)
     {
-      cout << "LrvTrack DEBUG: " << toPrint << endl;
+      if (vec.size()==0)
+        return "";
+      std::stringstream sstm;
+      //bool const is_number= std::is_arithmetic<number>::value;
+      //static_assert( is_number, "Provided type is not an arithmetic type");
+      sstm << "[" ;
+      typename std::vector<number>::const_iterator i=vec.begin()+position;
+      sstm << *i ;
+      ++i;
+      for( ; i != vec.end(); ++i)
+        sstm << ","<< *i;
+      sstm << "]";
+      return sstm.str();
     }
-}
-void verbosePrint(string &toPrint)
-{
-  if(LRVTRACK_VERBOSE_LEVEL>0)
-    {
-      cout << "LrvTrack DEBUG: " << toPrint << endl;
-    }
-}
-
-string printUIMap(map<unsigned int, unsigned int> &A)
-{
-  stringstream F;
-  map<unsigned int, unsigned int>::iterator Ait=A.begin();
-  F << "[ ";
-  while(Ait!=A.end())
-  {
-    F << Ait->first << " -> " << Ait->second << ",";
-    ++Ait;
-  }
-  F << " ]";
-  return F.str();
 }
 
 #endif
