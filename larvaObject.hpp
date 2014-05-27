@@ -12,14 +12,14 @@
 class blobObject_OL{
   private:
     // ID of the larva
-    unsigned int ID;
+    size_t ID;
 
     // ID of the originating blob of the larva.
     //  if the blob was there from the begining then
     //    originating_ID=ID
     //  if the blob is comming after dissapearing
     //    originating_ID=0
-    unsigned int originating_ID;
+    size_t originating_ID;
 
     // ID where the blob entered before it dissappeared
     //  if the blob ends without a collision or dissapearing
@@ -27,13 +27,13 @@ class blobObject_OL{
     //  if the blob dissapears
     //  ending_ID=0
     
-    unsigned int ending_ID;
+    size_t ending_ID;
 
     // Frame number of Nth data instance
-    std::vector<unsigned int> FRAME;
+    std::vector<size_t> FRAME;
 
     // Frames of existence until the Nth data instance
-    std::vector<unsigned int> FRAMES_COUNT;
+    std::vector<size_t> FRAMES_COUNT;
 
     //Vectors of length, width,size, perimeter, grey_value,various speeds etc.
     std::vector<double> length;
@@ -58,6 +58,9 @@ class blobObject_OL{
 
     //Vector of original blobs
     std::vector<cvb::CvBlob> blobs;
+    
+    //Vector of original blobs
+    //std::vector<larvaFit> fitLarva;
 
     bool collisionObject;
 };
@@ -68,16 +71,17 @@ class blobObject_OL{
 class larvaObject
 {
 public:
-  unsigned int start_frame;
-  unsigned int end_frame;
-  unsigned int lifetimeWithStats;
-  unsigned int lastBlobWithStats;
-  unsigned int lastFrameWithStats;
-  unsigned int larva_ID;
-  unsigned int old_ID;
-  std::vector<unsigned int> diverged_to;
-  unsigned int collided_to;
+  size_t start_frame;
+  size_t end_frame;
+  size_t lifetimeWithStats;
+  size_t lastBlobWithStats;
+  size_t lastFrameWithStats;
+  size_t larva_ID;
+  size_t old_ID;
+  std::vector<size_t> diverged_to;
+  size_t converged_to;
   bool isCluster;
+  int blobSize;
   std::vector<double> capture_times;
   std::vector<cvb::CvBlob> blobs; //Blob for each frame for a given larva
   std::vector<double> area;
@@ -133,7 +137,7 @@ public:
   double centroid_distance_x_sum;
   double centroid_distance_y_sum;
 
-  std::vector<unsigned int> inCluster;
+  std::vector<size_t> inCluster;
 
   std::vector<larvaDistanceMap> lrvDistances;
 
@@ -150,8 +154,9 @@ public:
     lifetimeWithStats(0),
     lastBlobWithStats(0),
     larva_ID(0),
-    collided_to(0),
+    converged_to(0),
     isCluster(false),
+    blobSize(1),
     area_mean(0),
     area_sum(0),
     area_max(0),
@@ -179,8 +184,8 @@ public:
   
   void dump() const;
   int switchFaultyAssignment(
-    std::map<unsigned int,std::vector<unsigned int> > &detected_clusters,
-    std::map<unsigned int,larvaObject> &detected_larvae
+    std::map<size_t,std::vector<size_t> > &detected_clusters,
+    std::map<size_t,larvaObject> &detected_larvae
   );
 };
 #endif

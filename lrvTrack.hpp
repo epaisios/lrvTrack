@@ -87,19 +87,20 @@ double LARVA_MAHALANOBIS_THRESHOLD=2.3;
 double LARVA_OBJECT_LENGTH=40;
 double IS_LARVA_THRESHOLD=253.2;
 double COLLISION_DURATION_THRESHOLD=48;
-unsigned int HISTORY_SIZE=10;
+size_t HISTORY_SIZE=10;
 
 double VIDEO_FPS=24.1;
-static unsigned int CURRENT_FRAME=0;
-static unsigned int TOTAL_FRAMES=0;
-unsigned int LARVAE_COUNT=0;
+size_t CURRENT_FRAME=0;
+static size_t TOTAL_FRAMES=0;
+size_t LARVAE_COUNT=0;
 
 size_t FRAME_COLS;
 size_t FRAME_ROWS;
 
-std::map<unsigned int, std::vector<unsigned int> > detected_clusters;
-std::map<unsigned int,larvaObject> detected_larvae;
-std::vector<unsigned int> lost_larvae;
+std::map<size_t, std::vector<size_t> > parent_blobs;
+std::map<size_t, std::vector<size_t> > children_blobs;
+std::map<size_t,larvaObject> detected_larvae;
+std::vector<size_t> lost_larvae;
 
 std::vector<cv::Vec3f> circles;
 std::vector<cv::Vec3f> cups;
@@ -107,10 +108,10 @@ std::vector<cv::Vec3f> cups;
 cvb::CvBlobs NEW;
 
 typedef struct {
-  unsigned int frame;
+  size_t frame;
   bool converging;
-  std::vector<unsigned int> from;
-  std::vector<unsigned int> to;
+  std::vector<size_t> from;
+  std::vector<size_t> to;
 } event;
 
 std::vector<event> events;
@@ -120,10 +121,10 @@ std::vector<event> events;
 // Assignments are such that:
 //    [ IDP of Previous Frame, [ IDN1, ..., IDNN]] IDs of
 //    new Frame assigned to IDP
-std::map<unsigned int, std::vector<unsigned int> > assignedPrevious;
-std::map<unsigned int, unsigned int> assignedPreMap;
-std::vector<unsigned int> newClusters;
-std::map<unsigned int,std::vector<unsigned int> > newDiverging;
+std::map<size_t, std::vector<size_t> > assignedPrevious;
+std::map<size_t, size_t> assignedPreMap;
+std::vector<size_t> newClusters;
+std::map<size_t,std::vector<size_t> > newDiverging;
 
 // map of assignments of the blobs in the current frame.
 // Assignments are such that:
@@ -131,8 +132,8 @@ std::map<unsigned int,std::vector<unsigned int> > newDiverging;
 //    [ IDP of Current Frame, [ID_NN, IDN1, ..., IDNN]] IDs of
 //    Previous Frame assigned to IDP
 //    ID NN
-std::map<unsigned int, std::vector<unsigned int> > assignedNew;
-std::vector<unsigned int> newInFrame;
+std::map<size_t, std::vector<size_t> > assignedNew;
+std::vector<size_t> newInFrame;
 //**********************************************************************
 
 /*cpu_timer tS;
@@ -141,6 +142,29 @@ cpu_times FrameEllapsedTime;
 cpu_times CurrentTime;*/
 
 double PIXEL_SIZE_IN_MM=0.14450867052023;
+
+const uint64_t factorial_vec[21]={1,
+                            1,
+                            2,
+                            6,
+                            24,
+                            120,
+                            720,
+                            5040,
+                            40320,
+                            362880,
+                            3628800,
+                            39916800,
+                            479001600,
+                            6227020800,
+                            87178291200,
+                            1307674368000,
+                            20922789888000,
+                            355687428096000,
+                            6402373705728000,
+                            121645100408832000,
+                            2432902008176640000};
+
 
 cv::Mat processedFrame;
 cv::Mat greyFrame;
@@ -153,6 +177,6 @@ int DEBUG_INFO=0;
 double Wlength=1.0;
 double Wsize=0.2;
 
-unsigned int bestCircle=0;
+size_t bestCircle=0;
 
 #endif

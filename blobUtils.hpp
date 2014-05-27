@@ -12,7 +12,7 @@ void spline3(std::vector<cv::Point2f> &cp,
            int n,
            int RES,
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di);
+           std::vector<size_t> &di);
 
 void spline4(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -20,9 +20,10 @@ void spline4(std::vector<cv::Point2f> &cp,
            int n,
            int RES,
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &cm,
-           std::vector<float> &vcurv);
+           std::vector<size_t> &di,
+           std::map<float,size_t> &cm,
+           std::vector<float> &vcurv,
+           double &cvariance);
 
 void spline2(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -30,8 +31,8 @@ void spline2(std::vector<cv::Point2f> &cp,
            int n,
            int RES,
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &cm,
+           std::vector<size_t> &di,
+           std::map<float,size_t> &cm,
            std::vector<float> &vcurv);
 
 double p2fdist(double x1,double y1, double x2, double y2);
@@ -39,7 +40,9 @@ double p2fdist(double x1,double y1, double x2, double y2);
 double p2fdist(cv::Point2f &a, cv::Point2f &b);
 
 double diff(cv::Point2f &a, cv::Point2f &b);
-void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points);
+void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points,size_t PAD=0);
+
+double vecVariance(std::vector<double> &c);
 
 void pointsToContourVector(cvb::CvBlob &blob,
                          std::vector<cv::Point2f> &kpoints,
@@ -64,6 +67,20 @@ void createLarvaContour(cv::Mat &lrvROI,
                         cv::Scalar bg=cv::Scalar(0)
                         );
 
+void createLarvaContour_custom(cv::Mat &lrvROI,
+                        cvb::CvBlob &blob,
+                        int type=CV_8UC1,
+                        int minx=0,
+                        int maxx=0,
+                        int miny=0,
+                        int maxy=0,
+                        int PAD=0,
+                        bool FILL=true,
+                        cv::Scalar color=cv::Scalar(255),
+                        int connectivity=4,
+                        cv::Scalar bg=cv::Scalar(0)
+    );;
+
 /*
 void createLarvaContourCV(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,
@@ -75,7 +92,7 @@ void createLarvaContourCV(cv::Mat &lrvROI,
 cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &e, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d);
 cv::Point2f px5Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d, cv::Point2f &e);
 
-void smoothPoints(std::vector<cv::Point2f> &origPoints, std::vector<cv::Point2f> &smoothened,cv::Mat &frame, unsigned int rep);
+void smoothPoints(std::vector<cv::Point2f> &origPoints, std::vector<cv::Point2f> &smoothened,cv::Mat &frame, size_t rep);
 
 void spline(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -123,7 +140,7 @@ void ssplint(std::vector<float> &d,
 */
 
 void createLarvaContourPacked(cv::Point &first, 
-                              unsigned int &size,
+                              size_t &size,
                               std::string &STR,
                               cvb::CvBlob &blob);
 
@@ -159,13 +176,14 @@ void curvVec(std::vector<cv::Point2f> &in,
              std::vector<float> &c);
 
 void getBestCurvature(std::vector<float> &c,
-                      std::vector<unsigned int> &di,
+                      std::vector<size_t> &di,
                       std::vector<float> &dmax
                       );
 void getBestCurvatureS(std::vector<float> &c,
-                      std::map<float,unsigned int> &curvatures,
-                      std::vector<unsigned int> &di,
-                      std::vector<float> &dmax
+                      std::map<float,size_t> &curvatures,
+                      std::vector<size_t> &di,
+                      std::vector<float> &dmax,
+                      double &variance
                       );
 namespace std{
 template<typename data>
@@ -187,12 +205,12 @@ template<typename data>
 
 template<typename data>
   void smoothVecMap(std::vector<data> &in,
-                 std::map<data,unsigned int> &out,
+                 std::map<data,size_t> &out,
                  std::vector<data> &out2,
                  int range, 
                  data initval)
   {
-    for(unsigned int i=0;i<in.size();i++)
+    for(size_t i=0;i<in.size();i++)
     {
       data ret;
       ret=getNeighboursAvg(in,i,range,initval);
@@ -207,7 +225,7 @@ template<typename data>
                  int range, 
                  data initval)
   {
-    for(unsigned int i=0;i<in.size();i++)
+    for(size_t i=0;i<in.size();i++)
     {
       data ret;
       ret=getNeighboursAvg(in,i,range,initval);

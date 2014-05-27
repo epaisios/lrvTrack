@@ -12,7 +12,7 @@ void log_init();
 void verbosePrint(std::stringstream &toPrint);
 void verbosePrint(const char * toPrint);
 void verbosePrint(std::string &toPrint);
-std::string printUIMap(std::map<unsigned int, unsigned int> &A);
+std::string printUIMap(std::map<size_t, size_t> &A);
 namespace std
 {
   template <typename number >

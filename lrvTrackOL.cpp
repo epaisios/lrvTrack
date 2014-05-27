@@ -1,9 +1,10 @@
 #include "lrvTrackOL.hpp"
+#include "lrvTrackPartitionGenerator.hpp"
 
 /*
  * Function to draw spine points of larvaObject lrv on frame img
  */
-void drawSpinePoints(Mat &img, larvaObject &lrv,unsigned int idx)
+void drawSpinePoints(Mat &img, larvaObject &lrv,size_t idx)
 {
   if(lrv.lrvDistances.size()==0)
     return;
@@ -34,7 +35,7 @@ void drawSpinePoints(Mat &img, larvaObject &lrv)
 void dumpDetectedLarvae()
 {
   BOOST_LOG_TRIVIAL(trace) << "Size: " << detected_larvae.size();
-  std::map<unsigned int,larvaObject>::const_iterator dlit;
+  std::map<size_t,larvaObject>::const_iterator dlit;
   dlit=detected_larvae.begin();
   stringstream d;
   d << "Contents: ";
@@ -55,7 +56,7 @@ void detectHeadTail()
 /*void detectHeadTailLarva(larvaObject &l)
 {
   double distance;
-  for(unsigned int i=0;i<l.centroid_speed_x.size();i++)
+  for(size_t i=0;i<l.centroid_speed_x.size();i++)
   {
     Point2f distz=l.lrvDistances[i].Spine[0] - l.lrvDistances[i].MidPoint;
     Point2f distb=l.lrvDistances[i].Spine.back() - l.lrvDistances[i].MidPoint;
@@ -77,10 +78,10 @@ double avgVec(vector<double> &vec)
  */
 namespace std{
   template<typename data>
-    double avgNVec(vector<data> &vec,unsigned int N=HISTORY_SIZE)
+    double avgNVec(vector<data> &vec,size_t N=HISTORY_SIZE)
     {
       double SUM=0;
-      unsigned int range;
+      size_t range;
       if (vec.size()>=N)
         range=N;
       else
@@ -93,21 +94,30 @@ namespace std{
 /*
  * Simple factorial (we just need small numbers so this should be quick enough)
  */
-unsigned int factorial(unsigned int num)
+uint64_t factorial(size_t n)
 {
-  unsigned int val=1;
-  while(num>1)
-    val=(num--)*val;
-
-  return val;
+      return factorial_vec[n];
 }
 
 /*
  * Number of combinations k of n
  */
-unsigned int kofn(unsigned int k, unsigned int n)
+size_t kofn(size_t k, size_t n)
 {
   return factorial(n)/(factorial(k)*factorial(n-k));
+}
+
+/*
+ * Stirling number of the second kind
+ * Set of N elements partitioned into k-blocks
+ */
+
+size_t stirling_2(size_t n, size_t k)
+{
+  int sum=0;
+  for(size_t j=0;j<=k;++j)
+    sum+=(int)(2*(((int) j+1)%2)-1) * (int)(kofn(j,k)*pow(k-j,n));
+  return sum/factorial(k);
 }
 
 /* This is not exactly the powerset. It is used for the detection of clustering
@@ -118,29 +128,29 @@ unsigned int kofn(unsigned int k, unsigned int n)
  *  OUT: Vector of vectors with the powersets (it does not contain powersets
  *       of 1 nor the complete vector as a set).
  */
-void powersets(vector<unsigned int> &IN, vector<vector<unsigned int> > &OUT){
-  for (unsigned int i=2 ; i<IN.size();i++)
+void powersets(vector<size_t> &IN, vector<vector<size_t> > &OUT){
+  for (size_t i=2 ; i<IN.size();i++)
   {
-    vector<unsigned int> pointers;
-    for(unsigned int k=0;k<i;k++)
+    vector<size_t> pointers;
+    for(size_t k=0;k<i;k++)
     {
       pointers.push_back(k);
     }
-    for (unsigned int j=0 ; j<kofn(i,IN.size());j++)
+    for (size_t j=0 ; j<kofn(i,IN.size());j++)
     {
-      vector<unsigned int> cvec;
-      for(unsigned int idx=0;idx<i;idx++)
+      vector<size_t> cvec;
+      for(size_t idx=0;idx<i;idx++)
       {
         cvec.push_back(IN[pointers[idx]]);
       }
       OUT.push_back(cvec);
-      for(unsigned int inc=i;inc>0;inc--)
+      for(size_t inc=i;inc>0;inc--)
       {
         if(pointers[inc-1]<IN.size()-1-(i-inc))
         {
           pointers[inc-1]++;
-          unsigned int add=0;
-          for(unsigned int res=inc;res<i;res++)
+          size_t add=0;
+          for(size_t res=inc;res<i;res++)
           {
             add++;
             pointers[res]=pointers[inc-1]+add;
@@ -196,6 +206,28 @@ void handleKeys(bool &STEP,bool &STOP, bool &TRACK, bool &SHOWTAGS)
     }
 }
 
+bool check_roundness(size_t lID, 
+                     double spDist, 
+                     double curRnd,
+                     double RndRat,
+                     double prespDist,
+                     double variance)
+{
+      /*BOOST_LOG_TRIVIAL(debug) << "RND, S, " << CURRENT_FRAME 
+        << ", " << lID
+        << ", " << curRnd
+        << ", " << RndRat
+        << ", " << spDist
+        << ", " << prespDist
+        << ", " << variance;*/
+    if(curRnd<=2.75)
+    {
+      return true;
+    }
+    else
+      return false;
+}
+
 double is_larva(larvaObject &f)
 {
   double avg_a=0.0;
@@ -205,8 +237,8 @@ double is_larva(larvaObject &f)
   double avg_wavg=0.0;
   double avg_wsd=0.0;
   double total=0.0;
-  unsigned int blen=f.blobs.size();
-  for(unsigned int i=0;i<f.blobs.size();i++)
+  size_t blen=f.blobs.size();
+  for(size_t i=0;i<f.blobs.size();i++)
   {
     avg_a+=f.blobs[i].area;
     avg_l+=f.lrvDistances[i].MaxDist;
@@ -232,9 +264,37 @@ double is_larva(larvaObject &f)
   return total;
 }
 
+void apply_model()
+{
+      for( auto &OOIp: detected_larvae) //OOI : Object of Interest
+      {
+        larvaObject &OOI=OOIp.second;
+        if(OOI.start_frame==CURRENT_FRAME && 
+           parent_blobs[OOI.larva_ID].size()>1 )
+        {
+          //Find predecessor's (if any and if collision)
+          //and then use the model :)
+          vector<cvb::CvBlob> vec;
+          for(auto &parents: parent_blobs[OOI.larva_ID])
+          {
+            cvb::CvBlob &nblob=detected_larvae[parents].blobs.back();
+            vec.push_back(nblob);
+          }
+          for(auto &parent: parent_blobs[OOI.larva_ID])
+          {
+            larvaFit lf;
+            larvaObject &o = detected_larvae[parent];
+            lf.setup(o);
+            lf.setloops(LRVTRACK_DSTEP,LRVTRACK_WSTEP);
+            lf.optimize(vec, OOI.blobs[0]);
+          }
+        }
+      }
+
+}
 void showTags2()
 {
-      map<unsigned int,larvaObject>::iterator it=detected_larvae.begin();
+      map<size_t,larvaObject>::iterator it=detected_larvae.begin();
       while (it!=detected_larvae.end())
       {
         if(it->second.start_frame>CURRENT_FRAME || 
@@ -244,7 +304,7 @@ void showTags2()
           continue;
         }
         stringstream sstm;
-        unsigned int c_index=CURRENT_FRAME-it->second.start_frame;
+        size_t c_index=CURRENT_FRAME-it->second.start_frame;
         cvb::CvBlob* blob=
                 &(it->second.blobs[c_index]);
         if(LRVTRACK_CHOREOGRAPHY_OUTPUT)
@@ -314,7 +374,13 @@ void showTags2()
           createLarvaContour(larvaROI,*blob,CV_8UC3,PAD,false,
               Scalar(0,255,0),8);
           drawSpinePoints(colorFrame,it->second,c_index);
-
+          BOOST_LOG_TRIVIAL(debug) << "LRVINFO:" << 
+            it->second.larva_ID << ", " <<
+            it->second.area[c_index] << ", " <<
+            it->second.length[c_index] << ", " <<
+            it->second.width[c_index] << ", " <<
+            it->second.grey_value[c_index] << ", " <<
+            it->second.perimeter[c_index];
           //plotAngle(blob,larvaROI,PAD);
         }
         it++;
@@ -459,7 +525,7 @@ bool centresMatch(
 bool centresMatch(
     cvb::CvBlobs &In, 
     cvb::CvBlob *blob,
-    vector<unsigned int> &larvae, 
+    vector<size_t> &larvae, 
     double &val,
     double factor=LARVA_CENTRE_COMPARISON_FACTOR-1)
 {
@@ -474,7 +540,7 @@ bool centresMatch(
   }
   else
   {
-    vector<unsigned int>::iterator it=larvae.begin();
+    vector<size_t>::iterator it=larvae.begin();
     while(it!=larvae.end())
     {
       xcomb+=In[*it]->centroid.x*In[*it]->area;
@@ -516,7 +582,7 @@ bool larvaToRing(cvb::CvBlob &blob)
   {
     std::vector<cv::Point2f> p;
     blobToPointVector(blob,p);
-    for(unsigned int i=0;i<p.size();i++)
+    for(size_t i=0;i<p.size();i++)
     {
       Point2f cp=p[i];
       double dst=p2fdist(p[i],cntr);
@@ -546,10 +612,10 @@ bool blobSizeIsRelevant(
 bool blobSizeIsRelevant(
     cvb::CvBlobs &In,
     cvb::CvBlob *BLOB,
-    vector<unsigned int> &larvae,
+    vector<size_t> &larvae,
     double ratio=LARVA_SIZE_COMPARISON_FACTOR)
 {
-  vector<unsigned int>::iterator IT=larvae.begin();
+  vector<size_t>::iterator IT=larvae.begin();
   double areaSUM=0;
   while (IT!=larvae.end())
   {
@@ -569,7 +635,7 @@ bool blobSizeIsRelevant(
  * to furthest.
  */
 void getNearbyLarvae(cvb::CvBlobs &Blobs, cvb::CvBlob *Blob, 
-		            vector<unsigned int> &nearbyLarvae,bool pre=true,
+		            vector<size_t> &nearbyLarvae,bool pre=true,
                 double PADRatio=1.5)
 {
   vector<double> distances;
@@ -590,7 +656,7 @@ void getNearbyLarvae(cvb::CvBlobs &Blobs, cvb::CvBlob *Blob,
       double DIST=fast_abs(Blob->centroid.x - cBlob->centroid.x) +
         fast_abs(Blob->centroid.y - cBlob->centroid.y);
       vector<double>::iterator dIt=distances.begin();
-      vector<unsigned int>::iterator nIt=nearbyLarvae.begin();
+      vector<size_t>::iterator nIt=nearbyLarvae.begin();
       if(nearbyLarvae.size()>0)
       {
         while(dIt!=distances.end())
@@ -634,7 +700,7 @@ void getNearbyLarvae(cvb::CvBlobs &Blobs, cvb::CvBlob *Blob,
  *         matches
  * postID: is the ID of the blob of the current frame
  */
-void assign_one(unsigned int preID,unsigned int postID)
+void assign_one(size_t preID,size_t postID)
 {
   assignedPrevious[preID].push_back(postID);
   assignedNew[postID].push_back(preID);
@@ -648,19 +714,21 @@ void assign_one(unsigned int preID,unsigned int postID)
  * postID: is the vector with the IDs of the larva in the new frame which
  *         diverged from preID
  */
-void assign_one(unsigned int preID,
-                vector<unsigned int> postID)
+void assign_one(size_t preID,
+                vector<size_t> postID)
 {
-  vector<unsigned int>::iterator postIT=postID.begin();
+  vector<size_t>::iterator postIT=postID.begin();
   assignedPreMap[preID]=postID.size();
-  detected_larvae[preID].isCluster=true;
+  //detected_larvae[preID].isCluster=true;
   while(postIT!=postID.end())
   {
-    unsigned int NewID=++LARVAE_COUNT;
+    size_t NewID=++LARVAE_COUNT;
     assignedNew[*postIT].push_back(NewID);
     BOOST_LOG_TRIVIAL(trace) << "Assigning: " << *postIT << " -> " << NewID;
     assignedPrevious[preID].push_back(NewID);
     detected_larvae[preID].diverged_to.push_back(NewID);
+    parent_blobs[NewID].push_back(preID);
+    children_blobs[preID].push_back(NewID);;
     ++postIT;
   }
   BOOST_LOG_TRIVIAL(debug) << CURRENT_FRAME << ", "
@@ -676,10 +744,10 @@ void assign_one(unsigned int preID,
  *         collided to form blob with postID
  * postID: is the ID of the blob of the new frame
  */
-void assign_one(vector<unsigned int> preID,
-                unsigned int postID,unsigned int newID)
+void assign_one(vector<size_t> preID,
+                size_t postID,size_t newID)
 {
-  vector<unsigned int>::iterator preIT=preID.begin();
+  vector<size_t>::iterator preIT=preID.begin();
   assignedNew[postID].push_back(newID);
   BOOST_LOG_TRIVIAL(debug) << CURRENT_FRAME << ", "
                            << printVector(preID) << " -> "
@@ -689,7 +757,7 @@ void assign_one(vector<unsigned int> preID,
     assignedNew[postID].push_back(*preIT);
     assignedPrevious[*preIT].push_back(postID);
     assignedPreMap[*preIT]=1;
-    detected_larvae[*preIT].collided_to=newID;
+    detected_larvae[*preIT].converged_to=newID;
     ++preIT;
   }
 }
@@ -704,12 +772,16 @@ void assign_one(vector<unsigned int> preID,
  *  IDs: the IDs of the blobs before the cluster
  */
 void assign_clustering(
-                      unsigned int POST_ID,
-                      vector<unsigned int> &IDs
+                      size_t POST_ID,
+                      vector<size_t> &IDs
                       )
 {
-  unsigned int CLUSTER_ID=++LARVAE_COUNT;
-  newClusters.push_back(CLUSTER_ID);
+  size_t CLUSTER_ID=++LARVAE_COUNT;
+  //newClusters.push_back(CLUSTER_ID);
+  //detected_converged[CLUSTER_ID]=IDs;
+  parent_blobs[CLUSTER_ID]=IDs;
+  for(auto &i:IDs)
+    children_blobs[i].push_back(CLUSTER_ID);
   assign_one(IDs,POST_ID,CLUSTER_ID);
 }
 
@@ -723,7 +795,7 @@ void assign_clustering(
  * Output:
  *  the distance
  */
- double mh_dist(unsigned int N,unsigned int C)
+ double mh_dist(size_t N,size_t C)
 {
   Mat candidateCovarMat;
   Mat candidateMeanMat;
@@ -875,7 +947,7 @@ bool speedMatch(cvb::CvBlob &blobP,
  */
 bool isMappingReasonable(lrvMapping &p,double duration)
 {
-      unsigned int lastIdx=detected_larvae[p.plrv].lastBlobWithStats;
+      size_t lastIdx=detected_larvae[p.plrv].lastBlobWithStats;
       //dumpDetectedLarvae();
       cvb::CvBlob &blobP=detected_larvae[p.plrv].blobs[lastIdx];
       cvb::CvBlob &blobN=*NEW[p.nlrv];
@@ -903,10 +975,10 @@ bool isMappingReasonable(lrvMapping &p,double duration)
  */
 bool isMappingReasonable(ltAssignments &m,double duration)
 {
-  for(unsigned int i=0;i<m.size();i++)
+  for(size_t i=0;i<m.size();i++)
   {
       lrvMapping &p=m[i];
-      unsigned int lastIdx=detected_larvae[p.plrv].lastBlobWithStats;
+      size_t lastIdx=detected_larvae[p.plrv].lastBlobWithStats;
       cvb::CvBlob &blobP=detected_larvae[p.plrv].blobs[lastIdx];
       cvb::CvBlob &blobN=*NEW[p.nlrv];
       int csx=detected_larvae[p.plrv].centroid_speed_x.size();
@@ -926,9 +998,9 @@ bool isMappingReasonable(ltAssignments &m,double duration)
 
 /* Check if assignment contains a mapping of o->n
  */
-bool assignmentContainsNewOld(ltAssignments &m,unsigned int n,unsigned int o)
+bool assignmentContainsNewOld(ltAssignments &m,size_t n,size_t o)
 {
-  for(unsigned int i=0;i<m.size();i++)
+  for(size_t i=0;i<m.size();i++)
   {
     if(m[i].nlrv==n || m[i].plrv==o)
       return true;
@@ -941,17 +1013,17 @@ bool assignmentContainsNewOld(ltAssignments &m,unsigned int n,unsigned int o)
 void pair_powersets(vector<lrvMapping> &IN, 
     vector<ltAssignments > &OUT)
 {
-  for (unsigned int i=1 ; i<=IN.size();i++)
+  for (size_t i=1 ; i<=IN.size();i++)
   {
-    vector<unsigned int> pointers;
-    for(unsigned int k=0;k<i;k++)
+    vector<size_t> pointers;
+    for(size_t k=0;k<i;k++)
     {
       pointers.push_back(k);
     }
-    for (unsigned int j=0 ; j<kofn(i,IN.size());j++)
+    for (size_t j=0 ; j<kofn(i,IN.size());j++)
     {
       ltAssignments cvec;
-      for(unsigned int idx=0;idx<i;idx++)
+      for(size_t idx=0;idx<i;idx++)
       {
         if(!assignmentContainsNewOld(cvec,
                                   IN[pointers[idx]].nlrv,
@@ -960,13 +1032,13 @@ void pair_powersets(vector<lrvMapping> &IN,
       }
       if(cvec.size()==i)
         OUT.push_back(cvec);
-      for(unsigned int inc=i;inc>0;inc--)
+      for(size_t inc=i;inc>0;inc--)
       {
         if(pointers[inc-1]<IN.size()-1-(i-inc))
         {
           pointers[inc-1]++;
-          unsigned int add=0;
-          for(unsigned int res=inc;res<i;res++)
+          size_t add=0;
+          for(size_t res=inc;res<i;res++)
           {
             add++;
             pointers[res]=pointers[inc-1]+add;
@@ -981,9 +1053,9 @@ void pair_powersets(vector<lrvMapping> &IN,
 //Adds a set of assignmets following a diverging event 
 //to the possible assignments map.
 void assignMapping(ltAssignments &m, 
-                   map<unsigned int,unsigned int> &newAssignments)
+                   map<size_t,size_t> &newAssignments)
 {
-  for(unsigned int i=0;i<m.size();i++)
+  for(size_t i=0;i<m.size();i++)
   {
     newAssignments[m[i].nlrv]=m[i].plrv;
   }
@@ -993,7 +1065,7 @@ void assignMapping(ltAssignments &m,
 double mappingAccuracy(ltAssignments &a)
 {
   double SUM=0;
-  for(unsigned int i=0;i<a.size();i++)
+  for(size_t i=0;i<a.size();i++)
   {
     SUM+=a[i].getDistance();
   }
@@ -1002,17 +1074,17 @@ double mappingAccuracy(ltAssignments &a)
 
 //Generate all the available reasonable mappings
 void createReasonableMappings(
-  vector<unsigned int> &candidateLarvae,
-  vector<unsigned int> &newLarvae,
+  vector<size_t> &candidateLarvae,
+  vector<size_t> &newLarvae,
   double duration,
   vector<ltAssignments> &accepted_mappings)
 {
     ltAssignments initial_pairs;
     vector<lrvMapping> valid_pairs;
-    map<unsigned int,unsigned int> mappable_new;
-    for(unsigned int i=0;i<candidateLarvae.size();i++)
+    map<size_t,size_t> mappable_new;
+    for(size_t i=0;i<candidateLarvae.size();i++)
     {
-      for(unsigned int j=0;j<newLarvae.size();j++)
+      for(size_t j=0;j<newLarvae.size();j++)
       {
         lrvMapping n(newLarvae[j],candidateLarvae[i]);
         //n.candidates=candidateLarvae;
@@ -1036,9 +1108,9 @@ void createReasonableMappings(
  *  newAssignments: mappints of the type [NEW]=OLD;
  */
 void diverge_match(
-  vector<unsigned int> &candidateLarvae,
-  vector<unsigned int> &newLarvae,
-  map<unsigned int, unsigned int> &newAssignments,
+  vector<size_t> &candidateLarvae,
+  vector<size_t> &newLarvae,
+  map<size_t, size_t> &newAssignments,
   double duration
   )
 {
@@ -1049,13 +1121,13 @@ void diverge_match(
     duration,
     valid_mappings);
 
-  map<double,unsigned int> mapping_accuracy;
-  for(unsigned int i=0;i<valid_mappings.size();i++)
+  map<double,size_t> mapping_accuracy;
+  for(size_t i=0;i<valid_mappings.size();i++)
   {
     double acc=mappingAccuracy(valid_mappings[i]);
     //cerr << "=========================" << endl;
     //cerr << "Mapping " << i << ": " << endl;
-    //for(unsigned int j=0;j<valid_mappings[i].size();j++)
+    //for(size_t j=0;j<valid_mappings[i].size();j++)
     //{
     //  valid_mappings[i][j].print();
     //}
@@ -1077,8 +1149,8 @@ void diverge_match(
  * old larvae.
  */
 void assign_divergingOL(cvb::CvBlobs &New,
-                      unsigned int CLUSTER_ID,
-                      vector<unsigned int> &IDs
+                      size_t CLUSTER_ID,
+                      vector<size_t> &IDs
                       )
 {
   // We have the following cases here:
@@ -1086,17 +1158,17 @@ void assign_divergingOL(cvb::CvBlobs &New,
   //     the cluster is newly found (it started as a cluster)
   //  2) CLUSTER_ID Corresponds to an existing cluster:
   //     we assign all the new blobs as decendants of the previous blob
-  map<unsigned int,vector<unsigned int> >::iterator dcIT;
+  map<size_t,vector<size_t> >::iterator dcIT;
   //Not found new cluster NEW IDs to be given to the vector
   //elements
   BOOST_LOG_TRIVIAL(trace) << "Cluster " << CLUSTER_ID 
                   << " diverged. Assigning new IDs for diverged larvae";
   assign_one(CLUSTER_ID,IDs);
-  detected_larvae[CLUSTER_ID].isCluster=true;
+  //detected_larvae[CLUSTER_ID].isCluster=true;
 }
 
-int detect_diverging(vector<unsigned int> &preLarvaeNearby,
-                       vector<unsigned int> &newLarvaeNearby,
+int detect_diverging(vector<size_t> &preLarvaeNearby,
+                       vector<size_t> &newLarvaeNearby,
                        cvb::CvBlobs &Pre,
                        cvb::CvBlobs &New)
 {
@@ -1108,7 +1180,7 @@ int detect_diverging(vector<unsigned int> &preLarvaeNearby,
   if(newLarvaeNearby.size()<=1)
     return -1; // No diverging is possible
   // Check the complete set first
-  vector<unsigned int>::iterator pIT=preLarvaeNearby.begin();
+  vector<size_t>::iterator pIT=preLarvaeNearby.begin();
   while(pIT!=preLarvaeNearby.end())
   {
     //BOOST_LOG_TRIVIAL(trace) << "Checking if nodes " 
@@ -1129,9 +1201,9 @@ int detect_diverging(vector<unsigned int> &preLarvaeNearby,
       //BOOST_LOG_TRIVIAL(trace) << "Checking powersets of " 
       //                         << printVector(newLarvaeNearby) 
       //                         << " that diverged from: " << *pIT;
-      vector<vector<unsigned int> > pSETS;
+      vector<vector<size_t> > pSETS;
       powersets(newLarvaeNearby,pSETS);
-      vector<vector<unsigned int> >::iterator pSIT=pSETS.begin();
+      vector<vector<size_t> >::iterator pSIT=pSETS.begin();
       while(pSIT!=pSETS.end())
       {
         if(centresMatch(New,Pre[*pIT],*pSIT,v))
@@ -1149,8 +1221,8 @@ int detect_diverging(vector<unsigned int> &preLarvaeNearby,
   return 0;
 }
 
-int detect_clustering(vector<unsigned int> &preLarvaeNearby,
-                       vector<unsigned int> &newLarvaeNearby,
+int detect_clustering(vector<size_t> &preLarvaeNearby,
+                       vector<size_t> &newLarvaeNearby,
                        cvb::CvBlobs &Pre,
                        cvb::CvBlobs &New)
 {
@@ -1160,7 +1232,7 @@ int detect_clustering(vector<unsigned int> &preLarvaeNearby,
     return -1; // No clustering is possible
   
   // Check the complete set first
-  vector<unsigned int>::iterator nIT=newLarvaeNearby.begin();
+  vector<size_t>::iterator nIT=newLarvaeNearby.begin();
   while(nIT!=newLarvaeNearby.end())
   {
     double v;
@@ -1182,9 +1254,9 @@ int detect_clustering(vector<unsigned int> &preLarvaeNearby,
       //continue;
       break;
     }
-    vector<vector<unsigned int> > pSETS;
+    vector<vector<size_t> > pSETS;
     powersets(preLarvaeNearby,pSETS);
-    vector<vector<unsigned int> >::iterator pSIT=pSETS.begin();
+    vector<vector<size_t> >::iterator pSIT=pSETS.begin();
     while(pSIT!=pSETS.end())
     {
       BOOST_LOG_TRIVIAL(trace) 
@@ -1215,7 +1287,7 @@ void findHeadTail(larvaObject &lrv,
                   bool force_SurroundingValSearch=false)
 {
   int max=0,min=65535;
-  unsigned int i=0;
+  size_t i=0;
   cvb::CvBlob blob=lrv.blobs.back();
   vector<Point2f> &spine=lrv.lrvDistances.back().Spine;
   Point2f bp(lrv.blobs.back().minx,lrv.blobs.back().miny);
@@ -1244,15 +1316,15 @@ void findHeadTail(larvaObject &lrv,
 void updateOneLarva(cvb::CvBlobs &In,
                     cvb::CvBlobs &Prev,
                     cvb::CvBlobs::iterator it,
-                    tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW_LARVA)
+                    tbb::concurrent_hash_map<size_t, larvaObject> &NEW_LARVA)
 {
-  unsigned int ID=(*it).first;
+  size_t ID=(*it).first;
   cvb::CvBlob blob=*((*it).second);
   Mat larvaROI,cntPoints;
   createLarvaContour(larvaROI,blob);
   createLarvaContourPoints(cntPoints,blob);
 
-  map<unsigned int,larvaObject>::iterator curLarva;
+  map<size_t,larvaObject>::iterator curLarva;
   // NEW LARVA OBJECT!
   if ((curLarva=detected_larvae.find(ID))==detected_larvae.end()
       ||
@@ -1375,7 +1447,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     newLarva.round_flag.push_back(false);
 
 
-    if(LRVTRACK_CSV_OUTPUT)
+    /*if(LRVTRACK_CSV_OUTPUT)
     {
       csvfile << CURRENT_FRAME/VIDEO_FPS <<
         " , " << newLarva.larva_ID;
@@ -1416,12 +1488,12 @@ void updateOneLarva(cvb::CvBlobs &In,
       //" , " << newLarva.centroids.back().y + blob.miny <<
       //" , " << newLarva.inCluster.back() <<
       csvfile << endl;
-    }
+    }*/
     newLarva.lastFrameWithStats=CURRENT_FRAME;
 
     //detected_larvae[ID]=newLarva;
     //NEW[ID]=newLarva;
-    tbb::concurrent_hash_map<unsigned int,larvaObject>::accessor a;
+    tbb::concurrent_hash_map<size_t,larvaObject>::accessor a;
     NEW_LARVA.insert(a,ID);
     a->second=newLarva;
   }
@@ -1623,20 +1695,18 @@ void updateOneLarva(cvb::CvBlobs &In,
     double curLen=cur_larva.length.back();
     double RndRat=curRnd/preRnd;
     double spDist=p2fdist(cur_larva.heads.back(),cur_larva.tails.back());
+    double var=Distances.curvatureVariance;
     //double spDist=distanceBetweenSpines(
     //             Distances,
     //             cur_larva.lrvDistances[cur_larva.lrvDistances.size()-2]);
-    if(cur_larva.round_flag.back()==false && curRnd <= 2.6 && RndRat<0.9)
+
+    //Add head and tail to the history
+    if(check_roundness(cur_larva.larva_ID,spDist,curRnd,RndRat,prespDist,var))
     {
-      /*BOOST_LOG_TRIVIAL(debug) << "RND, S, " << CURRENT_FRAME 
-        << ", " << cur_larva.larva_ID
-        << ", " << curRnd
-        << ", " << RndRat
-        << ", " << spDist
-        << ", " << spDist/prespDist;*/
       cur_larva.round_flag.push_back(true);
     }
-    else if(cur_larva.round_flag.back()==true && curRnd>=3.0 && RndRat>1.09)
+    else if(cur_larva.round_flag.back()==true && 
+           !check_roundness(cur_larva.larva_ID,spDist,curRnd,RndRat,prespDist,var))
     {
       /*BOOST_LOG_TRIVIAL(debug) << "RND, E, " << CURRENT_FRAME 
         << ", " << cur_larva.larva_ID
@@ -1663,9 +1733,6 @@ void updateOneLarva(cvb::CvBlobs &In,
         << ", " << spDist;*/
       cur_larva.round_flag.push_back(false);
     }
-
-    //Add head and tail to the history
-
     Point2f MP;
     MP.x=Distances.MidPoint.x-cur_larva.blobs.back().minx;
     MP.y=Distances.MidPoint.y-cur_larva.blobs.back().miny;
@@ -1685,7 +1752,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     //      part of a blob.
     cur_larva.inCluster.push_back(0);
 
-    if(LRVTRACK_CSV_OUTPUT)
+    /*if(LRVTRACK_CSV_OUTPUT)
     {
       csvfile << CURRENT_FRAME/VIDEO_FPS <<
         " , " << cur_larva.larva_ID;
@@ -1726,7 +1793,8 @@ void updateOneLarva(cvb::CvBlobs &In,
       //" , " << cur_larva.centroids.back().y + blob.miny <<
       //" , " << cur_larva.inCluster.back() <<
       csvfile << endl;
-    }
+    }*/
+
     cur_larva.lastFrameWithStats=CURRENT_FRAME;
   }
 }
@@ -1760,6 +1828,7 @@ void bg_without_larvae(Mat &fgImg)
     
     ++it;
   }
+  cvReleaseImage(&labelImg);
 }
 
 /* The function removes the background from the new frame
@@ -1779,8 +1848,8 @@ void process_frame(Mat &newFrame,
                   Mat &processedFrame)
 {
     int THRESH=THRESH_BINARY;
-    unsigned int CMAX=255;
-    unsigned int NB=137;
+    size_t CMAX=255;
+    size_t NB=137;
     int THRESHOLD=-30;
     int METHOD=ADAPTIVE_THRESH_MEAN_C;
     Mat fgFrame; //Foreground frame
@@ -1796,7 +1865,7 @@ void process_frame(Mat &newFrame,
     // The addWeighted would provide us with a fuzzier
     // removal which could also remove larvae. 
     absdiff(newFrame,greyBgFrame,fgFrame);
-    //addWeighted(fgFrame, 1.0, test, -2.0, 0.0, test);
+    //addWeighted(newFrame, 1.0, greyBgFrame, -3.0, 0.0, fgFrame);
 
     fgROI=Mat(fgFrame.rows , fgFrame.cols,fgFrame.depth(),Scalar(0));
 
@@ -1829,7 +1898,7 @@ void process_frame(Mat &newFrame,
     // Same process for odor cups
     if(cups.size()>0)
     {
-      for(unsigned int i=0; i<cups.size(); ++i)
+      for(size_t i=0; i<cups.size(); ++i)
       {
         circle(fgROI,
             Point2f(cups[i][0],cups[i][1]),
@@ -1862,12 +1931,13 @@ void process_frame(Mat &newFrame,
     // The processedFrame is the outcome of the good image and filtered for
     // noise by the processedFrame
     processedFrame=fgImage&processedFrame;
+    //equalizeHist(processedFrame, processedFrame);
 }
 
 //Match lost larvae
-unsigned int matchLostLarvae(unsigned int newLabel)
+size_t matchLostLarvae(size_t newLabel)
 {
-  for(vector<unsigned int>::iterator lIT=lost_larvae.begin();
+  for(vector<size_t>::iterator lIT=lost_larvae.begin();
       lIT!=lost_larvae.end();lIT++)
   {
       cvb::CvBlob &blobN=*NEW[newLabel];
@@ -1883,7 +1953,7 @@ unsigned int matchLostLarvae(unsigned int newLabel)
             detected_larvae[*lIT].max_centroid_speed) && 
           blobSizeIsRelevant(&blobP,&blobN))
       {
-        unsigned int ret=*lIT;
+        size_t ret=*lIT;
         lost_larvae.erase(lIT);
         return ret;
       }
@@ -1894,12 +1964,12 @@ unsigned int matchLostLarvae(unsigned int newLabel)
 void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
 {
   //cvb::CvBlobs::iterator it=In.begin();
-  tbb::concurrent_hash_map<unsigned int, larvaObject> NEW_LARVA;
+  tbb::concurrent_hash_map<size_t, larvaObject> NEW_LARVA;
   larvaeUpdateBody body(In,Prev,NEW_LARVA);
-  parallel_for_(Range(0, In.size()), body);
-  //parallel_for(BlockedRange(0, In.size()), body);
+  //parallel_for_(Range(0, In.size()), body);
+  parallel_for(BlockedRange(0, In.size()), body);
   
-  tbb::concurrent_hash_map<unsigned int, larvaObject>::iterator nit=
+  tbb::concurrent_hash_map<size_t, larvaObject>::iterator nit=
     NEW_LARVA.begin();
   while (nit!=NEW_LARVA.end())
   {
@@ -1933,7 +2003,7 @@ void newLarvaeTrack(cvb::CvBlobs &In,
   assignedPrevious.clear();
   assignedPreMap.clear();
   newInFrame.clear();
-  newClusters.clear();
+  //newClusters.clear();
 
   cvb::CvBlobs::iterator prevIt=Prev.begin();
   while (prevIt!=Prev.end())
@@ -1953,11 +2023,11 @@ void newLarvaeTrack(cvb::CvBlobs &In,
     if(assignedPreMap[prevIt->first]==0)
     {
       cvb::CvBlob *preBlob=prevIt->second;
-      unsigned int preID=prevIt->first;
+      size_t preID=prevIt->first;
 
       // Get larva around it before and after
-      vector<unsigned int> preLarvaeNearby;
-      vector<unsigned int> postLarvaeNearby;
+      vector<size_t> preLarvaeNearby;
+      vector<size_t> postLarvaeNearby;
       getNearbyLarvae(Prev,preBlob,preLarvaeNearby,true);
       getNearbyLarvae(In,preBlob,postLarvaeNearby,false);
 
@@ -2013,11 +2083,11 @@ void newLarvaeTrack(cvb::CvBlobs &In,
       else
       {
         // Try to assign obvious ones:
-        vector<unsigned int>::iterator preNearIt=preLarvaeNearby.begin();
+        vector<size_t>::iterator preNearIt=preLarvaeNearby.begin();
         while(preNearIt!=preLarvaeNearby.end())
         {
           bool erased=false;
-          vector<unsigned int>::iterator postNearIt=postLarvaeNearby.begin();
+          vector<size_t>::iterator postNearIt=postLarvaeNearby.begin();
           while(postNearIt!=postLarvaeNearby.end())
           {
             double val1,valb,vala;
@@ -2102,7 +2172,7 @@ void newLarvaeTrack(cvb::CvBlobs &In,
       }
     }
     ++prevIt;
-    map<unsigned int, vector<unsigned int> >::iterator prI=assignedPrevious.begin();
+    map<size_t, vector<size_t> >::iterator prI=assignedPrevious.begin();
     while(prI!=assignedPrevious.end())
     {
       if(prI->second.size()>0)
@@ -2143,10 +2213,10 @@ void newLarvaeTrack(cvb::CvBlobs &In,
     }
     else
     {
-      //unsigned int Match=matchLostLarvae(bIT->first);
+      //size_t Match=matchLostLarvae(bIT->first);
       //if(Match==0)
       //{
-        unsigned int NEWID=++LARVAE_COUNT;
+        size_t NEWID=++LARVAE_COUNT;
         newInFrame.push_back(NEWID);
         bIT->second->n20=bIT->second->label;
         bIT->second->label=NEWID;
@@ -2195,7 +2265,7 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput)
   {
     Mat ctout;
     double MF=1.3;
-    unsigned int PF=0;
+    size_t PF=0;
     int THRESHOLD=255;
     double cpow=1.25;
     ocl_output=ocl_output*MF+PF;
@@ -2229,7 +2299,7 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput)
   {
     Mat ctout;
     double MF=1.3;
-    unsigned int PF=0;
+    size_t PF=0;
     int THRESHOLD=255;
     double cpow=1.25;
     output=output*MF+PF;
@@ -2246,6 +2316,31 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput)
   }
   return retval;
 #endif
+}
+
+void extract_background_offline(VideoCapture &capture,
+                       Mat &greyBgFrame)
+{
+  Mat tmpFrame;
+  Mat origFrame;
+  Mat tmpFrame32f;
+  size_t width=capture.get(CV_CAP_PROP_FRAME_WIDTH);
+  size_t height=capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+  Mat resultframe = Mat::zeros(height,width,CV_32FC1);
+
+  size_t count=capture.get(CV_CAP_PROP_FRAME_COUNT);
+  while(get_next_frame(capture,tmpFrame,origFrame)) 
+  {
+    tmpFrame.convertTo(tmpFrame32f,CV_32FC1);
+    resultframe+=tmpFrame32f; 
+  }
+  capture.set(CV_CAP_PROP_POS_FRAMES ,0);
+  CURRENT_FRAME=0;
+  resultframe*=(1.0/count);
+  normalize(resultframe,greyBgFrame,0,255,CV_MINMAX);
+  greyBgFrame.convertTo(greyBgFrame,CV_8UC1);
+  imshow("background",greyBgFrame);
+  waitKey(10000);
 }
 
 /*
@@ -2275,8 +2370,8 @@ void extract_background(VideoCapture &capture,
   int THRESH=THRESH_BINARY;
 
   Mat ctout;
-  unsigned int CMAX=255;
-  unsigned int NB=275;
+  size_t CMAX=255;
+  size_t NB=275;
   int THRESHOLD=0;
   int METHOD=ADAPTIVE_THRESH_MEAN_C;
   // Thresholding here helps circle detection (trial and error)
@@ -2305,8 +2400,8 @@ void extract_background(VideoCapture &capture,
   // us the best ratio brigthness/size. Assign its ID to bestCircle
   double cutlim;
   cutlim=DBL_MAX;
-  unsigned int mysz=circles.size();
-  for(unsigned int i=0; i<circles.size();i++)
+  size_t mysz=circles.size();
+  for(size_t i=0; i<circles.size();i++)
   {
     Mat cutout=Mat::zeros(ctout.rows,ctout.cols, ctout.type());
     circle(cutout,
@@ -2711,23 +2806,249 @@ int handle_args(int argc, char* argv[])
  *  - Detect heads/tails
  *
 */
-void verifyLarvae(larvaObject &f)
+
+size_t evalPartitionSize(std::vector<std::vector<size_t> > &v,
+                          std::vector<size_t> &blobs)
 {
-  double ilval=is_larva(f);
-  //BOOST_LOG_TRIVIAL(debug) << "Verify: L" << f.larva_ID << ": " << ilval;
-  if(f.collided_to!=0)
-    detected_larvae[f.collided_to].isCluster=true;
-  if(f.diverged_to.empty()==false)
-    f.isCluster=true;
-  double total=0;
-  if(f.isCluster==false)
+  size_t vsz=v.size();
+  size_t bsz=blobs.size();
+  size_t totalError=0;
+  size_t b=0;
+  for(auto &i:v)
   {
-    if(ilval>310)
+    size_t expected_size=0;
+    for(auto &l:i)
+      expected_size+=detected_larvae[l].area.back();
+    totalError+=abs(detected_larvae[blobs[b++]].area.back()-
+                    expected_size);
+  }
+  return totalError;
+}
+
+void findEndObjectsFwHelper(larvaObject &t,
+                            size_t c, 
+                            size_t objnum,
+                            std::map<size_t,size_t> &blobSizeMap,
+                            std::vector<size_t> &e)
+{
+  if(e.size()==objnum)
+    return;
+  BOOST_LOG_TRIVIAL(debug) << "Verify: FindFW: Main Obj: " <<
+      t.larva_ID << " CurObj: " << c << " Objnum: " << objnum;
+  if(blobSizeMap[c]==1)
+  {
+    BOOST_LOG_TRIVIAL(debug) << 
+      "Verify: FindFW: blobSize 1 and not Cluster so we push: " << c;
+    e.push_back(c);
+  }
+  else
+  {
+    if(!children_blobs[c].empty())
     {
-      f.isCluster=true;
+      if(e.size()==objnum)
+        return;
+      BOOST_LOG_TRIVIAL(debug) << 
+        "Verify: FindFW: children not empty: " << c;
+      BOOST_LOG_TRIVIAL(debug) << "Verify: FindFW: " 
+        << printVector(children_blobs[c]);
+      for(auto &n: children_blobs[c])
+      {
+        if(e.size()==c)
+          break;
+        findEndObjectsFwHelper(t,n,objnum,blobSizeMap,e);
+      }
     }
   }
 }
+
+void findEndObjectsBwHelper(larvaObject &t,
+                            size_t c, 
+                            size_t objnum,
+                            std::map<size_t,size_t> &blobSizeMap,
+                            std::vector<size_t> &e)
+{
+  if(e.size()==objnum)
+    return;
+  BOOST_LOG_TRIVIAL(debug) << "Verify: FindBW: Main Obj: " <<
+      t.larva_ID << " CurObj: " << c << " Objnum: " << objnum;
+  if(blobSizeMap[c]==1)
+  {
+    BOOST_LOG_TRIVIAL(debug) << 
+      "Verify: FindBW: blobSize 1 and not Cluster so we push: " << c;
+    e.push_back(c);
+  }
+  else
+  {
+    if(!parent_blobs[c].empty())
+    {
+      BOOST_LOG_TRIVIAL(debug) << 
+        "Verify: FindBW: parents not empty: " << c;
+      BOOST_LOG_TRIVIAL(debug) << "Verify: FindBW: " 
+        << printVector(parent_blobs[c]);
+      for(auto &n: parent_blobs[c])
+      {
+        findEndObjectsBwHelper(t,n,objnum,blobSizeMap,e);
+      }
+    }
+  }
+}
+
+void findEndObjects(larvaObject &t, 
+                    std::vector<size_t> &e,
+                    std::map<size_t,size_t> &blobSizeMap,
+                    size_t obj_num,
+                    bool forward)
+{
+  if(forward)
+    findEndObjectsFwHelper(t,t.larva_ID,obj_num,blobSizeMap,e);
+  else
+    findEndObjectsBwHelper(t,t.larva_ID,obj_num,blobSizeMap,e);
+
+  if(e.size()!=t.blobSize)
+  {
+    BOOST_LOG_TRIVIAL(debug) << "WARNING: Cannot find end Objects "
+      << "Larva: " << t.larva_ID << " with size " << t.blobSize;
+  }
+}
+
+void clarifyLarvae(larvaObject &l,
+                   std::vector<size_t> &neighbors, 
+                   size_t neighborsize,
+                   std::vector<size_t> &allfound,
+                   std::map<size_t,size_t> &blobSizeMap,
+                   bool &change)
+{
+    if(neighborsize>allfound.size())
+    {
+      BOOST_LOG_TRIVIAL(debug) << "Clarify: For Larva: " <<
+        l.larva_ID << " WARN Nsize=" <<
+        neighbors.size() << ", ALL=" << allfound.size();
+      return;
+    }
+    partition_generator<size_t> pgs(allfound,neighbors.size());
+    pgs.m_partitions_of_n();
+    vector<vector <size_t> > &BestPartition=pgs.RES[0];
+    size_t minError=SIZE_MAX;
+    for(auto &pg: pgs.RES)
+    {
+      size_t ne;
+      ne=evalPartitionSize(pg,neighbors);
+      if(ne<minError)
+      {
+        minError=ne;
+        BestPartition=pg;
+        change=1;
+      }
+    }
+    size_t newsz=0;
+    for(auto i=0;i<neighbors.size();i++)
+    {
+      size_t sz=0;
+      for(auto &s:BestPartition[i])
+        sz+=detected_larvae[s].blobSize;
+
+      newsz+=sz;
+      detected_larvae[neighbors[i]].blobSize=sz;
+      blobSizeMap[neighbors[i]]=sz;
+      detected_larvae[neighbors[i]].isCluster=(sz-1);
+      BOOST_LOG_TRIVIAL(debug) << "Verify: FIX: OBJECT" 
+        << neighbors[i]
+        << " updated with blobSize: " << sz;
+      change=true;
+    }
+    //l.blobSize=newsz;
+    //if(newsz>1)
+    //  l.isCluster=true;
+    //BOOST_LOG_TRIVIAL(debug) << "Verify: FIX: OBJECT" 
+    //  << l.larva_ID
+    //  << " updated with blobSize: " << newsz;
+}
+
+/*void verifyLarva(larvaObject &f,bool &change)
+{
+  if(!f.diverged_to.empty())
+  {
+    size_t sum=0;
+    for(auto &v: f.diverged_to)
+      sum+=detected_larvae[v].blobSize;
+    BOOST_LOG_TRIVIAL(debug) << "Verify: Checking: CLUSTER" 
+      << f.larva_ID
+      << " has blobSize: " << f.blobSize
+      << " and the sum of those diverging from it is: " << sum;
+    if(f.blobSize!=sum)
+    {
+      BOOST_LOG_TRIVIAL(debug) << "Verify: WARN: CLUSTER" 
+        << f.larva_ID
+        << " has blobSize: " << f.blobSize
+        << " and the sum of those diverging from it is: " << sum;
+      BOOST_LOG_TRIVIAL(debug) << "Verify: WARN: From: " 
+        << printVector(f.diverged_to);
+      std::vector<size_t> endObjs;
+      f.blobSize=std::max(sum,(size_t) f.blobSize);
+
+      if(f.blobSize>1)
+        f.isCluster=true;
+      findEndObjects(f,endObjs,1);
+      if(endObjs.size()!=f.blobSize)
+      {
+        endObjs.clear();
+        findEndObjects(f,endObjs,0);
+      }
+      if(endObjs.size()!=f.blobSize)
+      {
+        BOOST_LOG_TRIVIAL(debug) << "Verify: WARN: for " << f.larva_ID
+          << " we cannot find enough end objects." ;
+        return;
+      }
+        
+      BOOST_LOG_TRIVIAL(debug) << "Verify: Clarifying: " << f.larva_ID 
+        << " with end objects: "<< printVector(endObjs)
+        << " for ObjectSize: " << f.blobSize;
+      clarifyLarvae(f,f.diverged_to,sum,endObjs,change);
+    }
+  }
+  if(parent_blobs[f.larva_ID].size()>1)
+  {
+    size_t sum=0;
+    for(auto &v: parent_blobs[f.larva_ID])
+      sum+=detected_larvae[v].blobSize;
+    BOOST_LOG_TRIVIAL(debug) << "Verify: Checking: CLUSTER" 
+      << f.larva_ID
+      << " has blobSize: " << f.blobSize
+      << " and the sum of those diverging from it is: " << sum;
+    if(f.blobSize!=sum)
+    {
+      BOOST_LOG_TRIVIAL(debug) << "Verify: WARN: CLUSTER" 
+        << f.larva_ID
+        << " has blobSize: " << f.blobSize
+        << " and the sum of those diverging from it is: " << sum;
+      BOOST_LOG_TRIVIAL(debug) << "Verify: WARN: From: " 
+        << printVector(parent_blobs[f.larva_ID]);
+      std::vector<size_t> endObjs;
+      f.blobSize=std::max(sum,(size_t) f.blobSize);
+
+      if(f.blobSize>1)
+        f.isCluster=true;
+      findEndObjects(f,endObjs,0);
+      if(endObjs.size()!=f.blobSize)
+      {
+        endObjs.clear();
+        findEndObjects(f,endObjs,0);
+      }
+      if(endObjs.size()!=f.blobSize)
+      {
+        BOOST_LOG_TRIVIAL(debug) << "Verify: WARN: for " << f.larva_ID
+          << " we cannot find enough end objects." ;
+        return;
+      }
+        
+      BOOST_LOG_TRIVIAL(debug) << "Verify: Clarifying: " << f.larva_ID 
+        << " with end objects: "<< printVector(endObjs)
+        << " for ObjectSize: " << f.blobSize;
+      clarifyLarvae(f,parent_blobs[f.larva_ID],sum,endObjs,change);
+    }
+  }
+}*/
 
 void determineHeadTail(larvaObject &f)
 {
@@ -2744,9 +3065,9 @@ void determineHeadTail(larvaObject &f)
     BOOST_LOG_TRIVIAL(debug) << d.str();
     return;
   }
-  unsigned int range=f.blobs.size();
-  std::vector<unsigned int> breaks;
-  for(unsigned int i=0;i<range;i++)
+  size_t range=f.blobs.size();
+  std::vector<size_t> breaks;
+  for(size_t i=0;i<range;i++)
   {
     if(f.round_flag[i]==true)
       breaks.push_back(i);
@@ -2758,11 +3079,11 @@ void determineHeadTail(larvaObject &f)
    d << "|  Range: " << range << endl;
    d << "|  Breaks: " << breaks.size() << " " << printVector(breaks) << endl;
 
-  for(unsigned int i=0;i<breaks.size();i++)
+  for(size_t i=0;i<breaks.size();i++)
   {
     d << "|    Break " << i << ":" << endl;
-    unsigned int endBreak=breaks[i];
-    unsigned int preBreak;
+    size_t endBreak=breaks[i];
+    size_t preBreak;
     if(i>0)
       preBreak=breaks[i-1]+1;
     else
@@ -2795,7 +3116,7 @@ void determineHeadTail(larvaObject &f)
     double sumHeadCnt=0.0;  //Distance covered by endpoint
     double sumTailCnt=0.0;
 
-    for(unsigned int j=preBreak;j<=endBreak;j++)
+    for(size_t j=preBreak;j<=endBreak;j++)
     {
       Point2f bpPoint(f.blobs[j].minx,f.blobs[j].miny);
       Point2f hPoint=f.heads[j]+bpPoint;
@@ -2817,25 +3138,65 @@ void determineHeadTail(larvaObject &f)
         sumTailCnt+=p2fdist(tPoint,pretPoint);
       }
     }
+    double vote_for_nochange=0;
+
+    if(sumTailDiff>sumHeadDiff)
+      vote_for_nochange+=2;
+    else
+      vote_for_nochange-=2;
+
+    if(sumTailGrey>sumHeadGrey)
+      vote_for_nochange++;
+    else
+      vote_for_nochange--;
+
+    if(sumHeadCnt>sumTailCnt)
+      vote_for_nochange++;
+    else
+      vote_for_nochange--;
+
+    /*vote_for_nochange+=2.0*(sumTailDiff-sumHeadDiff)/
+                            std::max(sumHeadDiff,sumTailDiff);
+
+    vote_for_nochange+=1.0*(sumTailGrey-sumHeadGrey)/
+                            std::max(sumHeadGrey,sumTailGrey);
+
+    vote_for_nochange+=1.0*(sumHeadCnt-sumTailCnt)/(
+                           std::max(sumHeadCnt,sumTailCnt)*(endBreak-preBreak+1));*/
+    size_t duration=endBreak-preBreak;
     d << "|" << endl;
-    d << "|      DHead: " << sumHeadDist << " , DTail: " << sumTailDist << ", ";
-    d << "GHead: " << sumHeadGrey << " , GTail: " << sumTailGrey << ", ";
-    d << "DiffH: " << sumHeadDiff << " , DiffT: " << sumTailDiff << ", ";
-    d << "CntH : " << sumHeadCnt << " , CntT : " << sumTailCnt << endl;
+    d << "|      LarvaID, Dhead, GHead, DiffH, CntH, Duration, Votes" << endl;
+    d << "|      " <<f.larva_ID*1000 + breaks.size() << ", ";
+    d << sumHeadDist/duration << " ,";
+    d << sumHeadGrey/duration << ", ";
+    d << sumHeadDiff/duration << ", ";
+    d << sumHeadCnt/duration << ", " << endBreak-preBreak <<", ";
+    d << (vote_for_nochange>=0) << endl;
+    d << "|      LarvaID, Dtail, GTail, DiffT, CntT, Duration, Votes" << endl;
+    d << "|      " <<f.larva_ID*1000 + breaks.size() << ", ";
+    d << sumTailDist/duration << ", ";
+    d << sumTailGrey/duration << ", ";
+    d << sumTailDiff/duration << ", ";
+    d << sumTailCnt/duration << ", " << endBreak-preBreak <<", ";
+    d << (vote_for_nochange<0) << endl;
     d << "|" << endl;
-    d << "|      SumH: " << sumHeadDist+sumHeadGrey+sumHeadDiff+sumHeadCnt 
-      << " , SumT: "     << sumTailDist+sumTailGrey+sumTailDiff+sumTailCnt
-      << endl;
-    d << "|" << endl;
-    if(sumHeadDiff+sumHeadCnt+sumHeadGrey>
-            sumTailDiff+sumTailCnt+sumTailGrey && breaks.size()==1)
+
+    /*d << "|      LarvaID, Dtail, GTail, DiffT, CntT, Duration, Votes" << endl;
+    d << "|      " <<f.larva_ID*1000 + breaks.size() << ", ";
+    d << sumTailDist - sumHeadDist << ", ";
+    d << sumTailGrey - sumHeadGrey << ", ";
+    d << sumTailDiff - sumHeadDiff << ", ";
+    d << sumTailCnt - sumHeadCnt << ", " << endBreak-preBreak <<", ";
+    d << (vote_for_nochange>=0) << endl;
+    d << "|" << endl;*/
+
+    if(vote_for_nochange<0 && breaks.size()==1)
     {
       f.heads.swap(f.tails);
     }
-    else if(sumHeadDiff+sumHeadCnt+sumHeadGrey>
-            sumTailDiff+sumTailCnt+sumTailGrey)
+    else if(vote_for_nochange<0)
     {
-      for(unsigned int k=preBreak;k<=endBreak;k++)
+      for(size_t k=preBreak;k<=endBreak;k++)
       {
         cv::Point2f b=f.heads[k];
         f.heads[k]=f.tails[k];
@@ -2861,58 +3222,257 @@ void determineHeadTail(larvaObject &f)
   }
 }
 
+#define blobSum(l,g) accumulate(l.begin(), \
+                              l.end(),0,\
+                              [&g](size_t total, size_t cur)\
+                              {return g[cur]+total;} );
+
+void updateBlobSize(larvaObject &l,
+                 map<size_t,size_t> &blobSizeMap,
+                 bool &change)
+{
+  size_t lID=l.larva_ID;
+  size_t parents=blobSum(parent_blobs[lID],blobSizeMap);
+  size_t children=blobSum(children_blobs[lID],blobSizeMap);
+  int size_as_child=0;
+  int size_as_parent=0;
+
+  if(parents==0 && children==0)
+  {
+    if(blobSizeMap[lID]==0)
+    {
+      change=true;
+      blobSizeMap[lID]=1;
+    }
+    return;
+  }
+
+  //Node as a child
+  if(parents!=0)
+  {
+    //One parent and being the onlychild
+    // Weird case that perhaps doesn't occur.
+    if(parent_blobs[lID].size()==1 && 
+       children_blobs[parent_blobs[lID].front()].size()==1)
+    {
+      size_as_child=blobSizeMap[parent_blobs[lID].front()];
+    }
+    else if(parent_blobs[lID].size()==1 && 
+       children_blobs[parent_blobs[lID].front()].size()>1)
+    {
+      /*size_as_child=blobSizeMap[parent_blobs[lID].front()];
+      for(auto &pc: children_blobs[parent_blobs[lID].front()])
+      {
+        if(pc!=lID)
+          size_as_child-=blobSizeMap[pc];
+      }*/
+      size_as_child=0;
+    }
+    else if(parent_blobs[lID].size()>1)
+    {
+      bool onlychild=true;
+      for(auto &pp: parent_blobs[lID])
+      {
+        if(children_blobs[pp].size()>1)
+        {
+          onlychild=false;
+          break;
+        }
+        if(children_blobs[pp].front()!=lID)
+        {
+          BOOST_LOG_TRIVIAL(debug) << "Verify: " <<
+            "Warning one parent but different child";
+          onlychild=false;
+          break;
+        }
+      }
+      if(onlychild)
+      {
+        size_as_child=blobSum(parent_blobs[lID],blobSizeMap);
+      }
+      else
+      {
+          BOOST_LOG_TRIVIAL(debug) << "Verify: " <<
+            "Warning two parents with foster siblings. Is unhandled";
+      }
+    }
+  }
+
+  //Node as parent
+  if(children!=0)
+  {
+    //One child and being the onlyparent
+    // Weird case that perhaps doesn't occur.
+    if(children_blobs[lID].size()==1 && 
+       parent_blobs[children_blobs[lID].front()].size()==1)
+    {
+      size_as_parent=blobSizeMap[children_blobs[lID].front()];
+    }
+    else if(children_blobs[lID].size()==1 && 
+       parent_blobs[children_blobs[lID].front()].size()>1)
+    {
+      /*size_as_parent=blobSizeMap[children_blobs[lID].front()];
+      for(auto &pc: parent_blobs[children_blobs[lID].front()])
+      {
+        if(children_blobs[pc].size()>1)
+        {
+          size_as_parent=0;//A bit of a mess :)
+          break;
+        }
+        //if(pc!=lID) //Also unhandled
+         // size_as_parent-=blobSizeMap[pc];
+      }*/
+      size_as_parent=0;
+    }
+    else if(children_blobs[lID].size()>1)
+    {
+      bool singleparent=true;
+      for(auto &pp: children_blobs[lID])
+      {
+        if(parent_blobs[pp].size()>1)
+        {
+          singleparent=false;
+          break;
+        }
+        if(parent_blobs[pp].front()!=lID)
+        {
+          BOOST_LOG_TRIVIAL(debug) << "Verify: " <<
+            "Warning one child but different parent";
+          singleparent=false;
+          break;
+        }
+      }
+      if(singleparent)
+      {
+        size_as_parent=blobSum(children_blobs[lID],blobSizeMap);
+      }
+      else
+      {
+          BOOST_LOG_TRIVIAL(debug) << "Verify: " <<
+            "Warning two children with other parents. Is unhandled";
+      }
+    }
+  }
+
+  BOOST_LOG_TRIVIAL(debug) << "Verify: L" 
+    << lID
+    << " with blobSize: " << blobSizeMap[lID]
+    << " parents: " << printVector(parent_blobs[lID])
+    << " as parent: " << size_as_parent
+    << " children: " << printVector(children_blobs[lID])
+    << " as child: " << size_as_child;
+
+  if(size_as_parent>size_as_child && size_as_child>0)
+  {
+    BOOST_LOG_TRIVIAL(debug) << "Verify: L" 
+      << lID
+      << " parents>children clarifying";
+    vector<size_t> allFwBlobs;
+    findEndObjects(l,allFwBlobs,blobSizeMap,size_as_parent,1);
+    BOOST_LOG_TRIVIAL(debug) << "Verify: L" 
+      << lID
+      << " found end Objects:" << printVector(allFwBlobs);
+    clarifyLarvae(l,
+        parent_blobs[lID],
+        parents,
+        allFwBlobs,
+        blobSizeMap,
+        change);
+    if(blobSizeMap[lID]<size_as_parent)
+    {
+      blobSizeMap[lID]=size_as_parent;
+      change=true;
+    }
+  }
+
+  else if(size_as_parent<size_as_child && size_as_parent>0)
+  {
+    BOOST_LOG_TRIVIAL(debug) << "Verify: L" 
+      << lID
+      << " parents<children clarifying";
+    vector<size_t> allBwBlobs;
+    findEndObjects(l,allBwBlobs,blobSizeMap,size_as_child,0);
+    BOOST_LOG_TRIVIAL(debug) << "Verify: L" 
+      << lID
+      << " found end Objects:" << printVector(allBwBlobs);
+    clarifyLarvae(l,
+        children_blobs[lID],
+        children,
+        allBwBlobs,
+        blobSizeMap,
+        change);
+    if(blobSizeMap[lID]<size_as_child)
+    {
+      blobSizeMap[lID]=size_as_child;
+      change=true;
+    }
+  }
+  else
+  {
+    if(max(size_as_parent,size_as_child)>blobSizeMap[lID])
+    {
+      blobSizeMap[lID]=max(size_as_parent,size_as_child);
+      change=true;
+    }
+  }
+}
+
 void secondPass()
 {
   /* We loop over each larva object and try to identify head/tail and wether it's a larva or not */
-  
-  std::map<unsigned int,larvaObject>::iterator dlit;
-  dlit=detected_larvae.begin();
-  //quick_loop for some general values
-  unsigned int not_larva_scale_cnt=0;
-  double not_larva_scale_avg=0.0;
-  double not_larva_scale_min=0.0;
-  unsigned int larva_scale_cnt=0;
-  double larva_scale_avg=0.0;
-  for(;dlit!=detected_larvae.end();++dlit)
+
+  std::map<size_t,size_t> blobSizeMap;
+  std::map<size_t, std::vector<size_t> > detailed_clusters;
+  //Initialize
+  for (auto &p: detected_larvae)
   {
-    if(dlit->second.isCluster==true)
+    size_t lID=p.second.larva_ID;
+    blobSizeMap[lID]=max(parent_blobs[lID].size(),
+                         children_blobs[lID].size());
+    if(blobSizeMap[lID]==0)
+      blobSizeMap[lID]=1;
+
+    BOOST_LOG_TRIVIAL(debug) << "Verify: Initialize: L" 
+      << lID
+      << " with blobSize: " << blobSizeMap[lID];
+  }
+  size_t iterations=1;
+  bool change=true; 
+  while(change && iterations<20)
+  {
+    change=false; 
+    BOOST_LOG_TRIVIAL(debug) << "Verify: Entering iteration: " 
+                             << iterations;
+    change=0;
+    BOOST_LOG_TRIVIAL(debug) << "Verify: Forward Scan";
+    for (auto p=detected_larvae.rbegin();
+              p!=detected_larvae.rend();p++)
     {
-      double nv=is_larva(dlit->second);
-      not_larva_scale_avg+=nv;
-      if(not_larva_scale_min>nv)
-        not_larva_scale_min=nv;
-      not_larva_scale_cnt++;
+      updateBlobSize(p->second,blobSizeMap,change);
     }
-    else
+    iterations++;
+  }
+
+  for (auto &p: detected_larvae)
+  {
+    if(blobSizeMap[p.second.larva_ID]>1)
     {
-      larva_scale_avg+=is_larva(dlit->second);
-      larva_scale_cnt++;
+      p.second.isCluster=1;
+      p.second.blobSize=blobSizeMap[p.second.larva_ID];
     }
   }
   
-  not_larva_scale_avg=not_larva_scale_avg/not_larva_scale_cnt;
-  larva_scale_avg=larva_scale_avg/larva_scale_cnt;
-
-  BOOST_LOG_TRIVIAL(debug) << "LARVA_SCALE: NOT_LARVA_AVG[" << not_larva_scale_avg
-                           << "] NOT_LARVA_MIN[" << not_larva_scale_min
-                           << "] LARVA_AVG[" << larva_scale_avg;
-
+  std::map<size_t,larvaObject>::iterator dlit;
+  dlit=detected_larvae.begin();
   for(;dlit!=detected_larvae.end();++dlit)
   {
-    /* Here we can run it along with the determine head since the
-       only case wher update the larva status that is missing is the
-       cluster creation. Cluster diverging is ok since can and do 
-       update the status of the existing object right away. This is not
-       possible when a cluster is created. But cluster creation depends
-       on existing objects which record that they converged to a next object
-       (i.e. with a greater ID number).*/
-    verifyLarvae(dlit->second);
     determineHeadTail(dlit->second);
   }
 }
 
 int main(int argc, char* argv[])
 {
+  //waitKey(10000);
   bool SHOWTAGS=true;
   bool TRACK=false;
   bool STEP=true;
@@ -2959,19 +3519,21 @@ int main(int argc, char* argv[])
       exit(5);
     }
   }
-  larvaFit lf;
+  //larvaFit lf;
   double totalFitError=0.0;
   while (!STOP)
   {
     if (!get_next_frame(capture,greyFrame,colorFrame))
       break;
     process_frame(greyFrame,bgFrame,colorFrame,processedFrame);
+    imshow("PF",processedFrame);
+    waitKey(1);
     IplImage ipl_thresholded = processedFrame;
     labelImg=cvCreateImage(
         cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
     NEW.clear();
     cvLabel(&ipl_thresholded, labelImg, NEW);
-    cvb::cvFilterByArea(NEW, 40, 1000);
+    cvb::cvFilterByArea(NEW, 40, 1200);
     cvb::CvBlobs tracked_blobs;
     cvb::CvBlobs blob1;
     cvb::CvBlobs::iterator blIT=NEW.begin();
@@ -2998,9 +3560,9 @@ int main(int argc, char* argv[])
       //stringstream sstr;
       //sstr<<lf;
       //BOOST_LOG_TRIVIAL(debug) << sstr;
-      unsigned long long a=getmsofday();
-      totalFitError+=lf.optimize2(detected_larvae[15].blobs.back());
-      BOOST_LOG_TRIVIAL(debug) << "FitTime: " << getmsofday()-a << "micros";
+      //unsigned long long a=getmsofday();
+      //totalFitError+=lf.optimize(detected_larvae[LRVTRACK_VERBOSE_LEVEL].blobs.back());
+      //BOOST_LOG_TRIVIAL(debug) << "FitTime: " << getmsofday()-a << "micros";
       //lf.showContour();
     }
     else
@@ -3011,6 +3573,7 @@ int main(int argc, char* argv[])
       int i=1;
       while (it!=NEW.end())
       {
+        
         preBlobs[i]=(*it).second;
         preBlobs[i]->label=i;
         it++;
@@ -3019,9 +3582,9 @@ int main(int argc, char* argv[])
       updateLarvae(preBlobs,preBlobs);
       //initialize(detected_larvae[3]);
       LARVAE_COUNT=preBlobs.size();
-      lf.setup(detected_larvae[15]);
-      lf.setloops(LRVTRACK_DSTEP,LRVTRACK_WSTEP);
-      lf.optimize2(detected_larvae[15].blobs.back());
+      //lf.setup(detected_larvae[LRVTRACK_VERBOSE_LEVEL]);
+      //lf.setloops(LRVTRACK_DSTEP,LRVTRACK_WSTEP);
+      //lf.optimize(detected_larvae[LRVTRACK_VERBOSE_LEVEL].blobs.back());
     }
 
     //dumpDetectedLarvae();
@@ -3044,8 +3607,10 @@ int main(int argc, char* argv[])
   }
   std::cerr << endl;
   BOOST_LOG_TRIVIAL(debug) << "Total Fit Error:" << totalFitError ;
-  return 0;
+  
+  //Second Pass
   secondPass();
+
   if(setup_capture_input(capture) == -1)
   {
     BOOST_LOG_TRIVIAL(error) 
@@ -3057,11 +3622,30 @@ int main(int argc, char* argv[])
   {
     if (!get_next_frame(capture,greyFrame,colorFrame))
       break;
+    apply_model(); 
+  }
 
+  // Third pass
+  if(setup_capture_input(capture) == -1)
+  {
+    BOOST_LOG_TRIVIAL(error) 
+      << "Error setting up the capture device (camera or video file)";
+    exit(1);
+  }
+  CURRENT_FRAME=0;
+  while (!STOP)
+  {
+    if (!get_next_frame(capture,greyFrame,colorFrame))
+      break;
+    /*cv::circle(colorFrame,
+               Point(circles[bestCircle][0],circles[bestCircle][1]),
+               circles[bestCircle][2],
+               Scalar(255,100,100));*/
     if (SHOWTAGS!=0)
     {
       showTags2();
     }
+    
     stringstream d;
     d<<CURRENT_FRAME;
     putText(colorFrame,
@@ -3082,10 +3666,11 @@ int main(int argc, char* argv[])
       imwrite(n.str(), colorFrame, compression_params);
     }
     catch (runtime_error& ex) {
-      fprintf(stderr, "Exception converting image to PNG format: %s\n", ex.what());
+      fprintf(stderr, 
+          "Exception converting image to PNG format: %s\n", 
+          ex.what());
       return 1;
     }
     //vidPOut << colorFrame;
   }
-
 }

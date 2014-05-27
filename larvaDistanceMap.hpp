@@ -6,6 +6,7 @@
 
 #define SPINE_SEGMENTS 12
 
+extern size_t CURRENT_FRAME;
 typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
 
 double p2fdist(cv::Point2f &a, cv::Point2f &b);
@@ -22,7 +23,7 @@ public:
   double WidthDist;
   double WidthAvg;
   double WidthSD;
-  unsigned int spineSegments;
+  size_t spineSegments;
   PointPair MaxDistPoints;
   cv::Point2f MidPoint;
   cv::Point2f p20;
@@ -36,6 +37,7 @@ public:
   double firstHalfWidthsSum;
   double secondHalfWidthsSum;
   double curvatureBias; // 0.0 <= Back <= 0.5 <= Front <= 1.0
+  double curvatureVariance; // 0.0 <= Back <= 0.5 <= Front <= 1.0
   int maxAngleLocation;
   class my2ndPoint
   {
@@ -109,7 +111,7 @@ double distanceBetweenSpines(larvaDistanceMap &a,larvaDistanceMap &b);
 void fixContour(
     cvb::CvBlob &blob,
     larvaDistanceMap &Distances,
-    unsigned int RES,
+    size_t RES,
     cv::Mat &frame,
     cv::Mat &previousFrame,
     std::vector<cv::Point2f> *heads=NULL,

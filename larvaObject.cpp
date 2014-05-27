@@ -136,13 +136,13 @@ void larvaObject::dump() const
 }
 
 int larvaObject::switchFaultyAssignment(
-  std::map<unsigned int,std::vector<unsigned int> > &detected_clusters,
-  std::map<unsigned int,larvaObject> &detected_larvae)
+  std::map<size_t,std::vector<size_t> > &detected_clusters,
+  std::map<size_t,larvaObject> &detected_larvae)
 {
   int i=inCluster.size()-1;
   int collisionIndex;
   int exchangeDuration; //in Frames up to current moment
-  unsigned int blob;
+  size_t blob;
 
 // Look for last collision
   for (; i>=0; i--)
@@ -174,8 +174,8 @@ int larvaObject::switchFaultyAssignment(
   exchangeDuration=inCluster.size()-collisionIndex-2;
 
 // Find the other larva involved
-  unsigned int otherLarvaID=0;
-  std::vector<unsigned int>::iterator otherLarvaIT=detected_clusters[blob].begin();
+  size_t otherLarvaID=0;
+  std::vector<size_t>::iterator otherLarvaIT=detected_clusters[blob].begin();
   for (; otherLarvaIT!=detected_clusters[blob].begin(); ++otherLarvaIT)
     {
       if (*otherLarvaIT!=larva_ID)

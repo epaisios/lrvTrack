@@ -53,7 +53,7 @@ class larvaFit
     void createContourFromFit(vector<Point2f> &F);
     void setupSpine();
     void pointToPoint(Point2f &p1, double angle, double d, Point2f &p2);
-    Mat completeFrame;
+    //Mat completeFrame;
     void calculateContourPoints(Point2f &a,
         Point2f &b,
         Point2f &c,
@@ -71,7 +71,7 @@ class larvaFit
         Point &cr);
     void paintPoly(Mat &ROI, Point* f,size_t fsize);
   public:
-    size_t PAD=12;
+    size_t PAD=10;
     unsigned long long ppdiffmax;
     unsigned long long createMatFromFitTime;
     size_t createMatFromFitCalls;
@@ -145,6 +145,15 @@ class larvaFit
     void showContour();
     double optimize2(cvb::CvBlob &blob);
     double optimize(cvb::CvBlob &blob);
+    double optimize(vector<cvb::CvBlob> &vec, cvb::CvBlob &res);
+    void createMatfromFit(Mat &larvaFitContour,
+                                Mat &fitBase,
+                                size_t minx,
+                                size_t maxx,
+                                size_t miny,
+                                size_t maxy,
+                                bool verbose
+                                );
     void createMatfromFit(Mat &larvaFitContour,
                           size_t minx,
                           size_t maxx,
@@ -152,7 +161,10 @@ class larvaFit
                           size_t maxy,
                           bool vervose=false
                           );
-    void filterAngle(std::vector<double> &a, double &val,double lim);
+    void filterAngle(std::vector<double> &a, 
+        double &val,
+        double lim,
+        double add);
 };
 
 

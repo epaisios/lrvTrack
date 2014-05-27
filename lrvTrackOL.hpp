@@ -1,6 +1,7 @@
 #ifndef __LRVTRACKOL_HPP__
 #define __LRVTRACKOL_HPP__
 #include <string>
+#include <utility>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -13,7 +14,6 @@
 #include "lrvTrackBase.hpp"
 #include "blobUtils.hpp"
 #include "larvaDistanceMap.hpp"
-#include "larvaSkel.hpp"
 #include "lrvTrackDebug.hpp"
 #include "lrvTrackFit.hpp"
 #include <fstream>
@@ -29,10 +29,10 @@ using namespace std;
 void updateOneLarva(cvb::CvBlobs &In,
                     cvb::CvBlobs &Prev,
                     cvb::CvBlobs::iterator it,
-                    tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW_LARVA);
+                    tbb::concurrent_hash_map<size_t, larvaObject> &NEW_LARVA);
 
-double mh_dist(unsigned int N,unsigned int C);
-double kn_dist(unsigned int N,unsigned int C);
+double mh_dist(size_t N,size_t C);
+double kn_dist(size_t N,size_t C);
 
 /* 
  * Class to perform the computations for each larva.
@@ -45,13 +45,13 @@ class larvaeUpdateBody : public ParallelLoopBody
 private:
   cvb::CvBlobs &In;
   cvb::CvBlobs &Prev;
-  tbb::concurrent_hash_map<unsigned int, larvaObject> &NEW_LARVA;
+  tbb::concurrent_hash_map<size_t, larvaObject> &NEW_LARVA;
   cvb::CvBlobs::iterator it;
 
 public:
   larvaeUpdateBody(cvb::CvBlobs &IIn, 
       cvb::CvBlobs &IPrev,
-      tbb::concurrent_hash_map<unsigned int, larvaObject> &n
+      tbb::concurrent_hash_map<size_t, larvaObject> &n
       ): 
     In(IIn),
     Prev(IPrev),
@@ -88,14 +88,14 @@ class lrvMapping {
   public:
     //The actual mapping
     // newID -> detectedLarvaeID
-    pair<unsigned int,unsigned int> mapping;
-    //vector<unsigned int> candidates;
-    unsigned int nlrv;
-    unsigned int plrv;
+    pair<size_t,size_t> mapping;
+    //vector<size_t> candidates;
+    size_t nlrv;
+    size_t plrv;
     //Constructor function sets up the mapping
-    lrvMapping(unsigned int a,unsigned int b)
+    lrvMapping(size_t a,size_t b)
     {
-      mapping=make_pair<unsigned int,unsigned int>(a,b);
+      mapping=make_pair(a,b);
       nlrv=mapping.first;
       plrv=mapping.second;
       dst=-1;

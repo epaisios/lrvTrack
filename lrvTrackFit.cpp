@@ -5,13 +5,14 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 
+
 inline double w(double x)
 {
-  double d=(x-1)*(x-1);
+  double d=(x-1)*(x-1)*(x-1);
   if(x>=1.3)
-    return sqrt(1-d);
+    return sqrt(1-d*d);
   if(x<1.3)
-    return sqrt(1-pow((1-x/1.3),1.4));
+    return sqrt(1-pow((1-x/1.3),1.7));
   return 0;
 }
 
@@ -127,6 +128,7 @@ void larvaFit::pointToPoint(Point2f &p1, double angle, double d, Point2f &p2)
   double k=tan(angle);
   double qpi=0.5*CV_PI;
   double dpi=1.5*CV_PI;
+
   if(angle<qpi || angle>dpi)
   {
     double xt=sqrt((d*d)/(1+k*k));
@@ -185,20 +187,25 @@ void larvaFit::setloops()
 
 
     wl.clear();
+    //wl.push_back(-2*wstep);
     wl.push_back(-wstep);
     wl.push_back(0);
     wl.push_back(wstep);
+    //wl.push_back(2*wstep);
 
 }
 
-void larvaFit::filterAngle(std::vector<double> &a, double &val,double lim)
+void larvaFit::filterAngle(std::vector<double> &a, 
+                           double &val,
+                           double lim,
+                           double add)
 {
-  if(val<lim)
+  if(val+a[0]<=lim)
     transform(a.begin(), a.end(), a.begin(),
-        bind2nd(std::plus<double>(), degree_step)); 
-  else if(val>2*CV_PI-lim)
+        bind2nd(std::plus<double>(), add)); 
+  else if(val+a.back()>=2*CV_PI-lim)
     transform(a.begin(), a.end(), a.begin(),
-        bind2nd(std::minus<double>(), degree_step));
+        bind2nd(std::minus<double>(), add));
 }
 
 void larvaFit::generate(std::vector<fitData> &fitSpace)
@@ -214,32 +221,11 @@ void larvaFit::generate(std::vector<fitData> &fitSpace)
   //fitSpace=std::vector<fitData>(30376);
   //fitSpace=std::vector<fitData>(18226);
 
-  filterAngle(a1,larvaFitData.angles[0],1*degree_step);
-  filterAngle(a2,larvaFitData.angles[1],1*degree_step);
-  filterAngle(a3,larvaFitData.angles[2],1*degree_step);
-  filterAngle(a4,larvaFitData.angles[3],1*degree_step);
+  filterAngle(a1,larvaFitData.angles[0],2*degree_step,2*degree_step);
+  filterAngle(a2,larvaFitData.angles[1],2*degree_step,2*degree_step);
+  filterAngle(a3,larvaFitData.angles[2],2*degree_step,degree_step);
+  filterAngle(a4,larvaFitData.angles[3],2*degree_step,degree_step);
   //filterAngle(ga,larvaFitData.global_angle,degree_step);
-
-  if(larvaFitData.width*wl[0]<orig_width*0.9)
-  {
-    transform(wl.begin(), wl.end(), wl.begin(),
-        bind2nd(std::plus<double>(), 2*wstep)); 
-  }
-  else if(larvaFitData.width*wl[0]>orig_width*1.1)
-  {
-    transform(wl.begin(), wl.end(), wl.begin(),
-        bind2nd(std::minus<double>(), 2*wstep)); 
-  }
-  if(larvaFitData.length*wl[0]<orig_length*0.9)
-  {
-    transform(wl.begin(), wl.end(), wl.begin(),
-        bind2nd(std::plus<double>(), 2*wstep)); 
-  }
-  else if(larvaFitData.length*wl[0]>orig_length*1.1)
-  {
-    transform(wl.begin(), wl.end(), wl.begin(),
-        bind2nd(std::minus<double>(), 2*wstep)); 
-  }
 
   fitSpace=std::vector<fitData>((a1.size()*
                                 a2.size()*
@@ -285,8 +271,8 @@ void larvaFit::generate(std::vector<fitData> &fitSpace)
                                            << l.length << ", "
                                            << l.width;*/
                   fitSpace[i++]=fitData(mp,
-                                        orig_length*(1.0+(wl[wp]*wstep)),
-                                        orig_width*(1.0+(wl[wp]*wstep)),
+                                        orig_length*(1.0+wl[wp]),
+                                        orig_width*(1.0-wl[wp]),
                                         l.angles[0]+a1[ia1],
                                         l.angles[1]+a2[ia2],
                                         l.angles[2]+a3[ia3],
@@ -364,6 +350,97 @@ class optimizeBody
     }
 };
 
+double larvaFit::optimize(vector<cvb::CvBlob> &vec, cvb::CvBlob &res)
+{
+  innerCountersReset();
+  std::vector<fitData> fitSpace;
+  generate(fitSpace);
+  std::vector<fitData>::iterator min=fitSpace.begin()+1;
+  double minerr=DBL_MAX;
+  Mat b1C;
+
+  size_t minx=INT_MAX,maxx=0,miny=INT_MAX,maxy=0;
+  for(auto &v:vec)
+  {
+    if(minx>v.minx)
+      minx=v.minx;
+    if(maxx<v.maxx)
+      maxx=v.maxx;
+    if(miny>v.miny)
+      miny=v.miny;
+    if(maxy<v.maxy)
+      maxy=v.maxy;
+  }
+  Mat all;
+  //Create contour bitmap of the resulting blob (the one detected)
+  createLarvaContour_custom(b1C,res,CV_8UC1,
+      minx,
+      maxx,
+      miny,
+      maxy,
+      PAD);
+
+  //Create contour bitmap of the blobs of the corresponding larvae
+  //in the previous step
+  for(auto &v:vec)
+  {
+    if(v.label==ID)
+      continue;
+    Mat vmat;
+    createLarvaContour_custom(vmat,
+        v,
+        CV_8UC1,
+        minx,
+        maxx,
+        miny,
+        maxy,
+        PAD);
+    if(all.empty())
+      vmat.copyTo(all);
+    else
+      all=vmat | all;
+  }
+
+  unsigned long long atime=getmsofday();
+  for(auto i=fitSpace.begin();i!=fitSpace.end();++i)
+  {
+    larvaFitData=*i;
+    //cout << *this << endl;
+    double r=errorFunc(b1C,
+                       minx,
+                       maxx,
+                       miny,
+                       maxy
+                       );
+
+    if(r<=minerr)
+    {
+      minerr=r;
+      min=i;
+    }
+  }
+  larvaFitData=*min;
+
+  BOOST_LOG_TRIVIAL(debug) << "Computed Angles: " << printVector(larvaFitData.angles) << endl;
+
+  Mat l1C;
+  /*BOOST_LOG_TRIVIAL(debug) << "LarvaFitData: " << larvaFitData.width <<" ," 
+                           << larvaFitData.length << ", " 
+                           << larvaFitData.midtail << ", "  
+                           << printVector(larvaFitData.angles) << ", "
+                           << larvaFitData.global_angle 
+                           << endl;*/
+  createMatfromFit(l1C,all,minx,maxx,miny,maxy,true);
+  cv::imshow("Fit Contour", l1C);
+  //cv::imshow("Old Frame", greyFrame);
+  cv::imshow("Old Contour", b1C);
+  cv::moveWindow("Old Contour",200,200);
+  cv::moveWindow("Fit Contour",200,130);
+  cv::waitKey(1);
+  return minerr;
+  //setupSpine();
+}
+
 double larvaFit::optimize(cvb::CvBlob &blob)
 {
   double minerr=DBL_MAX;
@@ -380,18 +457,29 @@ double larvaFit::optimize(cvb::CvBlob &blob)
   else
     larvaFitData=fitSpace[0];
   Mat l1C;
-  /*BOOST_LOG_TRIVIAL(debug) << "LarvaFitData: " << larvaFitData.width <<" ," 
+  BOOST_LOG_TRIVIAL(debug) << "LarvaFitData: " << larvaFitData.width <<" ," 
                            << larvaFitData.length << ", " 
                            << larvaFitData.midtail << ", "  
                            << printVector(larvaFitData.angles) << ", "
-                           << larvaFitData.global_angle 
-                           << endl;*/
+                           << larvaFitData.global_angle;
   createMatfromFit(l1C,blob.minx,blob.maxx,blob.miny,blob.maxy,true);
-  cv::imshow("Fit Contour", l1C);
+  cv::Mat comb(l1C.rows,2*l1C.cols+2,l1C.type(),cv::Scalar(255));
+  cv::Mat left(comb, Rect(0, 0, l1C.cols, l1C.rows));
+  cv::Mat right(comb, Rect(l1C.cols+2, 0, l1C.cols, l1C.rows));
+  l1C.copyTo(left);
+  b1C.copyTo(right);
+  //cv::imshow("Fit Contour", l1C);
   //cv::imshow("Old Frame", greyFrame);
-  cv::imshow("Old Contour", b1C);
-  cv::moveWindow("Old Contour",200,200);
-  cv::moveWindow("Fit Contour",200,130);
+  //cv::imshow("Old Contour", b1C);
+  cv::imshow("combined",comb);
+  stringstream n;
+  vector<int> compression_params;
+  compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+  compression_params.push_back(0);
+  n << "img/cc" << CURRENT_FRAME << ".png";
+  imwrite(n.str(), comb, compression_params);
+  //cv::moveWindow("Old Contour",200,200);
+  //cv::moveWindow("Fit Contour",200,130);
   cv::waitKey(1);
   return minerr;
 }
@@ -464,6 +552,7 @@ void larvaFit::showContour()
 
 larvaFit::larvaFit()
 {
+  cpoints_size=0;
 }
 
 void larvaFit::setup(larvaObject &l,int dstep, double wstep, size_t FRAME)
@@ -609,6 +698,7 @@ void larvaFit::innerCountersReset()
 }
 
 void larvaFit::createMatfromFit(Mat &larvaFitContour,
+                                Mat &fitBase,
                                 size_t minx,
                                 size_t maxx,
                                 size_t miny,
@@ -628,13 +718,17 @@ void larvaFit::createMatfromFit(Mat &larvaFitContour,
         maxx-minx+1+2*PAD,
         maxy-miny+1+2*PAD));*/
   Point2f bp(minx-PAD,miny-PAD);
+  
+  if(fitBase.rows!=tmp.rows || fitBase.cols!=tmp.cols)
+    return;
+
   //tmp.setTo(Scalar::all(0));
   tmp=Scalar(0);
   //cv::Mat completeFrame=cv::Mat(FRAME_ROWS,FRAME_COLS,
   //                        CV_8UC1,Scalar(0));
-  for(unsigned int i=0; i<spine.size()-1;i++)
+  for(size_t i=0; i<spine.size()-1;i++)
   {
-    unsigned int v=i*ipol;
+    size_t v=i*ipol;
     for(auto j=0;j<ipol;j++)
     {
       intSpine[v+j]=(spine[i+1]-spine[i])*((double)j/ipol)+spine[i];
@@ -644,8 +738,8 @@ void larvaFit::createMatfromFit(Mat &larvaFitContour,
   //if(verbose)
     //BOOST_LOG_TRIVIAL(debug) << "Interpolated Spine: " << printVector(intSpine) << endl;
   //vector<Point2f> cpoints(2*(intSpine.size()-1));
-  cpoints[0]=intSpine[0];
-  cpoints[cpoints_size/2]=intSpine.back();
+  cpoints[0]=intSpine[0]-bp;
+  cpoints[cpoints_size/2]=intSpine.back()-bp;
   for(auto i=1;i<intSpine.size()-1;i++)
   {
     calculateContourPoints(intSpine[i-1],
@@ -708,10 +802,126 @@ void larvaFit::createMatfromFit(Mat &larvaFitContour,
     }*/
   }
   //int npts=cpoints.size();
-  fillPoly(completeFrame,(const Point**) &cpoints,(int *) &cpoints_size,1,Scalar(255));
+  fillPoly(tmp,(const Point**) &cpoints,(int *) &cpoints_size,1,Scalar(255));
   for(size_t i=1;i<spine.size();i++)
   {
-    line(completeFrame,spine[i-1]-bp,spine[i]-bp,Scalar(100));
+    line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));
+  }
+  /*for(size_t i=0;i<spine.size();i++)
+  {
+    circle(completeFrame,spine[i],0,Scalar(50),-1);
+  }*/
+  //if(verbose)
+    //BOOST_LOG_TRIVIAL(debug) << "CPOINTS: " << printVector(cpoints);
+  larvaFitContour = tmp | fitBase;
+  createMatFromFitTime+=(getmsofday()-atime);
+  //free(t1);
+}
+
+void larvaFit::createMatfromFit(Mat &larvaFitContour,
+                                size_t minx,
+                                size_t maxx,
+                                size_t miny,
+                                size_t maxy,
+                                bool verbose
+                                )
+{
+  unsigned long long atime=getmsofday();
+  createMatFromFitCalls++;
+  setupSpine();
+  Mat tmp=cv::Mat(maxy-miny+1+(2*PAD),
+        maxx-minx+1+(2*PAD),
+        CV_8UC1,Scalar(0));
+  /*tmp=Mat(completeFrame,
+      Rect(minx-PAD,
+        miny-PAD,
+        maxx-minx+1+2*PAD,
+        maxy-miny+1+2*PAD));*/
+  Point2f bp(minx-PAD,miny-PAD);
+  //tmp.setTo(Scalar::all(0));
+  tmp=Scalar(0);
+  //cv::Mat completeFrame=cv::Mat(FRAME_ROWS,FRAME_COLS,
+  //                        CV_8UC1,Scalar(0));
+  for(size_t i=0; i<spine.size()-1;i++)
+  {
+    size_t v=i*ipol;
+    for(auto j=0;j<ipol;j++)
+    {
+      intSpine[v+j]=(spine[i+1]-spine[i])*((double)j/ipol)+spine[i];
+    }
+  }
+  intSpine.back()=spine.back();
+  //if(verbose)
+    //BOOST_LOG_TRIVIAL(debug) << "Interpolated Spine: " << printVector(intSpine) << endl;
+  //vector<Point2f> cpoints(2*(intSpine.size()-1));
+  cpoints[0]=intSpine[0]-bp;
+  cpoints[cpoints_size/2]=intSpine.back()-bp;
+  for(auto i=1;i<intSpine.size()-1;i++)
+  {
+    calculateContourPoints(intSpine[i-1],
+                           intSpine[i],
+                           intSpine[i+1],
+                           bp,
+                           //2.0*(i+1.0)/intSpine.size(),
+                           i,
+                           larvaFitData.width,
+                           cpoints[i],
+                           cpoints[cpoints_size-i]);
+    /*if(i==1)
+    {
+      Point t[3]={cpoints[i-1],
+                      cpoints[i],
+                      cpoints[cpoints.size()-i]};
+      //fillConvexPoly(tmp,t,3,Scalar(255));
+      paintPoly(completeFrame,t,3);
+    }
+    else if(i==intSpine.size()-2)
+    {
+      Point2f t1[4]={cpoints[i-1],
+                      cpoints[i],
+                      cpoints[cpoints.size()-i+1],
+                      cpoints[cpoints.size()-i]};
+      vector<Point2f> tv1(&t1[0],&t1[0]+4);
+      paintPoly(completeFrame,tv1);
+
+      Point t1[4]={cpoints[i-1],
+                      cpoints[i],
+                      cpoints[cpoints.size()-i],
+                      cpoints[cpoints.size()-i+1]};
+      //fillConvexPoly(tmp,t1,4,Scalar(255));
+      paintPoly(completeFrame,t1,4);
+
+      Point t2[3]={cpoints[cpoints.size()/2],
+                      cpoints[i],
+                      cpoints[cpoints.size()-i]};
+      //fillConvexPoly(tmp,t2,3,Scalar(255));
+      paintPoly(completeFrame,t2,3);
+    }
+    else if(i>1)
+    {
+      Point2f t1[4]={cpoints[i-1],
+                      cpoints[i],
+                      cpoints[cpoints.size()-i+1],
+                      cpoints[cpoints.size()-i]};
+      vector<Point2f> tv1(&t1[0],&t1[0]+4);
+      paintPoly(completeFrame,tv1);
+      Point t1[4]={cpoints[i-1],
+                      cpoints[i],
+                      cpoints[cpoints.size()-i],
+                      cpoints[cpoints.size()-i+1]};
+      //fillConvexPoly(tmp,t1,4,Scalar(255));
+      paintPoly(completeFrame,t1,4);
+    }*/
+    /*for(size_t i=0;i<intSpine.size();i++)
+    {
+      circle(completeFrame,intSpine[i],0,Scalar(100),-1);
+    }*/
+  }
+  //int npts=cpoints.size();
+  fillPoly(tmp,(const Point**) &cpoints,(int *) &cpoints_size,1,Scalar(255));
+  for(size_t i=1;i<spine.size();i++)
+  {
+    line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));
   }
   /*for(size_t i=0;i<spine.size();i++)
   {

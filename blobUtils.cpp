@@ -3,6 +3,23 @@
 #include "boost/dynamic_bitset.hpp"
 #include "alglib/interpolation.h"
 #include <sys/time.h>
+#include <boost/bind.hpp>
+#include <boost/ref.hpp>
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/mean.hpp>
+#include <boost/accumulators/statistics/moment.hpp>
+#include <boost/accumulators/statistics/variance.hpp>
+
+using namespace boost::accumulators;
+
+double vecVariance(std::vector<double> &c)
+{
+  accumulator_set<double, stats<tag::variance> > acc;
+  for_each(c.begin(), c.end(), boost::bind<void>(boost::ref(acc), _1));
+
+  return sqrt(variance(acc));
+}
 
 unsigned long long getmsofday()
 {
@@ -21,7 +38,7 @@ std::string printVector(alglib::real_1d_array &vec)
   std::stringstream sstm;
   //bool const is_number= std::is_arithmetic<number>::value;
   //static_assert( is_number, "Provided type is not an arithmetic type");
-  unsigned int i=0;
+  size_t i=0;
   sstm << "[" ;
   sstm << vec[i] ;
   ++i;
@@ -75,7 +92,7 @@ void derivVec(std::vector<cv::Point2f> &in,
 {
   std::vector<double> idx;
   d.push_back(cv::Point(0,0));
-  for(unsigned int i=1;i<in.size();i++)
+  for(size_t i=1;i<in.size();i++)
   {
     double R=1/(p[i]-p[i-1]);
     d.push_back((in[i]-in[i-1])*R);
@@ -90,7 +107,7 @@ void deriv2Vec(
     std::vector<cv::Point2f> &d2)
 {
   d2.push_back(cv::Point(0,0));
-  for(unsigned int i=1;i<d1.size();i++)
+  for(size_t i=1;i<d1.size();i++)
   {
     double R=1/(p[i]-p[i-1]);
     d2.push_back((d1[i]-d1[i-1])*R);
@@ -106,7 +123,7 @@ void curvVec(std::vector<cv::Point2f> &in,
   std::vector<cv::Point2f> d1,d2;
   derivVec(in,p,d1);
   deriv2Vec(d1,p,d2);
-  for(unsigned int i=0;i<in.size();i++)
+  for(size_t i=0;i<in.size();i++)
   {
     //std::cerr << d1[i].x << "," << d1[i].y << "," << d2[i].x << "," << d2[i].y << std::endl;
     float val=(d1[i].x*d2[i].y-d1[i].y*d2[i].x)/
@@ -142,14 +159,14 @@ cv::Point2f px5Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c
 }
 
 
-void smoothPoints(std::vector<cv::Point2f> &origPoints, std::vector<cv::Point2f> &smoothened,cv::Mat &frame, unsigned int rep)
+void smoothPoints(std::vector<cv::Point2f> &origPoints, std::vector<cv::Point2f> &smoothened,cv::Mat &frame, size_t rep)
 {
   std::vector<cv::Point2f> temp1=origPoints;
-  for (unsigned int k=0;k<rep;k++)
+  for (size_t k=0;k<rep;k++)
   {
     cv::Point2f NP=px3Smooth(frame, temp1[temp1.size()-2], temp1.back(), temp1[0], temp1[1], temp1[2]); 
     smoothened.push_back(NP);
-    for(unsigned int i=1;i<temp1.size();i++)
+    for(size_t i=1;i<temp1.size();i++)
     {
       if(temp1[i-1]!=temp1[i])
       {
@@ -183,14 +200,14 @@ double diff(cv::Point2f &a, cv::Point2f &b)
   return (fabs((double) a.x-b.x)+fabs((double)a.y-b.y));
 }
 
-void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points)
+void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points, size_t PAD)
 {
   cvb::CvContourPolygon *cntPoly=
     cvb::cvConvertChainCodesToPolygon(&p.contour);
   cvb::CvContourPolygon::iterator a=cntPoly->begin();
   while(a!=cntPoly->end())
     {
-      points.push_back(*a++);
+      points.push_back((cv::Point2f)(*a++)-cv::Point2f(PAD,PAD));
     }
   delete cntPoly;
 }
@@ -210,7 +227,7 @@ void pointsToContourVector(cvb::CvBlob &blob,
              );
 
   cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
-  for(unsigned int i=1;i<kpoints.size();i++)
+  for(size_t i=1;i<kpoints.size();i++)
   {
     cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,8);
     for(int j = 1; j < it.count; j++)
@@ -251,7 +268,7 @@ void blobToContourVector(cvb::CvBlob &blob,
              );
 
   cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
-  for(unsigned int i=1;i<kpoints.size();i++)
+  for(size_t i=1;i<kpoints.size();i++)
   {
     cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,4);
     for(int j = 1; j < it.count; j++)
@@ -346,7 +363,7 @@ void createLarvaContourCV(cv::Mat &lrvROI,
 
   std::vector<cv::Point2f> cntVec;
 
-  for (unsigned int i=0; i<cntPoly->size(); ++i)
+  for (size_t i=0; i<cntPoly->size(); ++i)
   {
     ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING+PADDING;
     ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING+PADDING;
@@ -366,6 +383,29 @@ void createLarvaContourCV(cv::Mat &lrvROI,
   drawContours(lrvROI,cvec,0,color,1,4,cv::noArray(),INT_MAX,cv::Point(PADDING,PADDING));
 }
 */
+
+void createLarvaContour_custom(cv::Mat &lrvROI,
+                        cvb::CvBlob &blob,
+                        int type,
+                        int minx,
+                        int maxx,
+                        int miny,
+                        int maxy,
+                        int PAD,
+                        bool FILL,
+                        cv::Scalar color,
+                        int connectivity,
+                        cv::Scalar bg)
+{
+  cv::Mat lrvROIlocal;
+  int dxu,dyu,dxb,dyb;
+  createLarvaContour(lrvROIlocal,blob,type,0,FILL,color,connectivity,bg);
+  if(! ( (dxu=blob.minx-minx)<0 || (dyu=blob.miny-miny)<0 || (dxb=maxx-blob.maxx)<0 || (dyb=maxy-blob.maxy)<0))
+  {
+    cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
+  }
+  dxu=0;
+}
 
 void createLarvaContour(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,
@@ -391,7 +431,7 @@ void createLarvaContour(cv::Mat &lrvROI,
                    );
   sizes[0]=static_cast<int> (cntPoly->size());
 
-  for (unsigned int i=0; i<cntPoly->size(); ++i)
+  for (size_t i=0; i<cntPoly->size(); ++i)
   {
     ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+PADDING;
     ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+PADDING;
@@ -442,7 +482,7 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
     color=cv::Scalar(255,255,255);
 
   sizes[0]=static_cast<int> (cntPoly->size());
-  for (unsigned int i=0; i<cntPoly->size(); ++i)
+  for (size_t i=0; i<cntPoly->size(); ++i)
     {
       ContourPoints[0][i].x=(*cntPoly)[i].x-blob.minx+ROI_PADDING+PADDING;
       ContourPoints[0][i].y=(*cntPoly)[i].y-blob.miny+ROI_PADDING+PADDING;
@@ -457,7 +497,7 @@ void createLarvaContourPoints(cv::Mat &lrvROI,
 }
 
 void createLarvaContourPacked(cv::Point &first, 
-                              unsigned int &size,
+                              size_t &size,
                               std::string &STR,
                               cvb::CvBlob &blob)
 {
@@ -466,8 +506,8 @@ void createLarvaContourPacked(cv::Point &first,
   first.x=(int) contourPoints.back().x;
   first.y=(int) contourPoints.back().y;
   std::stringstream outline;
-  unsigned int acc=0;
-  unsigned int cntSize=0;
+  size_t acc=0;
+  size_t cntSize=0;
   cv::Mat lrvROI;
   createLarvaContour(lrvROI,blob,CV_8UC1,0,false);
   int cnt3=0;
@@ -651,17 +691,18 @@ void sortPoints(std::vector<cv::Point2f> &cp,
 }
 
 void getBestCurvatureS(std::vector<float> &curv,
-                      std::map<float,unsigned int> &curvatures,
-                      std::vector<unsigned int> &di,
-                      std::vector<float> &dmax
+                      std::map<float,size_t> &curvatures,
+                      std::vector<size_t> &di,
+                      std::vector<float> &dmax,
+                      double &variance
                       )
 {
-  //std::map<float,unsigned int> c;
+  //std::map<float,size_t> c;
   std::vector<float> c;
   std::vector<float> c_tmp;
   int sf=11;
   //std::vector<double> idx;
-  //for(unsigned int i=0;i<curv.size();i++)
+  //for(size_t i=0;i<curv.size();i++)
   //{
   //  idx.push_back(i);
   //}
@@ -675,8 +716,8 @@ void getBestCurvatureS(std::vector<float> &curv,
   //g1.plot_xy(idx,c,"curvature smoothened");
   //wait_for_key();
 
-  unsigned int dmaxsz=0;
-  /*for(std::map<float,unsigned int>::reverse_iterator rit=curvatures.rbegin();
+  size_t dmaxsz=0;
+  /*for(std::map<float,size_t>::reverse_iterator rit=curvatures.rbegin();
       rit!=curvatures.rend();rit++)
   {
     di[dmaxsz]=rit->second;
@@ -685,15 +726,23 @@ void getBestCurvatureS(std::vector<float> &curv,
     if(dmaxsz>=di.size())
       break;
   }*/
-  std::map<float,std::vector<unsigned int> > maxima;
+  std::map<float,std::vector<size_t> > maxima;
   bool prePos=false;
   if(c[0]-c.back()>=0)
     prePos=true;
 
-  for(unsigned int i=1;i<c.size();i++)
+  double max=curv[0];
+  double min=curv[0];
+  for(size_t i=1;i<c.size();i++)
   {
     double vp=c[i-1];
     double va=c[i];
+    
+    if(curv[i]>max)
+      max=curv[i];
+    if(curv[i]<min)
+      min=curv[i];
+
     if(c[i]-c[i-1]>=0 )
     {
       prePos=true;
@@ -706,7 +755,18 @@ void getBestCurvatureS(std::vector<float> &curv,
 
       prePos=false;
     }
+    //mean+=curv[i];
   }
+  variance=max-min;
+  //mean=mean/curv.size();
+  
+  /*double s2,s3=0.0;
+  for(size_t i=0;i<curv.size();i++)
+  {
+    s2=s2+(curv[i]-mean)*(curv[i]-mean); 
+    s3=s3+(curv[i]-mean); 
+  }
+  variance = (s2-s3*s3/c.size())/(c.size()-1);*/
   if(c[0]-c.back()<0 )
   {
     if(prePos)
@@ -718,10 +778,10 @@ void getBestCurvatureS(std::vector<float> &curv,
     return;
   }
 
-  std::map<float,std::vector<unsigned int> >::reverse_iterator f=maxima.rbegin();
+  std::map<float,std::vector<size_t> >::reverse_iterator f=maxima.rbegin();
   float m1=10.0;
   int i1;
-  unsigned int sz1;
+  size_t sz1;
   while(m1>(float) 3.3)
   {
     if(f==maxima.rend())
@@ -746,7 +806,7 @@ void getBestCurvatureS(std::vector<float> &curv,
   }
   double P=0.6;
   /*std::vector<double> idx;
-  for(unsigned int i=0;i<curv.size();i++)
+  for(size_t i=0;i<curv.size();i++)
   {
     idx.push_back(i);
   }
@@ -847,12 +907,12 @@ void getBestCurvatureS(std::vector<float> &curv,
 }
 
 void getBestCurvature(std::vector<float> &c,
-                      std::vector<unsigned int> &di,
+                      std::vector<size_t> &di,
                       std::vector<float> &dmax
                       )
 {
   bool positive=true;
-  for(unsigned int i=1;i<c.size();i++)
+  for(size_t i=1;i<c.size();i++)
   {
     if(c[i]-c[i-1]>=0 )
     {
@@ -862,7 +922,7 @@ void getBestCurvature(std::vector<float> &c,
     else if(positive)
     {
       positive=false;
-      std::vector<unsigned int>::iterator dj=di.begin();
+      std::vector<size_t>::iterator dj=di.begin();
       for(std::vector<float>::iterator j=dmax.begin();j!=dmax.end();j++)
       {
         if(c[i-1]>(*j))
@@ -883,24 +943,28 @@ void getBestCurvature(std::vector<float> &c,
 void extractCentripetal(
     alglib::real_1d_array &x,
     alglib::real_1d_array &y,
-    alglib::real_1d_array &ad)
+    alglib::real_1d_array &ad,
+    std::vector<float> &d)
 {
-  unsigned int step=1;
+  size_t step=1;
   float csqrt=0.0;
-  for(unsigned int i=step;i<x.length();i+=step)
+  for(size_t i=step;i<x.length();i+=step)
   {
       csqrt+=sqrt(p2fdist(x[i],y[i],x[i-1],y[i-1]));
   }
   csqrt+=sqrt(p2fdist(x[x.length()-1],y[y.length()-1],x[0],y[0]));
   ad[0]=0;
-  unsigned int i=1;
+  d.push_back(0);
+  size_t i=1;
   for(i=1;i<x.length()-1;i++)
   {
     float newD = ad[i-1] + sqrt(p2fdist(x[i-1],y[i-1],x[i],y[i]))/csqrt;
     ad[i]=newD;
+    d.push_back(ad[i]);
   }
   i=x.length()-1;
   ad[i]=1.0;
+  d.push_back(1.0);
 }
 
 void splint(std::vector<cv::Point2f> &cp,
@@ -928,8 +992,8 @@ void spline3(std::vector<cv::Point2f> &cp,
            /*int d0,
            int dm,*/
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &curvatures)
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures)
 {
   std::vector<float> x2;
   std::vector<float> y2;
@@ -949,7 +1013,7 @@ void spline3(std::vector<cv::Point2f> &cp,
   std::vector<float> curvature;
   std::vector<float> pvals;
   std::vector<cv::Point2f> NP;
-  unsigned int didx=0;
+  size_t didx=0;
   for (int i=0;i<RES;i++)
   {
     t=t0+i*step;
@@ -974,7 +1038,7 @@ void spline3(std::vector<cv::Point2f> &cp,
 
   std::vector<float> scurvature;
   curvVec(np,pvals,scurvature);
-  getBestCurvatureS(scurvature,curvatures,di,dmax);
+  //getBestCurvatureS(scurvature,curvatures,di,dmax,cvariance);
 }
 
 void spline4(std::vector<cv::Point2f> &cp,
@@ -983,9 +1047,10 @@ void spline4(std::vector<cv::Point2f> &cp,
            int n,
            int RES,
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &curvatures,
-           std::vector<float> &vcurv)
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures,
+           std::vector<float> &vcurv,
+           double &cvariance)
 {
   alglib::real_1d_array x,y;                 
   alglib::real_1d_array ad,aw;               
@@ -996,7 +1061,7 @@ void spline4(std::vector<cv::Point2f> &cp,
   inu.setlength(0);
   nu.setlength(0);
   alglib::ae_int_t ink=0;                     
-  unsigned int extra=5;
+  size_t extra=5;
   x.setlength(m+2*extra);                          
   y.setlength(m+2*extra);                          
   ad.setlength(m+2*extra);                         
@@ -1004,33 +1069,36 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::spline1dinterpolant sx;            
   alglib::spline1dinterpolant sy;            
   alglib::spline1dfitreport rep;             
-  double rho=2.3;
+  double rho=0.7;
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
   for(int i=0;i<extra;i++)
   {
     x[i]=cp[cp.size()-extra+i].x;
     y[i]=cp[cp.size()-extra+i].y;
-    aw[i]=1e-10;
+    //aw[i]=w[cp.size()-extra+i];
+    aw[i]=1e-15;
   }
   for(int i=0;i<m;i++)
   {
     x[i+extra]=cp[i].x;
     y[i+extra]=cp[i].y;
-    aw[i+extra]=1e-15;
+    aw[i+extra]=w[i];
+    //aw[i]=1e-15;
   }
   for(int i=0;i<extra;i++)
   {
     x[extra+m+i]=cp[i].x;
     y[extra+m+i]=cp[i].y;
-    aw[i+m+extra]=1e-15;
+    aw[i+m+extra]=w[i];
+    aw[i]=1e-15;
   }
-  extractCentripetal(x,y,ad);
-  //alglib::spline1dfitpenalizedw(ad,x,aw,m+extra,rho,info,sx,rep);
-  //alglib::spline1dfitpenalizedw(ad,y,aw,m+extra,rho,info,sy,rep);
+  extractCentripetal(x,y,ad,d);
   try{
     alglib::spline1dfitpenalized(ad,x,m+2*extra,rho,info,sx,rep);
     alglib::spline1dfitpenalized(ad,y,m+2*extra,rho,info,sy,rep);
+    //alglib::spline1dfitpenalizedw(ad,x,aw,m+2*extra,rho,info,sx,rep);
+    //alglib::spline1dfitpenalizedw(ad,y,aw,m+2*extra,rho,info,sy,rep);
     //alglib::spline1dfitcubicwc(ad,x,aw,m+extra,nu,nu,inu,ink,m+extra+2,info,sx,rep);
     //alglib::spline1dfitcubicwc(ad,y,aw,m+extra,nu,nu,inu,ink,m+extra+2,info,sy,rep);
   }
@@ -1052,8 +1120,16 @@ void spline4(std::vector<cv::Point2f> &cp,
   std::vector<float> dmax(di.size(),0);
   std::vector<float> curvature;
   std::vector<float> pvals;
+  std::vector<double> adfactor;
+  adfactor.push_back(step);
+  for(size_t i=1;i<ad.length();i++)
+  {
+    adfactor.push_back((ad[i]-ad[i-1])/(tn-t0));
+  }
+  size_t j=0;
   for (int i=0;i<RES;i++)
   {
+    step=adfactor[j];
     t=t0+i*step;
     double vx,vy;
     vx = spline1dcalc(sx, t);
@@ -1061,10 +1137,12 @@ void spline4(std::vector<cv::Point2f> &cp,
     cv::Point2f N(vx,vy);
     np.push_back(N);
     pvals.push_back(t);
+    while(t<ad[j])
+      j++;
   }
   pvals.push_back(t+step);
   curvVec(np,pvals,vcurv);
-  getBestCurvatureS(vcurv,curvatures,di,dmax);
+  getBestCurvatureS(vcurv,curvatures,di,dmax,cvariance);
 }
 
 void spline2(std::vector<cv::Point2f> &cp,
@@ -1073,8 +1151,8 @@ void spline2(std::vector<cv::Point2f> &cp,
            int n,
            int RES,
            std::vector<cv::Point2f> &np,
-           std::vector<unsigned int> &di,
-           std::map<float,unsigned int> &curvatures,
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures,
            std::vector<float> &vcurv)
 {
   alglib::real_2d_array xy;
@@ -1114,7 +1192,8 @@ void spline2(std::vector<cv::Point2f> &cp,
   smoothVec(NP,np,5,cv::Point2f(0,0));
 
   curvVec(np,pvals,vcurv);
-  getBestCurvatureS(vcurv,curvatures,di,dmax);
+  double variance;
+  getBestCurvatureS(vcurv,curvatures,di,dmax,variance);
 }
 
 void spline(std::vector<cv::Point2f> &cp,
@@ -1238,7 +1317,7 @@ void fin(int n,
   xpointsx=(float *)malloc(n*sizeof(float));
   xpointsy=(float *)malloc(n*sizeof(float));
 
-  for(unsigned int i=0;i<xpoints.size();i++)
+  for(size_t i=0;i<xpoints.size();i++)
   {
     xpointsx[i]=xpoints[i].x;
     xpointsy[i]=xpoints[i].y;
@@ -1247,7 +1326,7 @@ void fin(int n,
   float **a;
   v=(float **)malloc(n*sizeof(float *));
   a=(float **)malloc(n*sizeof(float *));
-  for(unsigned int i=0;i<xpoints.size();i++)
+  for(size_t i=0;i<xpoints.size();i++)
   {
     v[i]=(float *)malloc(7*sizeof(float));
     a[i]=(float *)malloc(4*sizeof(float));
@@ -1268,7 +1347,7 @@ double getSurroundingSize(cv::Point2f &point,
     cv::Mat &grey_frame)
 {
   cv::Mat larvaImg,lrvROI;
-  unsigned int PADDING=4;
+  size_t PADDING=4;
   cv::Mat rROI,ROI;
   try{
     rROI=grey_frame(cv::Rect(blob.minx-PADDING,
@@ -1307,7 +1386,7 @@ double getSurroundingSize(cv::Point2f &point,
     cv::Mat &prev_frame)
 {
   cv::Mat larvaImg,lrvROI;
-  unsigned int PADDING=4;
+  size_t PADDING=4;
   cv::Mat rROI,ROI;
   cv::Mat preROI;
   try{
