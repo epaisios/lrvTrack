@@ -460,6 +460,69 @@ void createLarvaContour(cv::Mat &lrvROI,
 }
 
 
+// Finds the intersection of two lines, or returns false.
+// The lines are defined by (o1, p1) and (o2, p2).
+bool intersection(cv::Point2f o1, cv::Point2f p1, cv::Point2f o2, cv::Point2f p2,
+    cv::Point2f &r)
+{
+  cv::Point2f x = o2 - o1;
+  cv::Point2f d1 = p1 - o1;
+  cv::Point2f d2 = p2 - o2;
+
+  float cross = d1.x*d2.y - d1.y*d2.x;
+  if (abs(cross) < /*EPS*/1e-8)
+    return false;
+
+  double t1 = (x.x * d2.y - x.y * d2.x)/cross;
+  r = o1 + d1 * t1;
+  if(r.x<std::min(o1.x,p1.x) || r.x<std::min(o2.x,p2.x)
+      || r.x>std::max(o1.x,p1.x) || r.x>std::max(o2.x,p2.x)
+      || r.y<std::min(o1.y,p1.y) || r.y<std::min(o2.y,p2.y)
+      || r.y>std::max(o1.y,p1.y) || r.y>std::max(o2.y,p2.y))
+    return false;
+  return true;
+}
+
+cv::Point2f perp(cv::Point2f &p1, cv::Point2f &p2, cv::Point2f &p3, double len, bool right)
+{
+  cv::Point2f b(0,0);
+  cv::Point2f v1=p1-p2;
+  cv::Point2f v2=p3-p2;
+  double l1=sqrt(v1.x*v1.x+v1.y*v1.y);
+  double l2=sqrt(v2.x*v2.x+v2.y*v2.y);
+  cv::Point2f nv1=v1*(1/l1);
+  cv::Point2f nv2=v2*(1/l2);
+  cv::Point2f s=nv1+nv2;
+  double d=sqrt(s.x*s.x+s.y*s.y);
+  if(d<1e-8 || d<1e-8)
+  {
+    if(right)
+    {
+      if(nv2.x*nv2.y>0)
+        s.y=-nv2.y;
+      else
+        s.x=-nv2.x;
+    }
+    else
+    {
+      if(nv2.x*nv2.y>0)
+        s.x=-nv2.x;
+      else
+        s.y=-nv2.y;
+    }
+    return p2+len*s;
+  }
+  else 
+  {
+    s=s*(1/d);
+    if(right)
+      return p2+len*s;
+    else
+      return p2+len*(-1*s);
+  }
+}
+
+
 void createLarvaContourPoints(cv::Mat &lrvROI,
                               cvb::CvBlob &blob,
                               int type,
@@ -1069,7 +1132,7 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::spline1dinterpolant sx;            
   alglib::spline1dinterpolant sy;            
   alglib::spline1dfitreport rep;             
-  double rho=0.7;
+  double rho=2.0;
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
   for(int i=0;i<extra;i++)
@@ -1122,14 +1185,10 @@ void spline4(std::vector<cv::Point2f> &cp,
   std::vector<float> pvals;
   std::vector<double> adfactor;
   adfactor.push_back(step);
-  for(size_t i=1;i<ad.length();i++)
-  {
-    adfactor.push_back((ad[i]-ad[i-1])/(tn-t0));
-  }
   size_t j=0;
   for (int i=0;i<RES;i++)
   {
-    step=adfactor[j];
+    //step=adfactor[j];
     t=t0+i*step;
     double vx,vy;
     vx = spline1dcalc(sx, t);

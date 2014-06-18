@@ -32,6 +32,7 @@ public:
   std::vector<cv::Point2f> Spine;
   std::vector<double> Angles;
   std::vector<double> Widths;
+  std::vector<PointPair> fSpinePairs;
   std::vector<PointPair> spinePairs;
   double maxAngle;
   double firstHalfWidthsSum;

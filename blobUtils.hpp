@@ -161,6 +161,11 @@ double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD=0);
 double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
 double angleD( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
 double angleC( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
+cv::Point2f perp(cv::Point2f &p1, cv::Point2f &p2, 
+                 cv::Point2f &p3, double mag=1.0, 
+                 bool right=true);
+bool intersection(cv::Point2f o1, cv::Point2f p1, 
+                  cv::Point2f o2, cv::Point2f p2, cv::Point2f &r);
 
 void derivVec(std::vector<cv::Point2f> &in,
               std::vector<float> &p,

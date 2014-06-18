@@ -374,14 +374,78 @@ void showTags2()
           createLarvaContour(larvaROI,*blob,CV_8UC3,PAD,false,
               Scalar(0,255,0),8);
           drawSpinePoints(colorFrame,it->second,c_index);
-          BOOST_LOG_TRIVIAL(debug) << "LRVINFO:" << 
+          /*BOOST_LOG_TRIVIAL(debug) << "LRVINFO:" << 
             it->second.larva_ID << ", " <<
             it->second.area[c_index] << ", " <<
             it->second.length[c_index] << ", " <<
             it->second.width[c_index] << ", " <<
             it->second.grey_value[c_index] << ", " <<
-            it->second.perimeter[c_index];
+            it->second.perimeter[c_index];*/
           //plotAngle(blob,larvaROI,PAD);
+          cv::Point2f cc=Point2f(circles[bestCircle][0],
+                                 circles[bestCircle][1]);
+          double ppm=150/(2*circles[bestCircle][2]);
+          if((it->second.end_frame-it->second.start_frame)>80)
+          {
+            larvaObject &l=it->second;
+            cv::Point2f bp=cv::Point2f(l.blobs[c_index].minx,
+                                      l.blobs[c_index].miny);
+            cv::Point2f cbp=l.centroids[c_index]+bp;
+            ofstream lrvFile;
+            stringstream filename;
+            filename << "data/" << it->second.larva_ID << ".csv";
+            lrvFile.open(filename.str(),ios::app); 
+            lrvFile << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+            //lrvFile << (cbp.x - cc.x)*ppm << ",";
+            //lrvFile << (- cbp.y + cc.y)*ppm << ",";
+            bool rev=true;
+            if(l.lrvDistances[c_index].Spine[0]==
+                l.tails[c_index]+bp &&
+                l.lrvDistances[c_index].Spine.back()!=l.tails[c_index]+bp)
+            {
+              auto &d=l.lrvDistances[c_index].Spine;
+              for(auto &s : d)
+              {
+                lrvFile << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
+              }
+            }
+            else if(l.lrvDistances[c_index].Spine[0]!=
+                l.tails[c_index]+bp &&
+                l.lrvDistances[c_index].Spine.back()==l.tails[c_index]+bp)
+            {
+              auto &d=l.lrvDistances[c_index].Spine;
+              for(auto s=d.rbegin();s!=d.rend();s++)
+              {
+                lrvFile << (s->x-cc.x)*ppm << "," 
+                        << (-s->y+cc.y)*ppm <<",";
+              }
+              rev=true;
+            }
+            else
+            {
+              cerr << "Head tail confusion detected" << endl;
+            }
+            if(rev)
+            {
+              //l.lrvDistances[c_index].spinePairs
+            }
+            else
+            {
+              for(auto &p: l.lrvDistances[c_index].spinePairs)
+              {
+                lrvFile  << (p.first.x-cc.x)*ppm << "," 
+                         << (-p.first.y+cc.y)*ppm <<",";
+              }
+              auto &sp=l.lrvDistances[c_index].spinePairs;
+              for(auto p=sp.rbegin();p!=sp.rend();p++)
+              {
+                lrvFile << (p->second.x-cc.x)*ppm;
+              }
+            }
+            lrvFile << it->second.round_flag[c_index];
+            lrvFile <<endl;
+            lrvFile.close();
+          }
         }
         it++;
       }
@@ -2339,8 +2403,8 @@ void extract_background_offline(VideoCapture &capture,
   resultframe*=(1.0/count);
   normalize(resultframe,greyBgFrame,0,255,CV_MINMAX);
   greyBgFrame.convertTo(greyBgFrame,CV_8UC1);
-  imshow("background",greyBgFrame);
-  waitKey(10000);
+  //imshow("background",greyBgFrame);
+  //waitKey(10000);
 }
 
 /*
@@ -3526,8 +3590,8 @@ int main(int argc, char* argv[])
     if (!get_next_frame(capture,greyFrame,colorFrame))
       break;
     process_frame(greyFrame,bgFrame,colorFrame,processedFrame);
-    imshow("PF",processedFrame);
-    waitKey(1);
+    //imshow("PF",processedFrame);
+    //waitKey(1);
     IplImage ipl_thresholded = processedFrame;
     labelImg=cvCreateImage(
         cvGetSize(&ipl_thresholded), IPL_DEPTH_LABEL, 1);
@@ -3618,12 +3682,12 @@ int main(int argc, char* argv[])
     exit(1);
   }
   CURRENT_FRAME=0;
-  while (!STOP)
+  /*while (!STOP)
   {
     if (!get_next_frame(capture,greyFrame,colorFrame))
       break;
-    apply_model(); 
-  }
+    //apply_model(); 
+  }*/
 
   // Third pass
   if(setup_capture_input(capture) == -1)

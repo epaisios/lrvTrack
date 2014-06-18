@@ -100,6 +100,8 @@ size_t FRAME_ROWS;
 std::map<size_t, std::vector<size_t> > parent_blobs;
 std::map<size_t, std::vector<size_t> > children_blobs;
 std::map<size_t,larvaObject> detected_larvae;
+//std::map<size_t,larvaFit> model_larvae;
+
 std::vector<size_t> lost_larvae;
 
 std::vector<cv::Vec3f> circles;

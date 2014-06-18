@@ -1,6 +1,8 @@
 #include "larvaDistanceMap.hpp"
 #include "lrvTrackDebug.hpp"
+#include <unordered_set>
 #include <queue>
+#include <algorithm>
 #include <utility>
 #include <opencv2/highgui/highgui.hpp>
 #include "gnuplot_i.hpp"
@@ -174,11 +176,59 @@ void showPoints(cvb::CvBlob blob,
   std::cerr << "Dist bwdIdx->pbwdIdx: " << p2fdist(points[bwdIdx],points[pbwdIdx]) << std::endl;
 }
 
+void getArcSimple(size_t A,
+                size_t B,
+                std::vector<cv::Point2f> &contour,
+                std::vector<cv::Point2f> &Arc,
+                bool left
+                )
+{
+  size_t I=A;
+  int step;
+  size_t contour_size=contour.size();
+  if(left)
+    step=-1;
+  else
+    step=1;
+
+  if(left==true)
+    if(I==0)
+      I=contour.size()-1;
+    else
+      I+=step;
+  else 
+  {
+    if(I==contour.size()-1)
+      I=0;
+    else
+      I+=step;
+  }
+  
+  while(I!=B)
+  {
+    Arc.push_back(contour[I]);
+    if(left==true)
+      if(I==0)
+        I=contour.size()-1;
+      else
+        I+=step;
+    else 
+    {
+      if(I==contour.size()-1)
+        I=0;
+      else
+        I+=step;
+    }
+  }  
+}
+
 void getLeftArc(size_t A,
                 size_t B,
                 std::vector<cv::Point2f> &contour,
                 std::vector<cv::Point2f> &leftArc,
-                std::vector<double> &leftArcDistanceMap
+                std::vector<float> &centripetal,
+                std::vector<float> &leftArcCentripetal,
+                std::vector<float> &leftArcDistanceMap
                 )
 {
   size_t I=A;
@@ -189,6 +239,7 @@ void getLeftArc(size_t A,
     {
       leftArcDistanceMap.push_back(0);
       leftArc.push_back(contour[A]);
+      leftArcCentripetal.push_back(centripetal[A]);
       if(I==0)
         I=contour.size()-1;
       else
@@ -196,7 +247,8 @@ void getLeftArc(size_t A,
       continue;
     }
     leftArc.push_back(contour[I]);
-
+    leftArcCentripetal.push_back(centripetal[I]);
+      
     if(I==0)
     {
       double newDst=leftArcDistanceMap.back()+p2fdist(contour[I],contour[I+1]);
@@ -229,13 +281,16 @@ void getLeftArc(size_t A,
     leftArcDistanceMap.push_back(newDst);
   }
   leftArc.push_back(contour[B]);
+  leftArcCentripetal.push_back(centripetal[B]);
 }
 
 void getRightArc(size_t A,
                 size_t B,
                 std::vector<cv::Point2f> &contour,
                 std::vector<cv::Point2f> &rightArc,
-                std::vector<double> &rightArcDistanceMap
+                std::vector<float> &centripetal,
+                std::vector<float> &rightArcCentripetal,
+                std::vector<float> &rightArcDistanceMap
                 )
 {
   size_t I=A;
@@ -246,6 +301,7 @@ void getRightArc(size_t A,
     {
       rightArcDistanceMap.push_back(0);
       rightArc.push_back(contour[A]);
+      rightArcCentripetal.push_back(centripetal[A]);
       if(I==contour.size()-1)
         I=0;
       else
@@ -254,6 +310,7 @@ void getRightArc(size_t A,
     }
 
     rightArc.push_back(contour[I]);
+    rightArcCentripetal.push_back(centripetal[I]);
     if(I==contour.size()-1)
     {
       I=0;
@@ -282,11 +339,13 @@ void getRightArc(size_t A,
     rightArcDistanceMap.push_back(rightArcDistanceMap.back()+
                                   p2fdist(contour[B],contour.back()));
   rightArc.push_back(contour[B]);
+  rightArcCentripetal.push_back(centripetal[B]);
+
 
 }
 
-void getNextPointInArc(std::vector<cv::Point2f> &arc,
-                       std::vector<double> &arcDistanceMap,
+size_t getNextPointInArc(std::vector<cv::Point2f> &arc,
+                       std::vector<float> &arcDistanceMap,
                        double distance,
                        cv::Point2f &newPoint
     )
@@ -303,7 +362,7 @@ void getNextPointInArc(std::vector<cv::Point2f> &arc,
     newPoint=arc[i-1]+r*(arc[i]-arc[i-1]);
     r=1;
   }
-
+    return i;
 }
 
 double distanceBetweenSpines(larvaDistanceMap &a,larvaDistanceMap &b)
@@ -357,38 +416,146 @@ size_t findContourPointClosestTo(
   
 }
 
-void getCandidateSpine2(cvb::CvBlob &blob,
+void getIntersectionsWithContour(
+  cv::Point2f &p1,
+  cv::Point2f &p2,
+  cv::Point2f &p3,
+  larvaDistanceMap &candidateMap,
+  std::vector<cv::Point2f> &leftArc,
+  std::vector<cv::Point2f> &rightArc)
+{
+  std::vector<PointPair> &P=candidateMap.fSpinePairs;
+  cv::Point2f lp=perp(p1,p2,p3,candidateMap.WidthDist, 
+      false);
+  cv::Point2f rp=perp(p1,p2,p3,candidateMap.WidthDist, 
+      true);
+  size_t li=1,ri=1;
+  cv::Point2f lb,le,rb,re;
+
+  lb=leftArc[li-1]; le=leftArc[li];
+  rb=rightArc[ri-1]; re=rightArc[ri];
+
+  cv::Point2f int_left;
+  cv::Point2f int_right;
+  double minlDist=DBL_MAX;
+  double minrDist=DBL_MAX;
+  while(li<leftArc.size())
+  {
+    double d;
+    cv::Point2f intl;
+    if(intersection(lb,le,lp,rp,intl))
+    {
+      d=p2fdist(intl,p2);
+      if(d<minlDist)
+      {
+        minlDist=d;
+        int_left=intl;
+      }
+    }
+      lb=leftArc[li-1]; le=leftArc[li];
+    ++li;
+  }
+  while(ri<rightArc.size())
+  {
+    double d;
+    cv::Point2f intr;
+    if(intersection(rb,re,lp,rp,intr))
+    {
+      d=p2fdist(intr,p2);
+      if(d<minrDist)
+      {
+        minrDist=d;
+        int_right=intr;
+      }
+    }
+    rb=rightArc[ri-1]; re=rightArc[ri];
+    ++ri;
+  }
+
+  if(minlDist==DBL_MAX || minrDist==DBL_MAX)
+  {
+    if(minlDist==DBL_MAX)
+      int_left=1.0*P.back().first;
+
+    if(minrDist==DBL_MAX)
+      int_right=1.0*P.back().second;
+  }
+  else
+    p2=(int_left+int_right)*0.5;
+    
+
+  P.push_back(std::make_pair(int_left,int_right));
+}
+
+//We assume leftArc and rightArc start with A
+//and end with B included.
+void spineAndContour( 
+  std::vector<cv::Point2f> &leftArc,
+  std::vector<cv::Point2f> &rightArc,
+  std::vector<cv::Point2f> &wholeSpine,
+  larvaDistanceMap &candidateMap,
+  std::vector<float> &spineDistanceMap
+  )
+{
+  double stepS=candidateMap.MaxDist/(SPINE_SEGMENTS-1);
+  candidateMap.Spine.push_back(wholeSpine[0]);
+  for(size_t i=1;i<SPINE_SEGMENTS-1;++i)
+  {
+    cv::Point2f cPoint;
+    getNextPointInArc(wholeSpine,
+        spineDistanceMap,
+        i*stepS,
+        cPoint);
+
+    candidateMap.Spine.push_back(cPoint);
+
+    if(i>=2)
+    {
+      cv::Point2f &p0=candidateMap.Spine[i-2];
+      cv::Point2f &p1=candidateMap.Spine[i-1];
+      cv::Point2f &p2=candidateMap.Spine[i];
+      getIntersectionsWithContour(p0,p1,p2,candidateMap,
+          leftArc,rightArc);
+      candidateMap.Angles.push_back(
+          angleD(p0,p1,p2));
+      if(candidateMap.maxAngle<candidateMap.Angles.back())
+      {
+        candidateMap.maxAngle=candidateMap.Angles.back();
+        candidateMap.maxAngleLocation=i-1;
+      }
+    }
+  }
+
+  candidateMap.Spine.push_back(wholeSpine.back());
+  cv::Point2f &p0=candidateMap.Spine[SPINE_SEGMENTS-3];
+  cv::Point2f &p1=candidateMap.Spine[SPINE_SEGMENTS-2];
+  cv::Point2f &p2=candidateMap.Spine[SPINE_SEGMENTS-1];
+  getIntersectionsWithContour(p0,p1,p2,candidateMap,
+      leftArc,rightArc);
+}
+
+/*void getCandidateSpine2(cvb::CvBlob &blob,
                        size_t A,
                        size_t B, 
                        std::vector<cv::Point2f> &contour,
                        larvaDistanceMap &candidateMap,
                        std::map<float,size_t> &curvatures,
-                       std::vector<float> &centripetal,
                        size_t RESOLUTION=SPINE_SEGMENTS,
                        std::vector<cv::Point2f> *heads=NULL,
                        std::vector<cv::Point2f> *tails=NULL,
                        std::vector<cvb::CvBlob> *blobs=NULL)
 {
   std::vector<cv::Point2f> leftArc;
-  std::vector<double> leftArcDistanceMap;
+  std::vector<float> leftArcDistanceMap;
+  std::vector<float> leftArcCurvatures;
   std::vector<cv::Point2f> rightArc;
-  std::vector<double> rightArcDistanceMap;
+  std::vector<float> rightArcDistanceMap;
+  std::vector<float> rightArcCurvatures;
   std::vector<cv::Point2f> wholeSpine;
-  //cv::Mat FOO(1390,1038,CV_8UC3,cv::Scalar(0,0,0));
-  
-  getLeftArc(A,B,contour,leftArc,leftArcDistanceMap);
-  getRightArc(A,B,contour,rightArc,rightArcDistanceMap);
-  double dleft=leftArcDistanceMap.back();
-  double dright=rightArcDistanceMap.back();
-  /*std::cout << "P: " << cv::arcLength(contour,true) << " l: " << dleft
-            << " r: " << dright << std::endl;*/
-  if(dleft > 4*dright || dright > 4*dleft) 
-  {
-    candidateMap.MaxDist=0;
-    return;
-  }
-  double stepLeft=dleft/(RESOLUTION-1);
-  double stepRight=dright/(RESOLUTION-1);
+
+  getArcSimple(A,B,contour,leftArc,true);
+  getArcSimple(A,B,contour,rightArc,false);
+
   candidateMap.Spine.clear();
   wholeSpine.clear();
   wholeSpine.push_back(contour[A]);
@@ -414,29 +581,58 @@ void getCandidateSpine2(cvb::CvBlob &blob,
     curvIT++;
   }
 
-  float stepR=leftArc.size()/RESOLUTION;
-  float stepL=rightArc.size()/RESOLUTION;
-
-  size_t idxL=1;
-  size_t idxR=1;
-
-  for(size_t i=1;i<RESOLUTION-1;++i)
+  std::map<size_t, std::pair<size_t,float> > minDist;
+  std::vector<cv::Point2f> *smallest_arc;
+  std::vector<cv::Point2f> *longest_arc;
+  if(leftArc.size()<rightArc.size())
   {
-    if(i*stepL>=idxL)
-    {
-      idxL++;
-    }
-    if(i*stepR>=idxR)
-    {
-      idxR++;
-    }
-    cv::Point2f cPointLeft=leftArc[idxL-1]+
-                       (idxL-i*stepL)*(leftArc[idxL]-leftArc[idxL-1]);
+    smallest_arc=&leftArc;
+    longest_arc=&rightArc;
+  }
+  else
+  {
+    smallest_arc=&rightArc;
+    longest_arc=&leftArc;
+  }
 
-    cv::Point2f cPointRight=rightArc[idxR-1]+
-                       (idxR-i*stepR)*(rightArc[idxR]-rightArc[idxR-1]);
+  size_t preli=0;
+  size_t li=0;
+  for(size_t si=0; si<smallest_arc->size();si++)
+  {
+    if((*smallest_arc)[si]==(*longest_arc)[li])
+    {
+      std::cerr << "lv==rv should not happen" << std::endl;
+    }
+    double dist=p2fdist((*smallest_arc)[si],(*longest_arc)[li]);
+    double distAl=p2fdist((*longest_arc)[li],contour[A]);
+    double distAs=p2fdist((*smallest_arc)[li],contour[A]);
+    double distD=distAl-distAs;
+    double newdist=dist-distD;
+    bool entry=true;
+    while(newdist<=dist || entry)
+    {
+      entry=false;
+      li++;
+      dist=newdist;
+      distAl=p2fdist((*longest_arc)[li],contour[A]);
+      distAs=p2fdist((*smallest_arc)[li],contour[A]);
+      distD=distAl-distAs;
+      newdist=p2fdist((*smallest_arc)[si],
+          (*longest_arc)[li])-distD;
+    }
+    li--;
+    if(li==preli)
+      continue;
+    preli=li;
+
+    if((*longest_arc)[li]==contour[B])
+      break;
+
+    cv::Point2f &cPointLeft=(*smallest_arc)[si];
+    cv::Point2f &cPointRight=(*longest_arc)[li];
     cv::Point2f newPoint=(cPointLeft+cPointRight)*0.5;
-    candidateMap.spinePairs.push_back(std::make_pair(cPointLeft,cPointRight));
+    candidateMap.spinePairs.push_back
+      (std::make_pair(cPointLeft,cPointRight));
     candidateMap.Widths.push_back(p2fdist(cPointLeft,cPointRight));
     candidateMap.WidthAvg+=candidateMap.Widths.back();
     //cv::line(FOO,cPointLeft*2,cPointRight*2,cv::Scalar(0,0,200));
@@ -444,15 +640,15 @@ void getCandidateSpine2(cvb::CvBlob &blob,
     {
       candidateMap.WidthDist=candidateMap.Widths.back();
     }
-    if(i>0.85*RESOLUTION)
+    if(li>0.85*leftArc.size())
       candidateMap.firstHalfWidthsSum+=candidateMap.Widths.back();
 
-    if(i<0.15*RESOLUTION)
+    if(li<0.15*leftArc.size())
       candidateMap.secondHalfWidthsSum+=candidateMap.Widths.back();
 
     wholeSpine.push_back(newPoint);
-
   }
+
   candidateMap.WidthAvg=candidateMap.WidthAvg/candidateMap.Widths.size();
   for(size_t i=0;i<candidateMap.Widths.size();++i)
   {
@@ -469,54 +665,33 @@ void getCandidateSpine2(cvb::CvBlob &blob,
     return;
   }
   candidateMap.MaxDist=cv::arcLength(wholeSpine,false);
-  std::vector<double> spineDistanceMap;
+  std::vector<float> spineDistanceMap;
 
   spineDistanceMap.push_back(0);
   spineDistanceMap.push_back(p2fdist(wholeSpine[1],wholeSpine[0]));
   for (size_t i=2;i<wholeSpine.size()-1;++i)
     spineDistanceMap.push_back(spineDistanceMap.back()+
-                               p2fdist(wholeSpine[i],wholeSpine[i-1]));
+        p2fdist(wholeSpine[i],wholeSpine[i-1]));
 
   spineDistanceMap.push_back(candidateMap.MaxDist);
 
-  double stepS=candidateMap.MaxDist/(SPINE_SEGMENTS-1);
 
   candidateMap.Spine.push_back(wholeSpine[0]);
-  for(size_t i=1;i<SPINE_SEGMENTS-1;++i)
-  {
-    cv::Point2f cPoint;
-    getNextPointInArc(wholeSpine,
-                      spineDistanceMap,
-                      i*stepS,
-                      cPoint);
-    candidateMap.Spine.push_back(cPoint);
-
-    if(i>=2)
-    {
-      candidateMap.Angles.push_back(
-          angleD(
-            candidateMap.Spine[i-2],
-            candidateMap.Spine[i-1],
-            candidateMap.Spine[i]));
-      if(candidateMap.maxAngle<candidateMap.Angles.back())
-      {
-        candidateMap.maxAngle=candidateMap.Angles.back();
-        candidateMap.maxAngleLocation=i-1;
-      }
-    }
-  }
-  candidateMap.Spine.push_back(wholeSpine.back());
+  spineAndContour(leftArc, rightArc,
+      wholeSpine,
+      candidateMap,
+      spineDistanceMap);
   candidateMap.Angles.push_back(angleD(
-                    candidateMap.Spine[SPINE_SEGMENTS-3],
-                    candidateMap.Spine[SPINE_SEGMENTS-2],
-                    candidateMap.Spine.back()));
+        candidateMap.Spine[SPINE_SEGMENTS-3],
+        candidateMap.Spine[SPINE_SEGMENTS-2],
+        candidateMap.Spine.back()));
   if(candidateMap.maxAngle<candidateMap.Angles.back())
   {
     candidateMap.maxAngle=candidateMap.Angles.back();
     candidateMap.maxAngleLocation=i-1;
   }
+}*/
 
-}
 
 void getCandidateSpine(cvb::CvBlob &blob,
                        size_t A,
@@ -524,30 +699,99 @@ void getCandidateSpine(cvb::CvBlob &blob,
                        std::vector<cv::Point2f> &contour,
                        larvaDistanceMap &candidateMap,
                        std::map<float,size_t> &curvatures,
-                       std::vector<float> &centripetal,
+                       std::vector<float> &curvatureMat,
                        size_t RESOLUTION=SPINE_SEGMENTS,
                        std::vector<cv::Point2f> *heads=NULL,
                        std::vector<cv::Point2f> *tails=NULL,
                        std::vector<cvb::CvBlob> *blobs=NULL)
 {
   std::vector<cv::Point2f> leftArc;
-  std::vector<double> leftArcDistanceMap;
+  std::vector<float> leftArcDistanceMap;
+  std::vector<float> leftArcCurvatures;
   std::vector<cv::Point2f> rightArc;
-  std::vector<double> rightArcDistanceMap;
+  std::vector<float> rightArcDistanceMap;
+  std::vector<float> rightArcCurvatures;
   std::vector<cv::Point2f> wholeSpine;
   //cv::Mat FOO(1390,1038,CV_8UC3,cv::Scalar(0,0,0));
   
-  getLeftArc(A,B,contour,leftArc,leftArcDistanceMap);
-  getRightArc(A,B,contour,rightArc,rightArcDistanceMap);
-  double dleft=leftArcDistanceMap.back();
-  double dright=rightArcDistanceMap.back();
-  /*std::cout << "P: " << cv::arcLength(contour,true) << " l: " << dleft
-            << " r: " << dright << std::endl;*/
+  float cmin=FLT_MAX;
+  for(auto &v:curvatureMat)
+  {
+    if(v<-4)
+      v=-4;
+    if(v>4)
+      v=4;
+    if(cmin>v)
+      cmin=v;
+  }
+  std::vector<float> cvec;
+  cv::add(curvatureMat,cmin+1,cvec);
+
+  getLeftArc(A,B,contour,leftArc,cvec,leftArcCurvatures,leftArcDistanceMap);
+  getRightArc(A,B,contour,rightArc,cvec,rightArcCurvatures,rightArcDistanceMap);
+
+  float dleft=leftArcDistanceMap.back();
+  float dright=rightArcDistanceMap.back();
+
   if(dleft > 4*dright || dright > 4*dleft) 
   {
     candidateMap.MaxDist=0;
     return;
   }
+  
+  //Get left/right arc sizes
+  size_t lsize=leftArcCurvatures.size();
+  size_t rsize=rightArcCurvatures.size();
+  
+  float lStep=(float) RESOLUTION/(float) lsize;
+  float rStep=(float) RESOLUTION/(float) rsize;
+  
+  std::vector<float> cVector;
+  std::vector<float> clVector;
+  std::vector<float> crVector;
+  std::vector<float> NcVector;
+  float cVecSum=0.0;
+  float cMin=FLT_MAX;
+  float clMin=FLT_MAX;
+  float crMin=FLT_MAX;
+  float cMax=FLT_MIN;
+  float clMax=FLT_MIN;
+  float crMax=FLT_MIN;
+  for(size_t i=0;i<RESOLUTION;i++)
+  {
+    float lcval=leftArcCurvatures[i*lStep]+
+        (leftArcCurvatures[i*lStep+1]-leftArcCurvatures[i*lStep])*
+        (i*lStep-(int)(i*lStep));
+
+    float rcval=rightArcCurvatures[i*rStep]+
+        (rightArcCurvatures[i*rStep+1]-rightArcCurvatures[i*rStep])*
+        (i*rStep-(int)(i*rStep));
+
+    clVector.push_back(lcval);
+    crVector.push_back(rcval);
+    float ratio=lcval/rcval;
+    cVector.push_back(ratio);
+    if(cMin>ratio)
+      cMin=ratio;
+    if(cMax<ratio)
+      cMax=ratio;
+    cVecSum+=ratio;
+  }
+  float cVecAvg=cVecSum/RESOLUTION;
+  
+  std::cerr << "Larva: " << blob.label << std::endl;
+  std::cerr << "lcmin: " << clMin << std::endl;
+  std::cerr << "lcmax: " << clMax << std::endl;
+  std::cerr << "rcmin: " << crMin << std::endl;
+  std::cerr << "rcmax: " << crMax << std::endl;
+  std::cerr << "Curvature Left: " << std::endl << printVector(leftArcCurvatures) << std::endl;
+  std::cerr << "Curvature Right: " << std::endl << printVector(rightArcCurvatures) << std::endl;
+  std::cerr << "Curvature Left: " << std::endl << printVector(clVector) << std::endl;
+  std::cerr << "Curvature Right: " << std::endl << printVector(crVector) << std::endl;
+  std::cerr << "Curvature Ratio: " << std::endl << printVector(cVector) << std::endl;
+
+  double origStepLeft=dleft/(RESOLUTION-1);
+  double origStepRight=dright/(RESOLUTION-1);
   double stepLeft=dleft/(RESOLUTION-1);
   double stepRight=dright/(RESOLUTION-1);
   candidateMap.Spine.clear();
@@ -574,22 +818,27 @@ void getCandidateSpine(cvb::CvBlob &blob,
     }
     curvIT++;
   }
-
+  size_t lpap=0; // previous_arc_point left
+  size_t rpap=0; // previous_arc_point left
+  
   for(size_t i=1;i<RESOLUTION-1;++i)
   {
     cv::Point2f cPointLeft;
     cv::Point2f cPointRight;
-
-    getNextPointInArc(leftArc,
+    stepLeft=origStepLeft;//a(cVector[i]/cVecAvg);
+    stepRight=origStepRight;//*(cVector[i]/cVecAvg);
+    lpap=getNextPointInArc(leftArc,
                       leftArcDistanceMap,
                       i*stepLeft,
                       cPointLeft);
 
-    getNextPointInArc(rightArc,
+    rpap=getNextPointInArc(rightArc,
                       rightArcDistanceMap,
                       i*stepRight,
                       cPointRight);
 
+    //std::cerr << "L: " << stepLeft << ", ";
+    //std::cerr << "R: " << stepRight << std::endl;
     cv::Point2f newPoint=(cPointLeft+cPointRight)*0.5;
     candidateMap.spinePairs.push_back(std::make_pair(cPointLeft,cPointRight));
     candidateMap.Widths.push_back(p2fdist(cPointLeft,cPointRight));
@@ -624,7 +873,7 @@ void getCandidateSpine(cvb::CvBlob &blob,
     return;
   }
   candidateMap.MaxDist=cv::arcLength(wholeSpine,false);
-  std::vector<double> spineDistanceMap;
+  std::vector<float> spineDistanceMap;
 
   spineDistanceMap.push_back(0);
   spineDistanceMap.push_back(p2fdist(wholeSpine[1],wholeSpine[0]));
@@ -634,37 +883,15 @@ void getCandidateSpine(cvb::CvBlob &blob,
 
   spineDistanceMap.push_back(candidateMap.MaxDist);
 
-  double stepS=candidateMap.MaxDist/(SPINE_SEGMENTS-1);
+  spineAndContour(leftArc, rightArc,
+      wholeSpine,
+      candidateMap,
+      spineDistanceMap);
 
-  candidateMap.Spine.push_back(wholeSpine[0]);
-  for(size_t i=1;i<SPINE_SEGMENTS-1;++i)
-  {
-    cv::Point2f cPoint;
-    getNextPointInArc(wholeSpine,
-                      spineDistanceMap,
-                      i*stepS,
-                      cPoint);
-    candidateMap.Spine.push_back(cPoint);
-
-    if(i>=2)
-    {
-      candidateMap.Angles.push_back(
-          angleD(
-            candidateMap.Spine[i-2],
-            candidateMap.Spine[i-1],
-            candidateMap.Spine[i]));
-      if(candidateMap.maxAngle<candidateMap.Angles.back())
-      {
-        candidateMap.maxAngle=candidateMap.Angles.back();
-        candidateMap.maxAngleLocation=i-1;
-      }
-    }
-  }
-  candidateMap.Spine.push_back(wholeSpine.back());
   candidateMap.Angles.push_back(angleD(
-                    candidateMap.Spine[SPINE_SEGMENTS-3],
-                    candidateMap.Spine[SPINE_SEGMENTS-2],
-                    candidateMap.Spine.back()));
+        candidateMap.Spine[SPINE_SEGMENTS-3],
+        candidateMap.Spine[SPINE_SEGMENTS-2],
+        candidateMap.Spine.back()));
   if(candidateMap.maxAngle<candidateMap.Angles.back())
   {
     candidateMap.maxAngle=candidateMap.Angles.back();
@@ -924,8 +1151,8 @@ void fixContour(
   int PAD=3;
   //blobToPointVector(blob,ppoints);
   std::vector<cv::Point2f> xpoints;
-  blobToContourVector(blob,frame,PAD,tmpPoints);
-  cv::approxPolyDP(tmpPoints,ppoints,0.3,true);
+  blobToContourVector(blob,frame,PAD,ppoints);
+  //cv::approxPolyDP(tmpPoints,ppoints,0.3,true);
   cv::Point2f nh(0,0),nt(0,0);
   if(heads==(std::vector<cv::Point2f> *) -14)
   {
@@ -963,45 +1190,13 @@ void fixContour(
       (pt)+cv::Point2f(PAD,PAD),
       0,
       cv::Scalar(0,255,0),-1);
-    //std::vector<uchar> status;
-    //std::vector<float> err;
-    //std::vector<cv::Point2f> pp;
-    //std::vector<cv::Point2f> pn;
-    //pp.push_back(ph);
-    //pp.push_back(pt);
-
-    //cv::TermCriteria termcrit(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 200, 0.000000003);
-    //cv::Mat flow;
-    //calcOpticalFlowSF(pROI, ROI, flow,3,8,3);
-    //calcOpticalFlowFarneback(pROI, ROI, flow, 0.8, 4, 4, 100,3,0.6,cv::OPTFLOW_FARNEBACK_GAUSSIAN);
-    //const cv::Point2f& fhxy = flow.at<cv::Point2f>(ph.y, ph.x);
-    //const cv::Point2f& ftxy = flow.at<cv::Point2f>(pt.y, pt.x);
-    //nh=cv::Point2f(ph.x+fhxy.x,ph.y+fhxy.y);
-    //nt=cv::Point2f(pt.x+ftxy.x,pt.y+ftxy.y);
-    //pn.push_back(nh);
-    //pn.push_back(nt);
-    //calcOpticalFlowPyrLK(pROI, ROI, pp, pn, status, err, cv::Size(41,41),
-    //    29,termcrit,cv::OPTFLOW_LK_GET_MIN_EIGENVALS);
-    //nh=pn[0];
-    //nt=pn[1];
-    /*cv::circle(cROI, 
-      (pn[0])+cv::Point2f(PAD,PAD),
-      0,
-      cv::Scalar(0,255,0),-1);
-    cv::circle(cROI, 
-      (pn[1])+cv::Point2f(PAD,PAD),
-      0,
-      cv::Scalar(0,255,0),-1);*/
   }
-  //expandcontour(frame,ppoints,cntPoints);
-  //ppoints.clear();
-  //pointsToContourVector(blob,cntPoints,frame,PAD,ppoints);
-
-  //double perimeter=cv::arcLength(xpoints,true);
   float csqrt=0.0;
   //smoothPoints(cntPoints,ppoints,frame,1);
   //smoothAndExtractCentripetal(frame,ppoints,xpoints,d,csqrt);
   extractCentripetal(ppoints,xpoints,d,csqrt);
+  //std::cerr << "ppoints: " << ppoints.size() << std::endl;
+  //std::cerr << "xpoints: " << xpoints.size() << std::endl;
   /*csqrt+=sqrt(p2fdist(xpoints[1],xpoints[0]));
   csqrt+=sqrt(p2fdist(xpoints[2],xpoints[1]));*/
 
@@ -1051,12 +1246,12 @@ void fixContour(
   }
 
 #ifdef LRV_TRACK_VISUAL_DEBUG
-  for(size_t i=0;i<ppoints.size();++i)
+  for(size_t i=0;i<xpoints.size();++i)
   {
-    cv::Vec3b val= cROI.at<cv::Vec3b>((ppoints[i]-bp)+cv::Point2f(PAD,PAD));
-    cv::Scalar sval(0,0,val[0]+val[1]+val[2]);
+    cv::Vec3b val= cROI.at<cv::Vec3b>((xpoints[i]-bp)+cv::Point2f(PAD,PAD));
+    cv::Scalar sval(0,0,std::min(val[0]+val[1]+val[2]+50,255));
     cv::circle(cROI, 
-      (ppoints[i]-bp)+cv::Point2f(PAD,PAD),
+      (xpoints[i]-bp)+cv::Point2f(PAD,PAD),
       0,
       sval,-1);
   }
@@ -1130,17 +1325,6 @@ catch(...)
   {
     for(size_t j=i+1; j<dIdx.size();j++)
     {
-      /*size_t MAX=newPoints.size();
-      if(dIdx[i]>dIdx[j] && 
-          dIdx[i]-dIdx[j]>(MAX/3) &&
-          dIdx[i]-(MAX+dIdx[j])>(MAX/3)
-        )
-        continue;
-      else if(dIdx[j]>dIdx[i] && 
-          dIdx[j]-dIdx[i]>(MAX/3) &&
-          dIdx[j]-(MAX+dIdx[i])>(MAX/3)
-          )
-        continue;*/
       std::vector<cv::Point2f> cSpine;
       std::vector<PointPair> pPairs;
       size_t di=dIdx[i];
@@ -1162,17 +1346,32 @@ catch(...)
       if(di == dj)
         continue;
       larvaDistanceMap candidateMap(newPoints);
+      int sf=21;
+      std::vector<float> c_tmp,c;
+      vcurv[0]=(vcurv.back()+vcurv[1])/2;
+      smoothVec(vcurv,c_tmp,sf,(float)0.0);
+      smoothVec(c_tmp,c,sf/2,(float)0.0);
       getCandidateSpine(blob,
           di,
           dj,
           newPoints,
           candidateMap,
           curvatures,
-          d,
+          c,
           50,
           heads,
           tails,
           blobs);
+      /*getCandidateSpine2(blob,
+          di,
+          dj,
+          newPoints,
+          candidateMap,
+          curvatures,
+          50,
+          heads,
+          tails,
+          blobs);*/
 
       if(maxLength<=candidateMap.MaxDist)
       {
@@ -1201,6 +1400,15 @@ catch(...)
         2
         );
   }
+for(auto &pair: Distances.fSpinePairs)
+{
+  cv::line(cROI, 
+      MULT*(pair.first-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
+      MULT*(pair.second-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
+      cv::Scalar(255,0,0),
+      1
+      );
+}
   cv::circle(cROI, 
       MULT*(Distances.Spine.back()-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
       4,
@@ -1225,7 +1433,7 @@ catch(...)
 #endif
 
   //if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label==0)
+  if(blob.label==15)
   {
     size_t i;
 
