@@ -398,7 +398,7 @@ void showTags2()
             lrvFile << (float) CURRENT_FRAME/VIDEO_FPS << ",";
             //lrvFile << (cbp.x - cc.x)*ppm << ",";
             //lrvFile << (- cbp.y + cc.y)*ppm << ",";
-            bool rev=true;
+            bool rev=false;
             if(l.lrvDistances[c_index].Spine[0]==
                 l.tails[c_index]+bp &&
                 l.lrvDistances[c_index].Spine.back()!=l.tails[c_index]+bp)
@@ -408,6 +408,7 @@ void showTags2()
               {
                 lrvFile << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
               }
+              rev=true;
             }
             else if(l.lrvDistances[c_index].Spine[0]!=
                 l.tails[c_index]+bp &&
@@ -419,31 +420,58 @@ void showTags2()
                 lrvFile << (s->x-cc.x)*ppm << "," 
                         << (-s->y+cc.y)*ppm <<",";
               }
-              rev=true;
+              rev=false;
             }
             else
             {
               cerr << "Head tail confusion detected" << endl;
             }
+
             if(rev)
             {
-              //l.lrvDistances[c_index].spinePairs
-            }
-            else
-            {
+              lrvFile << (l.lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
+                      <<  (-l.lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
               for(auto &p: l.lrvDistances[c_index].spinePairs)
               {
-                lrvFile  << (p.first.x-cc.x)*ppm << "," 
-                         << (-p.first.y+cc.y)*ppm <<",";
+                lrvFile  << (p.second.x-cc.x)*ppm << "," 
+                         << (-p.second.y+cc.y)*ppm <<",";
               }
+              lrvFile << (l.lrvDistances[c_index].Spine.back().x-cc.x)*ppm 
+                      << ","
+                      <<   (-l.lrvDistances[c_index].Spine.back().y+cc.y)*ppm 
+                      << ",";
               auto &sp=l.lrvDistances[c_index].spinePairs;
               for(auto p=sp.rbegin();p!=sp.rend();p++)
               {
-                lrvFile << (p->second.x-cc.x)*ppm;
+                lrvFile << (p->first.x-cc.x)*ppm << ","
+                        << (-p->first.y+cc.y)*ppm <<",";
               }
             }
+            else
+            {
+              lrvFile << (l.lrvDistances[c_index].Spine.back().x-cc.x)*ppm 
+                      << ","
+                      <<   (-l.lrvDistances[c_index].Spine.back().y+cc.y)*ppm 
+                      << ",";
+              auto &sp=l.lrvDistances[c_index].spinePairs;
+              for(auto p=sp.rbegin();p!=sp.rend();p++)
+              {
+                lrvFile  << (p->first.x-cc.x)*ppm << "," 
+                         << (-p->first.y+cc.y)*ppm <<",";
+              }
+
+              lrvFile << (l.lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
+                      <<  (-l.lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
+              for(auto &p: l.lrvDistances[c_index].spinePairs)
+              {
+                lrvFile << (p.second.x-cc.x)*ppm << ","
+                        << (-p.second.y+cc.y)*ppm <<",";
+              }
+            }
+            lrvFile << (l.blobs[c_index].centroid.x-cc.x)*ppm << ","
+                    << (l.blobs[c_index].centroid.x-cc.x)*ppm << ",";
             lrvFile << it->second.round_flag[c_index];
-            lrvFile <<endl;
+            lrvFile << endl;
             lrvFile.close();
           }
         }

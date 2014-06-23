@@ -15,7 +15,6 @@ double p2fdist(double x1,double y1, double x2, double y2);
 class larvaDistanceMap
 {
 private:
-  std::vector<double> distances;
   cv::Mat px;
   cv::Mat py;
 public:
@@ -34,6 +33,7 @@ public:
   std::vector<double> Widths;
   std::vector<PointPair> fSpinePairs;
   std::vector<PointPair> spinePairs;
+  std::vector<double> distances;
   double maxAngle;
   double firstHalfWidthsSum;
   double secondHalfWidthsSum;
