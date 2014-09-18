@@ -3,4 +3,3 @@
 -I/opt/opencv/2.4.7/include
 -I/usr/local/include
 -I.
--DLRVTRACK_WITH_OPENCL

@@ -66,6 +66,7 @@ public:
             updateOneLarva(In,Prev,it,NEW_LARVA);
         }
     }
+#if CV_VERSION_MAJOR<3
     void operator ()(const BlockedRange& range) const
     {
         for (int i = range.begin(); i < range.end(); ++i)
@@ -75,6 +76,7 @@ public:
             updateOneLarva(In,Prev,it,NEW_LARVA);
         }
     }
+#endif
 };
 
 

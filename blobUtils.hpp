@@ -1,10 +1,16 @@
 #ifndef __LRVTRACK_BLOBUTILS_HPP__
 #define __LRVTRACK_BLOBUTILS_HPP__
 #include <opencv2/core/core.hpp>
+
+#if CV_VERSION_MAJOR>=3
+#include <opencv2/imgproc/imgproc.hpp>
+#endif
+
 #include "cvblob.h"
 #define ROI_PADDING 0
 
 unsigned long long getmsofday();
+extern double LRVTRACK_SMOOTHING;
 
 void spline3(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -35,9 +41,50 @@ void spline2(std::vector<cv::Point2f> &cp,
            std::map<float,size_t> &cm,
            std::vector<float> &vcurv);
 
-double p2fdist(double x1,double y1, double x2, double y2);
 
-double p2fdist(cv::Point2f &a, cv::Point2f &b);
+namespace lrvTrack{
+  
+inline  double p2fdist(const double x1,const double y1,const double x2, const double y2)
+  {
+    double xdiff=x1 - x2;
+    double ydiff=y1 - y2;
+    return sqrt(xdiff*xdiff + ydiff*ydiff);
+  }
+
+template <typename point_type_a, typename point_type_b >
+  inline    double p2fdist(const point_type_a &a, const point_type_b &b)
+    {
+      double xdiff=a.x - b.x;
+      double ydiff=a.y - b.y;
+      return sqrt(xdiff*xdiff + ydiff*ydiff);
+    }
+
+template <typename point_type_a, typename point_type_b >
+  inline    double p2fdist(point_type_a &&a, const point_type_b &b)
+    {
+      double xdiff=a.x - b.x;
+      double ydiff=a.y - b.y;
+      return sqrt(xdiff*xdiff + ydiff*ydiff);
+    }
+
+template <typename point_type_a, typename point_type_b >
+  inline    double p2fdist(const point_type_a &a, point_type_b &&b)
+    {
+      double xdiff=a.x - b.x;
+      double ydiff=a.y - b.y;
+      return sqrt(xdiff*xdiff + ydiff*ydiff);
+    }
+
+template <typename point_type_a, typename point_type_b >
+  inline    double p2fdist(point_type_a &&a, point_type_b &&b)
+    {
+      double xdiff=a.x - b.x;
+      double ydiff=a.y - b.y;
+      return sqrt(xdiff*xdiff + ydiff*ydiff);
+    }
+  
+}
+
 
 double diff(cv::Point2f &a, cv::Point2f &b);
 void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points,size_t PAD=0);
@@ -55,15 +102,29 @@ void blobToContourVector(cvb::CvBlob &p,
                          int PAD,
                          std::vector<cv::Point2f> &points);
 
+void tile2same(cv::Mat &a, cv::Mat &b, cv::Mat &r);
+
 void createLarvaROI(cv::Mat &frame, cv::Mat &ROI, cvb::CvBlob &blob);
 
 void createLarvaContour(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,
+                        std::vector<std::pair<cv::Point2f,cv::Point2f> > &cpairs,
+                        std::vector<cv::Point2f> &spine,
                         int type=CV_8UC1,
-                        int PADDING=0,
+                        int padding=0,
                         bool FILL=true,
                         cv::Scalar color=cv::Scalar(255),
-                        int connectivity=4,
+                        int connectivity=8,
+                        cv::Scalar bg=cv::Scalar(0)
+                        );
+
+void createLarvaContour(cv::Mat &lrvROI,
+                        cvb::CvBlob &blob,
+                        int type=CV_8UC1,
+                        int padding=0,
+                        bool FILL=true,
+                        cv::Scalar color=cv::Scalar(255),
+                        int connectivity=8,
                         cv::Scalar bg=cv::Scalar(0)
                         );
 
@@ -77,7 +138,7 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
                         int PAD=0,
                         bool FILL=true,
                         cv::Scalar color=cv::Scalar(255),
-                        int connectivity=4,
+                        int connectivity=8,
                         cv::Scalar bg=cv::Scalar(0)
     );;
 
@@ -147,7 +208,7 @@ void createLarvaContourPacked(cv::Point &first,
 void createLarvaContourPoints(cv::Mat &lrvROI,
                               cvb::CvBlob &blob,
                               int type=CV_8UC1,
-                              int PADDING=0);
+                              int padding=0);
 
 void lengthAreaPerimeter(double a,double b,double &length, double &width);
 
@@ -159,7 +220,7 @@ double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob,cv::Mat &grey_fr
 double getSurroundingSize(cv::Point2f &point, cvb::CvBlob &blob,cv::Mat &grey_frame,cv::Mat &preFrame);
 double plotAngle(cvb::CvBlob *blob,cv::Mat &ROIimg,int PAD=0);
 double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
-double angleD( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
+double angleD( cv::Point2f pt1, cv::Point2f pt0, cv::Point2f pt2 );
 double angleC( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 );
 cv::Point2f perp(cv::Point2f &p1, cv::Point2f &p2, 
                  cv::Point2f &p3, double mag=1.0, 
@@ -171,6 +232,12 @@ void derivVec(std::vector<cv::Point2f> &in,
               std::vector<float> &p,
     std::vector<cv::Point2f> &d);
 
+void derivVec(std::vector<cv::Point2f> &in,
+    std::vector<cv::Point2f> &d1);
+
+void deriv2Vec(std::vector<cv::Point2f> &d1,
+    std::vector<cv::Point2f> &d2);
+
 void deriv2Vec(
     std::vector<cv::Point2f> &d1,
               std::vector<float> &p,
@@ -179,6 +246,11 @@ void deriv2Vec(
 void curvVec(std::vector<cv::Point2f> &in,
              std::vector<float> &p,
              std::vector<float> &c);
+
+void curvVec(std::vector<cv::Point2f> &in,
+    std::vector<float> &out);
+
+void findLocalMaxima(std::vector<float> &m,std::vector<size_t> &loc);
 
 void getBestCurvature(std::vector<float> &c,
                       std::vector<size_t> &di,
@@ -225,6 +297,28 @@ template<typename data>
   }
 
 template<typename data>
+  data smoothVal(std::vector<data> &in,
+                 int idx,int size)
+  {
+    int start,end;
+    start=idx-((size-1)/2);
+    end=idx+((size-1)/2);
+    if(start<0)
+      start=0;
+    if(end>in.size()-1)
+      end=in.size()-1;
+
+    int d=end-start+1;
+    data sum=in[start];
+    for(int i=start+1;i<=end;i++)
+    {
+      sum+=in[i];
+    }
+    return ((double)(1.0/d))*sum;
+  }
+}
+
+template<typename data>
   void smoothVec(std::vector<data> &in,
                  std::vector<data> &out, 
                  int range, 
@@ -237,6 +331,5 @@ template<typename data>
       out.push_back(ret);
     }
   }
-}
 
 #endif

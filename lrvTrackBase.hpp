@@ -13,4 +13,9 @@ void lrvTrackNormalize(cv::Mat &src,
     double beta,
     int norm_type);
 
+void lrvTrackBilateral(cv::Mat &src,
+    cv::Mat &dst,
+    int ksize,
+    float sigma,
+    double sigmaSpace);
 #endif

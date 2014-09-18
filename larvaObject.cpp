@@ -7,6 +7,7 @@
 #include <iostream>
 
 using namespace std;
+using namespace lrvTrack;
 
 void larvaObject::dump() const
 {
@@ -17,7 +18,7 @@ void larvaObject::dump() const
   cerr << "lastBlobWithStats: " << lastBlobWithStats << endl;
   cerr << "lastFrameWithStats: " << lastFrameWithStats << endl;
   cerr << "larva_ID: " << larva_ID << endl;
-  cerr << "old_ID: " << old_ID << endl;
+  cerr << "updated_ID: " << updated_ID << endl;
   //cerr << "parentBlobID: " << parentBlobID << endl;
   cerr << "isCluster: " << isCluster << endl;
   cerr << "vector capture_times: " << endl;

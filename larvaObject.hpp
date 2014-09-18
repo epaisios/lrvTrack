@@ -9,10 +9,10 @@
  * The class contains a bunch of synchronized vectors.
  */
 
-class blobObject_OL{
+/*class blobObject_OL{
   private:
     // ID of the larva
-    size_t ID;
+    //size_t ID;
 
     // ID of the originating blob of the larva.
     //  if the blob was there from the begining then
@@ -63,7 +63,7 @@ class blobObject_OL{
     //std::vector<larvaFit> fitLarva;
 
     bool collisionObject;
-};
+};*/
 
 /*
  * Class containing information about each larva and its history on the plate.
@@ -77,7 +77,7 @@ public:
   size_t lastBlobWithStats;
   size_t lastFrameWithStats;
   size_t larva_ID;
-  size_t old_ID;
+  size_t updated_ID;
   std::vector<size_t> diverged_to;
   size_t converged_to;
   bool isCluster;
@@ -114,10 +114,16 @@ public:
   double width_max;
   double width_min;
 
+  std::vector<double> minHTDist;
+  double minHTDist_mean;
+  double minHTDist_sum;
+
   std::vector<double> headBodyAngle;
   std::vector<double> orientationAngle;
 
   std::vector<double> roundness;
+  double roundness_sum;
+  double roundness_mean;
   std::vector<double> angular_speed;
 
   std::vector<cv::Point2f> centroids;
@@ -178,6 +184,8 @@ public:
     width_max(0),
     width_min(0),
     round_flag(false),
+    minHTDist_mean(0),
+    minHTDist_sum(0),
     centroid_distance_x_sum(0),
     centroid_distance_y_sum(0)
   {}

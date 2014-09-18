@@ -4,7 +4,7 @@
 #endif
 
 #ifdef LRVTRACK_WITH_OPENCL
-#include "opencv2/ocl/ocl.hpp"
+#include "opencv2/core/ocl.hpp"
 #endif
 
 #ifdef LRVTRACK_WITH_CUDA
@@ -20,7 +20,18 @@ void lrvTrackNormalize(cv::Mat &src,
   dst_host.download(dst);
 }
 
-#elif defined(LRVTRACK_WITH_OPENCL)
+void lrvTrackBilateral(cv::Mat &src,
+                              cv::Mat &dst,
+                              int ksize,
+                              float sigma,
+                              double sigmaSpace)
+{
+  cv::gpu::GpuMat dst_host,src_host;
+  src_host.upload(src);
+  cv::gpu::bilateralFilter(src_host,dst_host,ksize,sigma,sigmaSpace);
+}
+
+/*#elif defined(LRVTRACK_WITH_OPENCL)
 void lrvTrackNormalize(cv::Mat &_src , cv::Mat &_dst, double a, double b,
                               int norm_type)
 {
@@ -54,6 +65,20 @@ void lrvTrackNormalize(cv::Mat &_src , cv::Mat &_dst, double a, double b,
   dst.upload(_dst);
 }
 
+void lrvTrackBilateral(cv::Mat &_src,
+                              cv::Mat &_dst,
+                              int ksize,
+                              float sigma,
+                              double sigmaSpace)
+{
+  cv::ocl::oclMat src(_src);
+  cv::ocl::oclMat dst(_dst);
+  int rtype =  src.depth();
+  _dst.create(_src.dims , _src.size, CV_MAKETYPE(rtype, _src.channels()));
+  cv::ocl::bilateralFilter(src,dst,ksize,sigma,sigmaSpace);
+  dst.upload(_dst);
+}
+*/
 #else
 void lrvTrackNormalize(cv::Mat &src,
                               cv::Mat &dst,
@@ -62,5 +87,14 @@ void lrvTrackNormalize(cv::Mat &src,
                               int norm_type)
 {
   cv::normalize(src,dst,alpha,beta,norm_type);
+}
+
+void lrvTrackBilateral(cv::Mat &src,
+                              cv::Mat &dst,
+                              int ksize,
+                              float sigma,
+                              double sigmaSpace)
+{
+  bilateralFilter(src,dst,ksize,sigma,sigmaSpace);
 }
 #endif

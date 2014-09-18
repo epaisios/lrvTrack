@@ -3,17 +3,25 @@
 #include <map>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+
+#if CV_VERSION_MAJOR>=3
+#include <opencv2/videoio/videoio.hpp>
+#include <opencv2/videoio/videoio_c.h>
+#include <opencv2/core/utility.hpp>
+#endif
+
 #include <opencv2/ml/ml.hpp>
 #ifdef LRVTRACK_WITH_CUDA
 #include <opencv2/gpu/gpu.hpp>
 #elif defined(LRVTRACK_WITH_OPENCL)
-#include <opencv2/ocl/ocl.hpp>
+#include <opencv2/core/ocl.hpp>
 #endif
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <fstream>
 #include "larvaObject.hpp"
+#include "lrvTrackFit.hpp"
 #include <boost/timer/timer.hpp>
 #ifdef _WIN32
 #include <winsock.h>
@@ -29,21 +37,23 @@ std::string VIDEO_TYPE=".avi";
 //int VIDEO_CODEC=CV_FOURCC('I', '4', '2', '0');
 //int VIDEO_CODEC=CV_FOURCC('Y', 'U', 'Y', '2');
 //int VIDEO_CODEC=CV_FOURCC('Y', '4', '2', '2');
-int VIDEO_CODEC=CV_FOURCC('Y', 'V', '1', '2');
+//int VIDEO_CODEC=CV_FOURCC('Y', 'V', '1', '2');
 //int VIDEO_CODEC=CV_FOURCC('U', 'Y', 'V', 'Y');
 //int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
 //int VIDEO_CODEC=CV_FOURCC('Y', '8', '0', '0');
 //int VIDEO_CODEC=CV_FOURCC('H', 'D', 'Y', 'C');
-
+//int VIDEO_CODEC=CV_FOURCC('H','F','Y','U');
 //int VIDEO_CODEC=CV_FOURCC('L','A','G','S');
-//int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
+int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
 //int VIDEO_CODEC=CV_FOURCC('I', '4', '2', '0');
 //int VIDEO_CODEC=CV_FOURCC('J', 'P', 'G', 'L');
 //int VIDEO_CODEC=CV_FOURCC('Y', 'U', 'V', '4');
 //int VIDEO_CODEC=CV_FOURCC('H','F','Y','U');
 //int VIDEO_CODEC=CV_FOURCC('F','F','V','1');
-//int VIDEO_CODEC=CV_FOURCC('X','2','6','4');
+//int VIDEO_CODEC=CV_FOURCC('H','2','6','4');
 //int VIDEO_CODEC=CV_FOURCC('S','V','Q','3');
+//int VIDEO_CODEC=CV_FOURCC('M','P','4','S');
+//int VIDEO_CODEC=CV_FOURCC('M','J','P','G');
 //int VIDEO_CODEC=CV_FOURCC('F','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('L','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('M','P','4','2');
@@ -57,6 +67,7 @@ int START_FRAME=0;
 
 // *** FLAGS ***
 int LRVTRACK_DSTEP=15;
+size_t LRVTRACK_PETRIDISH=90;
 double LRVTRACK_WSTEP=0.02;
 int LRVTRACK_VERBOSE_LEVEL=1;
 std::string LRVTRACK_RESULTS_FOLDER;
@@ -65,13 +76,28 @@ std::string LRVTRACK_NAME;
 std::string LRVTRACK_SAVE_VIDEO;
 std::string LRVTRACK_SAVE_PROCESSED_VIDEO="";
 std::string LRVTRACK_FILE_INPUT;
+std::string LRVTRACK_ROI_INPUT;
+// Larvae File Descriptors for output
+std::map<size_t,std::ofstream> lfds;
+
 int  LRVTRACK_CAMERA_INPUT;
 int  LRVTRACK_ODOUR_CUPS=0;
 int  LRVTRACK_CONTOUR_RESOLUTION=150;
-bool LRVTRACK_INVERT=true;
+size_t LRVTRACK_MIN_OBJ_SIZE=20;
+size_t LRVTRACK_MAX_OBJ_SIZE=1200;
+size_t LRVTRACK_THREADS=8;
+double LRVTRACK_GAMMA=1.0;
+double LRVTRACK_BRIGHTNESS=0.0;
+double LRVTRACK_CONTRAST=1.0;
+double LRVTRACK_SMOOTHING=2.0;
+bool LRVTRACK_USE_MODEL=false;
+bool LRVTRACK_INVERT=false;
+bool LRVTRACK_PARALLEL=false;
 bool LRVTRACK_NORMALIZE=false;
 bool LRVTRACK_CHOREOGRAPHY_OUTPUT=false;
+bool LRVTRACK_EXTRACT_OFFLINEBG=false;
 bool LRVTRACK_CSV_OUTPUT=false;
+bool LRVTRACK_SHOW_LIVE=false;
 bool LRVTRACK_SHOW_SKELETON=false;
 bool LRVTRACK_SHOW_CONTOUR=false;
 bool LRVTRACK_SHOW_ORIENTATION=false;
@@ -100,7 +126,7 @@ size_t FRAME_ROWS;
 std::map<size_t, std::vector<size_t> > parent_blobs;
 std::map<size_t, std::vector<size_t> > children_blobs;
 std::map<size_t,larvaObject> detected_larvae;
-//std::map<size_t,larvaFit> model_larvae;
+std::vector<collisionModel> larvaeModels;
 
 std::vector<size_t> lost_larvae;
 

@@ -1,31 +1,34 @@
-OPENCV_VER=2.4.7
+OPENCV_VER=3.0.0-alpha
 INCLUDES=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I.
 INCLUDES_GPU=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I.
 INCLUDES_QT=-I/opt/opencv/${OPENCV_VER}-qt/include/opencv -I/opt/opencv/${OPENCV_VER}-qt/include -I.
 #GCCFLAGS=-fopenmp -DAE_CPU=AE_INTEL
 #GCCFLAGS=-DAE_CPU=AE_INTEL -std=c++11 -Wno-c++11-extensions
 GCCFLAGS=-std=c++0x -pipe -march=core-avx-i -Wno-c++11-extensions -DBOOST_LOG_DYN_LINK
-GCCFLAGS_GPU=$(GCCFLAGS) -DLRVTRACK_WITH_CUDA
-GCCFLAGS_OPENCL=$(GCCFLAGS) -DLRVTRACK_WITH_OPENCL
-OPTFLAGS=-O2
-DEBUGFLAGS=-g
+GCCFLAGS_GPU=-DLRVTRACK_WITH_CUDA
+GCCFLAGS_OCL=-DLRVTRACK_WITH_OPENCL
+OPTFLAGS=-O3 -msse2 -DAE_CPU=AE_INTEL
+DEBUGFLAGS=-g -O0
 OPENCL_LIBS=-lopencv_ocl
+     #-lopencv_contrib#
 LIBS=-lm\
-		  -lopencv_contrib\
-		 	-lopencv_core\
-		 	-lopencv_highgui\
-		 	-lopencv_video\
-		 	-lopencv_imgproc\
-			-lopencv_photo\
-			-lopencv_ml\
-		 	-lcvblob\
-			-ltbb\
-		 	-lboost_log-mt\
-			-lboost_log_setup-mt\
-		 	-lboost_program_options-mt\
-		 	-lboost_filesystem-mt\
-		 	-lboost_system-mt\
-			-lboost_timer-mt
+     -lopencv_core\
+     -lopencv_highgui\
+     -lopencv_videoio\
+     -lopencv_video\
+     -lopencv_imgcodecs\
+     -lopencv_imgproc\
+     -lopencv_photo\
+     -lopencv_ml\
+     -lcvblob\
+     -ltbb\
+     -lportaudio\
+     -lboost_log-mt\
+     -lboost_log_setup-mt\
+     -lboost_program_options-mt\
+     -lboost_filesystem-mt\
+     -lboost_system-mt\
+     -lboost_timer-mt
 
 ALG_OBJ=alglib/alglibinternal.o\
  alglib/alglibmisc.o\
@@ -44,6 +47,7 @@ LT_OBJ=lrvTrackBase.o\
  lrvTrackDebug.o\
  larvaObject.o\
  lrvTrackFit.o\
+ lrvTrackAudio.o\
  lrvTrackOL.o
 
 LT_DEPS=lrvTrackBase.hpp\
@@ -69,8 +73,23 @@ all: lrvTrack
 opt: GCCFLAGS+=$(OPTFLAGS) 
 opt: DEBUGFLAGS= 
 opt: all
+
+gpu_debug: GCCFLAGS+=$(GCCFLAGS_GPU) 
+gpu_debug: LIBS+=-lopencv_gpu
+gpu_debug: all
+
+ocl_debug: GCCFLAGS+=$(GCCFLAGS_OCL) 
+#ocl_debug: LIBS+=-lopencv_ocl
+ocl_debug: all
 	
+gpu: GCCFLAGS+=$(GCCFLAGS_GPU) 
+gpu: LIBS+=-lopencv_gpu
+gpu: opt
+
+ocl: GCCFLAGS+=$(GCCFLAGS_OCL) 
+#ocl: LIBS+=-lopencv_ocl
+ocl: opt
 
 clean: 
-	@rm -rf alglib/*.o *.o lrvTrack *.dSYM
+	@rm -rf alglib/*.o *.o lrvTrack *.dSYM *.clb
 

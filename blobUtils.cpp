@@ -12,6 +12,7 @@
 #include <boost/accumulators/statistics/variance.hpp>
 
 using namespace boost::accumulators;
+using namespace lrvTrack;
 
 double vecVariance(std::vector<double> &c)
 {
@@ -48,19 +49,19 @@ std::string printVector(alglib::real_1d_array &vec)
   return sstm.str();
 }
 
-double p2fdist(double x1,double y1, double x2, double y2)
+/*double p2fdist(double x1,double y1, double x2, double y2)
 {
   double xdiff=x1 - x2;
   double ydiff=y1 - y2;
   return sqrt(xdiff*xdiff + ydiff*ydiff);
-}
+}*/
 
-double p2fdist(cv::Point2f &a, cv::Point2f &b)
+/*double p2fdist(cv::Point2f a, cv::Point2f b)
 {
   double xdiff=a.x - b.x;
   double ydiff=a.y - b.y;
   return sqrt(xdiff*xdiff + ydiff*ydiff);
-}
+}*/
 
 //cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c)
 cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &e, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d)
@@ -87,6 +88,17 @@ cv::Point2f px3Smooth(cv::Mat &f, cv::Point2f &e, cv::Point2f &a, cv::Point2f &b
 }
 
 void derivVec(std::vector<cv::Point2f> &in,
+    std::vector<cv::Point2f> &d1)
+{
+  std::vector<double> idx;
+  d1.push_back(in[0]-in.back());
+  for(size_t i=1;i<in.size();i++)
+  {
+    d1.push_back(in[i]-in[i-1]);
+  }
+}
+
+void derivVec(std::vector<cv::Point2f> &in,
               std::vector<float> &p,
     std::vector<cv::Point2f> &d)
 {
@@ -99,6 +111,17 @@ void derivVec(std::vector<cv::Point2f> &in,
   }
   d[0]=(in[0]-in.back())*(1/(p[p.size()-1]-p[p.size()-2]));
 
+}
+
+void deriv2Vec(std::vector<cv::Point2f> &d1,
+    std::vector<cv::Point2f> &d2)
+{
+  std::vector<double> idx;
+  d1.push_back(d1[0]-d1.back());
+  for(size_t i=1;i<d1.size();i++)
+  {
+    d2.push_back((d1[i]-d1[i-1]));
+  }
 }
 
 void deriv2Vec(
@@ -116,6 +139,21 @@ void deriv2Vec(
 }
 
 void curvVec(std::vector<cv::Point2f> &in,
+             std::vector<float> &out)
+{
+
+  std::vector<cv::Point2f> d1,d2;
+  derivVec(in,d1);
+  deriv2Vec(d1,d2);
+  for(size_t i=0;i<in.size();i++)
+  {
+    float val=((float)(d1[i].x*d2[i].y-d1[i].y*d2[i].x))/
+        pow(d1[i].x*d1[i].x+d1[i].y*d1[i].y,1.5);
+    out.push_back(val);
+  }
+}
+
+void curvVec(std::vector<cv::Point2f> &in,
              std::vector<float> &p,
              std::vector<float> &c)
 {
@@ -130,6 +168,31 @@ void curvVec(std::vector<cv::Point2f> &in,
         pow(d1[i].x*d1[i].x+d1[i].y*d1[i].y,1.5);
     c.push_back(val);
   }
+}
+
+void findLocalMaxima(std::vector<float> &m,std::vector<size_t> &loc)
+{
+  size_t idx;
+  if(m.size()<3)
+    return;
+  std::map<float, size_t> v;
+
+  if(m[0]>m.back() && m[0]>m[1])
+    v[m[0]]=0;
+  for(idx=1;idx<m.size()-1;idx++)
+  {
+    if(m[idx]>m[idx-1] && m[idx]>m[idx+1])
+      v[m[idx]]=idx;
+  }
+  idx=m.size()-1;
+  if(m[idx]>m[idx-1] && m[idx]>m[0])
+    v[m[idx]]=idx;
+  for(std::map<float, size_t>::reverse_iterator l=v.rbegin();
+      l!=v.rend();l++)
+  {
+    loc.push_back(l->second);
+  }
+
 }
 
 cv::Point2f px5Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d, cv::Point2f &e)
@@ -270,7 +333,7 @@ void blobToContourVector(cvb::CvBlob &blob,
   cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
   for(size_t i=1;i<kpoints.size();i++)
   {
-    cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,4);
+    cv::LineIterator it(ROI,kpoints[i-1]-PADpoint,kpoints[i]-PADpoint,8);
     for(int j = 1; j < it.count; j++)
     {
       cv::Point2f newPoint;
@@ -384,6 +447,17 @@ void createLarvaContourCV(cv::Mat &lrvROI,
 }
 */
 
+void tile2same(cv::Mat &a, cv::Mat &b, cv::Mat &r)
+{
+  r=cv::Mat(a.rows,a.cols+b.cols,a.type());
+  cv::Rect r1(0,0,a.cols,a.rows);
+  cv::Rect r2(a.cols,0,b.cols,a.rows);
+  cv::Mat e1=r(r1);
+  cv::Mat e2=r(r2);
+  a.copyTo(e1);
+  b.copyTo(e2);
+}
+
 void createLarvaContour_custom(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,
                         int type,
@@ -400,11 +474,86 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
   cv::Mat lrvROIlocal;
   int dxu,dyu,dxb,dyb;
   createLarvaContour(lrvROIlocal,blob,type,0,FILL,color,connectivity,bg);
-  if(! ( (dxu=blob.minx-minx)<0 || (dyu=blob.miny-miny)<0 || (dxb=maxx-blob.maxx)<0 || (dyb=maxy-blob.maxy)<0))
+  if(! ( (dxu=blob.minx-minx)+PAD<0 || (dyu=blob.miny-miny)+PAD<0 || (dxb=maxx-blob.maxx)+PAD<0 || (dyb=maxy-blob.maxy)+PAD<0))
   {
     cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
   }
+  else
+  {
+    if(dxu<0)
+      dxu=0;
+    if(dyu<0)
+      dyu=0;
+    if(dxb<0)
+      dxb=0;
+    if(dyb<0)
+      dyb=0;
+    cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
+  }
   dxu=0;
+}
+
+void createLarvaContour(cv::Mat &lrvROI,
+                        cvb::CvBlob &blob,
+                        std::vector<std::pair<cv::Point2f,cv::Point2f> > &cpairs,
+                        std::vector<cv::Point2f> &spine,
+                        int type,
+                        int PADDING,
+                        bool FILL,
+                        cv::Scalar color,
+                        int connectivity,
+                        cv::Scalar bg)
+{
+  int sizes[1];
+
+  if (lrvROI.empty())
+    lrvROI=cv::Mat(blob.maxy-blob.miny+1+(2*PADDING),
+                        blob.maxx-blob.minx+1+(2*PADDING),
+                        type,bg);
+
+  cv::Point2f bp(blob.minx-PADDING,blob.miny-PADDING);
+  cv::Point *ContourPoints[1];
+  size_t ContourSz=2*cpairs.size()+2;
+  ContourPoints[0]=(cv::Point*) malloc(
+                     ContourSz*sizeof(cv::Point)
+                   );
+
+  size_t i=1;
+  ContourPoints[0][0]=spine[0]-bp;
+  ContourPoints[0][ContourSz/2]=spine.back()-bp;
+  cv::Point pl=ContourPoints[0][0];
+  cv::Point pr=ContourPoints[0][0];
+  for(auto &p: cpairs)
+  {
+    ContourPoints[0][i]=p.first-bp;
+    ContourPoints[0][ContourSz-i]=p.second-bp;
+    if(!FILL)
+    {
+      cv::line(lrvROI,pl,ContourPoints[0][i],color,1,connectivity);
+      cv::line(lrvROI,pr,ContourPoints[0][ContourSz-i],color,1,connectivity);
+      pl=ContourPoints[0][i];
+      pr=ContourPoints[0][ContourSz-i];
+    }
+    i++;
+  }
+  if(!FILL)
+  {
+    cv::line(lrvROI,ContourPoints[0][ContourSz/2],ContourPoints[0][ContourSz/2-1],color,1,connectivity);
+    cv::line(lrvROI,ContourPoints[0][ContourSz/2],ContourPoints[0][ContourSz/2+1],color,1,connectivity);
+  }
+
+
+  if(FILL)
+  {
+    cv::fillPoly(lrvROI,
+        (const cv::Point**) ContourPoints,
+        sizes,
+        1,
+        color,
+        connectivity
+        );
+  }
+  free(ContourPoints[0]);
 }
 
 void createLarvaContour(cv::Mat &lrvROI,
@@ -664,9 +813,10 @@ double angle( cv::Point2f &pt1, cv::Point2f &pt0, cv::Point2f &pt2 )
   return acos((dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10));
 }
 
-double angleD( cv::Point2f &pt2, cv::Point2f &pt0, cv::Point2f &pt1 )
+// Angle within 0-2*Pi clockwise from last point to first point around middle point
+// Y-axes reversed to match opencv Mat axes
+double angleD( cv::Point2f pt2, cv::Point2f pt0, cv::Point2f pt1 )
 {
-  //Absolute Tail/Head Angle
   cv::Point2f newPT1=pt1-pt0;
   double arc1=atan2(newPT1.y,newPT1.x);
   double arc2=atan2(pt2.y,pt2.x);
@@ -774,7 +924,8 @@ void getBestCurvatureS(std::vector<float> &curv,
   //Gnuplot g2("linespoints");
   //g1.plot_xy(idx,curv,"curvature");
   smoothVec(curv,c_tmp,sf,(float)0.0);
-  smoothVecMap(c_tmp,curvatures,c,sf/2,(float)0.0);
+  //smoothVecMap(c_tmp,curvatures,c,sf/2,(float)0.0);
+  smoothVecMap(c_tmp,curvatures,c,sf,(float)0.0);
 
   //g1.plot_xy(idx,c,"curvature smoothened");
   //wait_for_key();
@@ -1132,7 +1283,7 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::spline1dinterpolant sx;            
   alglib::spline1dinterpolant sy;            
   alglib::spline1dfitreport rep;             
-  double rho=2.0;
+  double rho=LRVTRACK_SMOOTHING;
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
   for(int i=0;i<extra;i++)
@@ -1430,7 +1581,7 @@ double getSurroundingSize(cv::Point2f &point,
   cv::bitwise_and(ROI,lrvROI,ROI);
   cv::Mat cROI(ROI.size(),ROI.depth());
   cROI=cv::Scalar(0);
-  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),12,cv::Scalar(255),-1);
+  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),blob.area/10,cv::Scalar(255),-1);
   cv::Mat area=ROI&cROI;
   cv::equalizeHist( area, area);
   //lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);

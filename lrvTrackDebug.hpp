@@ -13,7 +13,7 @@ void verbosePrint(std::stringstream &toPrint);
 void verbosePrint(const char * toPrint);
 void verbosePrint(std::string &toPrint);
 std::string printUIMap(std::map<size_t, size_t> &A);
-namespace std
+namespace lrvTrack
 {
   template <typename number >
     std::string printVector(std::vector<number> vec,int position=0)

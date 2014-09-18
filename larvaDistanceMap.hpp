@@ -3,14 +3,15 @@
 #include <opencv2/core/core.hpp>
 #include <vector>
 #include "cvblob.h"
+#include "blobUtils.hpp"
 
 #define SPINE_SEGMENTS 12
 
 extern size_t CURRENT_FRAME;
 typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
 
-double p2fdist(cv::Point2f &a, cv::Point2f &b);
-double p2fdist(double x1,double y1, double x2, double y2);
+/*double p2fdist(cv::Point2f a, cv::Point2f b);
+double p2fdist(double x1,double y1, double x2, double y2);*/
 
 class larvaDistanceMap
 {
@@ -85,7 +86,7 @@ public:
                                                 maxAngleLocation(-1)
   {
     //distances.reserve((points.size())*(points.size()));
-    Spine.resize(spineSegments);
+    //Spine.resize(spineSegments);
   }
 
   void getPxPy(cv::Mat &x,cv::Mat &y)
