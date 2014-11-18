@@ -11,6 +11,8 @@
 
 unsigned long long getmsofday();
 extern double LRVTRACK_SMOOTHING;
+extern size_t LRVTRACK_FRAME_WIDTH;
+extern size_t LRVTRACK_FRAME_HEIGHT;
 
 void spline3(std::vector<cv::Point2f> &cp,
            std::vector<float> &d,
@@ -96,6 +98,14 @@ void pointsToContourVector(cvb::CvBlob &blob,
                          cv::Mat &frame, 
                          int PAD,
                          std::vector<cv::Point2f> &points);
+
+bool createSimpleROI(cv::Mat &img,
+                     size_t minx,
+                     size_t miny,
+                     size_t maxx,
+                     size_t maxy,
+                     size_t PADDING,
+                     cv::Mat &res);
 
 void blobToContourVector(cvb::CvBlob &p,
                          cv::Mat &frame, 
@@ -250,7 +260,9 @@ void curvVec(std::vector<cv::Point2f> &in,
 void curvVec(std::vector<cv::Point2f> &in,
     std::vector<float> &out);
 
-void findLocalMaxima(std::vector<float> &m,std::vector<size_t> &loc);
+void contourAngles(std::vector<cv::Point2f> &in,
+                   std::vector<double> &angles,
+                   size_t S=2);
 
 void getBestCurvature(std::vector<float> &c,
                       std::vector<size_t> &di,
@@ -271,7 +283,7 @@ template<typename data>
     {
       int id=i;
       if(i<0)
-        id=in.size()+i-1;
+        id=in.size()+i;
       if(i>(int) in.size()-1)
         id=i-in.size();
       sum+=in[id];
@@ -294,6 +306,92 @@ template<typename data>
       out[ret]=i;
       out2.push_back(ret);
     }
+  }
+
+template<typename data>
+  void findLocalMaxima(std::vector<data> &m,std::vector<size_t> &loc,bool maxima=true)
+  {
+      if(m.size()<3)
+        return;
+
+    struct iv{
+      data value;
+      size_t index;
+      iv(data v, size_t i)
+      {
+        value=v;
+        index=i;
+      }
+    };
+
+    std::vector<iv> d;
+    if(maxima==true)
+    {
+      long idx=0;
+      for(idx=0;idx<m.size();idx++)
+      {
+        //Check previous points
+        long p=idx;
+        long n=idx;
+        while(m[idx]==m[p])
+        {
+          p--;
+          if(p<0)
+            p=m.size()+p;
+        }
+        while(m[idx]==m[n])
+        {
+          n++;
+          if(n>=m.size())
+            n=n-m.size();
+        }
+        if(m[idx]>m[n] && m[idx]>m[p])
+        {
+          d.emplace_back(iv(m[idx],idx));
+        }
+      }
+      struct by_value_max{
+        bool operator()(iv const &a, iv const &b) {
+          return a.value > b.value;
+        }
+      };
+      std::sort(d.begin(),d.end(),by_value_max());
+    }
+    else
+    {
+      long idx=0;
+      for(idx=0;idx<m.size();idx++)
+      {
+        //Check previous points
+        long p=idx;
+        long n=idx;
+        while(m[idx]==m[p])
+        {
+          p--;
+          if(p<0)
+            p=m.size()+p;
+        }
+        while(m[idx]==m[n])
+        {
+          n++;
+          if(n>=m.size())
+            n=n-m.size();
+        }
+        if(m[idx]<m[n] && m[idx]<m[p])
+        {
+          d.emplace_back(iv(m[idx],idx));
+        }
+      }
+      struct by_value_min{
+        bool operator()(iv const &a, iv const &b) {
+          return a.value < b.value;
+        }
+      };
+      std::sort(d.begin(),d.end(),by_value_min());
+    }
+
+    for(size_t i=0;i<d.size();i++)
+      loc.push_back(d[i].index);
   }
 
 template<typename data>

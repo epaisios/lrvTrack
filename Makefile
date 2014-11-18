@@ -1,4 +1,4 @@
-OPENCV_VER=3.0.0-alpha
+OPENCV_VER=3.0.0-beta
 INCLUDES=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I.
 INCLUDES_GPU=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I.
 INCLUDES_QT=-I/opt/opencv/${OPENCV_VER}-qt/include/opencv -I/opt/opencv/${OPENCV_VER}-qt/include -I.
@@ -22,7 +22,6 @@ LIBS=-lm\
      -lopencv_ml\
      -lcvblob\
      -ltbb\
-     -lportaudio\
      -lboost_log-mt\
      -lboost_log_setup-mt\
      -lboost_program_options-mt\
@@ -47,7 +46,6 @@ LT_OBJ=lrvTrackBase.o\
  lrvTrackDebug.o\
  larvaObject.o\
  lrvTrackFit.o\
- lrvTrackAudio.o\
  lrvTrackOL.o
 
 LT_DEPS=lrvTrackBase.hpp\

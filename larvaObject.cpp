@@ -5,6 +5,7 @@
 #include "lrvTrackBase.hpp"
 #include "lrvTrackDebug.hpp"
 #include <iostream>
+#include <sstream>
 
 using namespace std;
 using namespace lrvTrack;
@@ -134,6 +135,139 @@ void larvaObject::dump() const
   cerr << "max_centroid_speed: " << max_centroid_speed << endl;
   cerr << "min_centroid_speed: " << min_centroid_speed << endl;
 
+}
+
+void larvaObject::csvLine(size_t CURRENT_FRAME, 
+                          size_t VIDEO_FPS, 
+                          cv::Point2f &cc, 
+                          double ppm, 
+                          string &csvline)
+{
+  size_t c_index=CURRENT_FRAME-start_frame;
+  cv::Point2f bp=cv::Point2f(blobs[c_index].minx,
+      blobs[c_index].miny);
+  stringstream data;
+
+  data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+
+  bool rev=false;
+  if(lrvDistances[c_index].Spine[0]==
+      tails[c_index]+bp &&
+      lrvDistances[c_index].Spine.back()!=tails[c_index]+bp)
+  {
+    auto &d=lrvDistances[c_index].Spine;
+    /*if(c_index>0)
+      {
+      if(!round_flag[c_index] && !round_flag[c_index-1])
+      {
+      vector<double> spineAnglesPre;
+      vector<double> spineAngles;
+      vector<double> spineAngleDiff;
+      getAnglesFromSpine(lrvDistances[c_index-1].Spine,spineAnglesPre,false);
+      getAnglesFromSpine(d,spineAngles,false);
+      if(spineAngles.size()==spineAnglesPre.size())
+      {
+      for(size_t i=0;i<spineAngles.size();i++)
+      {
+      spineAngleDiff.push_back(spineAngles[i]-spineAnglesPre[i]);
+      }
+      BOOST_LOG_TRIVIAL(debug) << "Angles: " << printVector(spineAngles);
+      BOOST_LOG_TRIVIAL(debug) << "AngleDiff: " << printVector(spineAngleDiff);
+      }
+      }
+      }*/
+    for(auto &s : d)
+    {
+      data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
+    }
+    rev=true;
+  }
+  else if(lrvDistances[c_index].Spine[0]!=
+      tails[c_index]+bp &&
+      lrvDistances[c_index].Spine.back()==tails[c_index]+bp)
+  {
+    auto &d=lrvDistances[c_index].Spine;
+    /*if(c_index>0)
+      {
+      if(!round_flag[c_index] && !round_flag[c_index-1])
+      {
+      vector<double> spineAnglesPre;
+      vector<double> spineAngles;
+      vector<double> spineAngleDiff;
+      getAnglesFromSpine(lrvDistances[c_index-1].Spine,spineAnglesPre,false);
+      getAnglesFromSpine(d,spineAngles,false);
+      if(spineAngles.size()==spineAnglesPre.size())
+      {
+      for(size_t i=0;i<spineAngles.size();i++)
+      {
+      spineAngleDiff.push_back(spineAngles[i]-spineAnglesPre[i]);
+      }
+      BOOST_LOG_TRIVIAL(debug) << "Angles: " << printVector(spineAngles);
+      BOOST_LOG_TRIVIAL(debug) << "AngleDiff: " << printVector(spineAngleDiff);
+      }
+      }
+      }*/
+    for(auto s=d.rbegin();s!=d.rend();s++)
+    {
+      data << (s->x-cc.x)*ppm << ","
+        << (-s->y+cc.y)*ppm <<",";
+    }
+    rev=false;
+  }
+  else
+  {
+    cout << "Head tail confusion detected: Larva: " << larva_ID 
+      << " Frame: " << CURRENT_FRAME << endl;
+    csvline="";
+    return;
+  }
+
+  if(rev)
+  {
+    data << (lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
+      <<  (-lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
+    for(auto &p: lrvDistances[c_index].spinePairs)
+    {
+      data  << (p.second.x-cc.x)*ppm << ","
+        << (-p.second.y+cc.y)*ppm <<",";
+    }
+    data << (lrvDistances[c_index].Spine.back().x-cc.x)*ppm
+      << ","
+      <<   (-lrvDistances[c_index].Spine.back().y+cc.y)*ppm
+      << ",";
+    auto &sp=lrvDistances[c_index].spinePairs;
+    for(auto p=sp.rbegin();p!=sp.rend();p++)
+    {
+      data << (p->first.x-cc.x)*ppm << ","
+        << (-p->first.y+cc.y)*ppm <<",";
+    }
+  }
+  else
+  {
+    data << (lrvDistances[c_index].Spine.back().x-cc.x)*ppm
+      << ","
+      <<   (-lrvDistances[c_index].Spine.back().y+cc.y)*ppm
+      << ",";
+    auto &sp=lrvDistances[c_index].spinePairs;
+    for(auto p=sp.rbegin();p!=sp.rend();p++)
+    {
+      data  << (p->first.x-cc.x)*ppm << ","
+        << (-p->first.y+cc.y)*ppm <<",";
+    }
+
+    data << (lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
+      <<  (-lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
+    for(auto &p: lrvDistances[c_index].spinePairs)
+    {
+      data << (p.second.x-cc.x)*ppm << ","
+        << (-p.second.y+cc.y)*ppm <<",";
+    }
+  }
+  data << (blobs[c_index].centroid.x-cc.x)*ppm << ","
+    << (blobs[c_index].centroid.x-cc.x)*ppm << ",";
+  data << round_flag[c_index];
+  data << endl;
+  csvline=data.str();
 }
 
 int larvaObject::switchFaultyAssignment(

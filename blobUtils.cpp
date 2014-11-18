@@ -170,30 +170,6 @@ void curvVec(std::vector<cv::Point2f> &in,
   }
 }
 
-void findLocalMaxima(std::vector<float> &m,std::vector<size_t> &loc)
-{
-  size_t idx;
-  if(m.size()<3)
-    return;
-  std::map<float, size_t> v;
-
-  if(m[0]>m.back() && m[0]>m[1])
-    v[m[0]]=0;
-  for(idx=1;idx<m.size()-1;idx++)
-  {
-    if(m[idx]>m[idx-1] && m[idx]>m[idx+1])
-      v[m[idx]]=idx;
-  }
-  idx=m.size()-1;
-  if(m[idx]>m[idx-1] && m[idx]>m[0])
-    v[m[idx]]=idx;
-  for(std::map<float, size_t>::reverse_iterator l=v.rbegin();
-      l!=v.rend();l++)
-  {
-    loc.push_back(l->second);
-  }
-
-}
 
 cv::Point2f px5Smooth(cv::Mat &f, cv::Point2f &a, cv::Point2f &b, cv::Point2f &c, cv::Point2f &d, cv::Point2f &e)
 {
@@ -281,13 +257,17 @@ void pointsToContourVector(cvb::CvBlob &blob,
                          int PAD,
                          std::vector<cv::Point2f> &points)
 {
-  cv::Mat ROI=cv::Mat(frame,
-              cv::Rect(blob.minx-PAD,
-                       blob.miny-PAD,
-                       blob.maxx-blob.minx+1+2*PAD,
-                       blob.maxy-blob.miny+1+2*PAD
-                      )
-             );
+  
+  cv::Mat ROI;
+  if(!createSimpleROI(
+      frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      PAD,
+      ROI))
+    return;
 
   cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
   for(size_t i=1;i<kpoints.size();i++)
@@ -322,13 +302,16 @@ void blobToContourVector(cvb::CvBlob &blob,
   std::vector<cv::Point2f> kpoints;
   blobToPointVector(blob,kpoints);
 
-  cv::Mat ROI=cv::Mat(frame,
-              cv::Rect(blob.minx-PAD,
-                       blob.miny-PAD,
-                       blob.maxx-blob.minx+1+2*PAD,
-                       blob.maxy-blob.miny+1+2*PAD
-                      )
-             );
+  cv::Mat ROI;
+  if(!createSimpleROI(
+      frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      PAD,
+      ROI))
+    return;
 
   cv::Point2f PADpoint(blob.minx-PAD,blob.miny-PAD);
   for(size_t i=1;i<kpoints.size();i++)
@@ -394,13 +377,17 @@ if(x4>0 && y4>0)
 
 void createLarvaROI(cv::Mat &frame, cv::Mat &ROI, cvb::CvBlob &blob)
 {
-  ROI=cv::Mat(frame,
-              cv::Rect(blob.minx-ROI_PADDING,
-                       blob.miny-ROI_PADDING,
-                       blob.maxx-blob.minx+1+2*ROI_PADDING,
-                       blob.maxy-blob.miny+1+2*ROI_PADDING
-                      )
-             );
+
+  if(!createSimpleROI(
+      frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      ROI_PADDING,
+      ROI))
+    return;
+
   //cv::normalize(ROI,ROI,0,255,cv::NORM_MINMAX);
 }
 
@@ -446,6 +433,51 @@ void createLarvaContourCV(cv::Mat &lrvROI,
   drawContours(lrvROI,cvec,0,color,1,4,cv::noArray(),INT_MAX,cv::Point(PADDING,PADDING));
 }
 */
+
+bool createSimpleROI(cv::Mat &img,
+                     size_t minx,
+                     size_t miny,
+                     size_t maxx,
+                     size_t maxy,
+                     size_t PADDING,
+                     cv::Mat &res)
+{
+  try{
+    if (minx-PADDING>0 &&
+        miny-PADDING>0 &&
+        maxx+1+PADDING>LRVTRACK_FRAME_WIDTH &&
+        maxy+1+PADDING>LRVTRACK_FRAME_HEIGHT)
+    {
+      res=img(cv::Rect(minx-PADDING,
+            miny-PADDING,
+            maxx-minx+1+2*PADDING,
+            maxy-miny+1+2*PADDING));
+    }
+    else
+    {
+      res=img(
+          cv::Rect(minx,
+            miny,
+            maxx-minx+1,
+            maxy-miny+1));
+
+          copyMakeBorder(res,
+            res,
+            PADDING,
+            PADDING,
+            PADDING,
+            PADDING,
+            cv::BORDER_CONSTANT,
+            cv::Scalar(0));
+          }
+          }
+          catch(...)
+          {
+          std::cerr << "Error creating ROI" << std::endl;
+          return false;
+          }
+          return true;
+}
 
 void tile2same(cv::Mat &a, cv::Mat &b, cv::Mat &r)
 {
@@ -868,11 +900,17 @@ double getGreyValue(cv::Mat &larvaROI, cvb::CvBlob &blob,cv::Mat &grey_frame)
 {
   cv::Mat ROI;
   //TODO: Fix when the Padding exceeds the image size!!!
-  cv::Mat ROIcopy=grey_frame(cv::Rect(blob.minx-ROI_PADDING,
-                                      blob.miny-ROI_PADDING,
-                                      blob.maxx-blob.minx+1+2*ROI_PADDING,
-                                      blob.maxy-blob.miny+1+2*ROI_PADDING)
-                            );
+
+  cv::Mat ROIcopy;
+  if(!createSimpleROI(grey_frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      ROI_PADDING,
+      ROIcopy))
+    return 0;
+
   ROIcopy.copyTo(ROI);
   ROI=ROI&larvaROI;
   //lrvTrackNormalize(ROI, ROI, 0, 255, CV_MINMAX );
@@ -900,6 +938,23 @@ void sortPoints(std::vector<cv::Point2f> &cp,
   else
   {
     std::sort(cp.begin(),cp.end(),baseYsmaller);
+  }
+}
+
+//Angles of the contour points with step 2
+void contourAngles(std::vector<cv::Point2f> &in,
+                   std::vector<double> &angles,
+                   size_t S)
+{
+  for(size_t i=0; i<in.size();i++)
+  {
+    long p=i-S;
+    long n=i+S;
+    if(p<0)
+      p=in.size()+p;
+    if(n>in.size()-1)
+      n=n-in.size();
+    angles.push_back(angleD(in[p],in[i],in[n]));
   }
 }
 
@@ -1559,23 +1614,20 @@ double getSurroundingSize(cv::Point2f &point,
   cv::Mat larvaImg,lrvROI;
   size_t PADDING=4;
   cv::Mat rROI,ROI;
-  try{
-    rROI=grey_frame(cv::Rect(blob.minx-PADDING,
-          blob.miny-PADDING,
-          blob.maxx-blob.minx+1+2*PADDING,
-          blob.maxy-blob.miny+1+2*PADDING)
-        );
-    rROI.copyTo(ROI);
-    //cvtColor(rROI,ROI,CV_BGR2GRAY);
-
-    createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
-    //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
-  }
-  catch(...)
-  {
-    std::cerr << "getSurroundingSize: Error creating ROI" << std::endl;
+  if(!createSimpleROI(grey_frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      PADDING,
+      rROI))
     return 0;
-  }
+  rROI.copyTo(ROI);
+  //cvtColor(rROI,ROI,CV_BGR2GRAY);
+
+  createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
+  //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
+
   cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
   cv::erode(lrvROI,lrvROI,element);
   cv::bitwise_and(ROI,lrvROI,ROI);
@@ -1599,39 +1651,37 @@ double getSurroundingSize(cv::Point2f &point,
   size_t PADDING=4;
   cv::Mat rROI,ROI;
   cv::Mat preROI;
-  try{
-    rROI=grey_frame(cv::Rect(blob.minx-PADDING,
-          blob.miny-PADDING,
-          blob.maxx-blob.minx+1+2*PADDING,
-          blob.maxy-blob.miny+1+2*PADDING)
-        );
-    //rROI.copyTo(ROI);
-    cvtColor(rROI,ROI,CV_BGR2GRAY);
-
-    if(!prev_frame.empty())
-    { 
-      preROI=prev_frame(cv::Rect(blob.minx,
-            blob.miny,
-            blob.maxx-blob.minx+1,
-            blob.maxy-blob.miny+1)
-          );
-
-      cv::copyMakeBorder(preROI,
-                         preROI,
-                         PADDING,
-                         PADDING,
-                         PADDING,
-                         PADDING,
-                         cv::BORDER_CONSTANT,cv::Scalar(255));
-    }
-    createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
-    //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
-  }
-  catch(...)
-  {
-    std::cerr << "getSurroundingSize: Error creating ROI" << std::endl;
+  if(!createSimpleROI(grey_frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      PADDING,
+      rROI))
     return 0;
+  cvtColor(rROI,ROI,CV_BGR2GRAY);
+
+  if(!prev_frame.empty())
+  { 
+    if(!createSimpleROI(prev_frame,
+      blob.minx,
+      blob.miny,
+      blob.maxx,
+      blob.maxy,
+      0,
+      preROI))
+    return 0;
+
+    cv::copyMakeBorder(preROI,
+        preROI,
+        PADDING,
+        PADDING,
+        PADDING,
+        PADDING,
+        cv::BORDER_CONSTANT,cv::Scalar(255));
   }
+  createLarvaContour(lrvROI, blob,CV_8UC1,PADDING);
+  //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
   cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
   cv::erode(lrvROI,lrvROI,element);
   //cv::erode(preROI,preROI,element);

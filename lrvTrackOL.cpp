@@ -1,5 +1,4 @@
 #include "lrvTrackOL.hpp"
-#include "lrvTrackAudio.hpp"
 #include "lrvTrackPartitionGenerator.hpp"
 #include <boost/tokenizer.hpp>
 #include <numeric>
@@ -524,12 +523,35 @@ void brightnessContrastGammaOCL(ocl::oclMat &f,
 
 void showModels()
 {
+  cv::Point2f cc=Point2f(circles[bestCircle][0],
+      circles[bestCircle][1]);
+  double ppm;
+  if(LRVTRACK_MPP==0.0)
+    ppm=LRVTRACK_PETRIDISH/(2*circles[bestCircle][2]);
+  else
+    ppm=LRVTRACK_MPP;
   for(auto &m: larvaeModels)
   {
+    if(!m.SUCCESS)
+      continue;
     if(m.SFRAME<=CURRENT_FRAME && m.EFRAME>=CURRENT_FRAME)
     {
       for(auto &l: m.larvae_models)
       {
+        string data;
+        size_t c_index=CURRENT_FRAME-m.SFRAME;
+        l[c_index].csvLine(CURRENT_FRAME,
+                  m.SFRAME,
+                  m.EFRAME,
+                  VIDEO_FPS,
+                  cc,
+                  ppm,
+                  data);
+        if(data != "")
+        {
+          lfds[l[c_index].ID] << data;
+        }
+
         size_t IDX=CURRENT_FRAME-m.SFRAME;
         int i=0;
         for (auto &p:l[IDX].spine)
@@ -553,11 +575,61 @@ void showModels()
             1,
             Scalar(0,0,255),
             -1);
-        /*vector<vector<Point2f> > f;
-        f.push_back(l[IDX].spine);
-        polylines(colorFrame,f,false,Scalar(255,0,0));*/
       }
     }
+  }
+}
+
+void getAnglesFromSpine(vector<Point2f> &spine, vector<double> &angles, bool reverse)
+{
+  if(!reverse)
+  {
+    for(auto it=spine.begin()+1;it!=spine.end()-1;it++)
+    {
+      double a=angleD(*(it-1),*it,*(it+1));
+      angles.push_back(a);
+    }
+  }
+  else
+  {
+    for(auto it=spine.rbegin()+1;it!=spine.rend()-1;it++)
+    {
+      double a=angleD(*(it-1),*it,*(it+1));
+      angles.push_back(a);
+    }
+  }
+}
+
+bool checkLarvaLength(size_t ID)
+{
+  larvaObject &o=detected_larvae[ID];
+  size_t length=o.end_frame-o.start_frame;
+  if(o.larva_ID == o.updated_ID)
+  {
+      return (length>LRVTRACK_MIN_OUTPUT_DURATION);
+  }
+  else
+  {
+    for(auto &l: detected_larvae)
+    {
+      larvaObject &p=l.second;
+      length+=o.lifetimeWithStats;
+    }
+    for(auto &m: larvaeModels)
+    {
+      if(m.SUCCESS)
+      {
+        for(auto &lm: m.larvae_models)
+        {
+          if(lm[0].ID==o.updated_ID)
+          {
+            length+=(m.EFRAME-m.SFRAME);
+            break;
+          }
+        }
+      }
+    }
+    return (length>LRVTRACK_MIN_OUTPUT_DURATION);
   }
 }
 
@@ -598,19 +670,14 @@ void showTags2()
 
     int PAD=2;
     Mat larvaROI;
-    try{
-      larvaROI=Mat(colorFrame,
-          Rect(blob->minx-ROI_PADDING-PAD,
-            blob->miny-ROI_PADDING-PAD,
-            blob->maxx-blob->minx+1+2*(ROI_PADDING+PAD),
-            blob->maxy-blob->miny+1+2*(ROI_PADDING+PAD))
-          );
-    }
-    catch(...)
-    {
-      BOOST_LOG_TRIVIAL(warning) << "larvaROI failed. continuing";
+    if(!createSimpleROI(colorFrame,
+          blob->minx,
+          blob->miny,
+          blob->maxx,
+          blob->maxy,
+          ROI_PADDING+PAD,
+          larvaROI))
       break;
-    }
     Point2f cr(blob->centroid.x-blob->minx,blob->centroid.y-blob->miny);
     //larvaSkel testSkel(larvaROI,cr);
     //testSkel.drawSkeleton(larvaROI,Scalar(0,0,255));
@@ -652,160 +719,72 @@ void showTags2()
                          CV_8UC3,PAD,false,
                          Scalar(0,255,0),8);
       drawSpinePoints(colorFrame,it->second,c_index);
-      if(LRVTRACK_USE_MODEL)
-        showModels();
-      /*BOOST_LOG_TRIVIAL(debug) << "LRVINFO:" <<
-        it->second.larva_ID << ", " <<
-        it->second.area[c_index] << ", " <<
-        it->second.length[c_index] << ", " <<
-        it->second.width[c_index] << ", " <<
-        it->second.grey_value[c_index] << ", " <<
-        it->second.perimeter[c_index];*/
-      //plotAngle(blob,larvaROI,PAD);
       cv::Point2f cc=Point2f(circles[bestCircle][0],
           circles[bestCircle][1]);
-      double ppm=LRVTRACK_PETRIDISH/(2*circles[bestCircle][2]);
-      if((it->second.end_frame-it->second.start_frame)>80)
+      double ppm;
+      if(LRVTRACK_MPP==0.0)
+        ppm=LRVTRACK_PETRIDISH/(2*circles[bestCircle][2]);
+      else
+        ppm=LRVTRACK_MPP;
+      if(LRVTRACK_USE_MODEL)
+      {
+        fs::path data_folder(LRVTRACK_DATE+"-data");
+        if(!fs::exists(data_folder))
+        {
+          fs::create_directory(data_folder);
+        }
+      }
+      else
+      {
+        fs::path data_folder(LRVTRACK_DATE+"-data");
+        if(!fs::exists(data_folder))
+        {
+          fs::create_directory(data_folder);
+        }
+      }
+
+      //Here we must check whether the complete added track length is
+      //long enough.
+      //if((it->second.end_frame-it->second.start_frame)>LRVTRACK_MIN_OUTPUT_DURATION)
+      if (checkLarvaLength(it->second.larva_ID))
       {
         larvaObject &l=it->second;
-        cv::Point2f bp=cv::Point2f(l.blobs[c_index].minx,
-            l.blobs[c_index].miny);
-        //cv::Point2f cbp=l.centroids[c_index]+bp;
-        //ofstream &lrvFile=lfds[l.larva_ID];
-        stringstream filename;
-        stringstream data;
-        filename << "data/" << l.larva_ID << ".csv";
-        if(lfds[l.larva_ID].is_open()==false)
-          lfds[l.larva_ID].open(filename.str());
-        data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
-
-        bool rev=false;
-        if(l.lrvDistances[c_index].Spine[0]==
-            l.tails[c_index]+bp &&
-            l.lrvDistances[c_index].Spine.back()!=l.tails[c_index]+bp)
+        stringstream f;
+        if(LRVTRACK_USE_MODEL)
         {
-          auto &d=l.lrvDistances[c_index].Spine;
-          for(auto &s : d)
-          {
-            data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
-          }
-          rev=true;
-        }
-        else if(l.lrvDistances[c_index].Spine[0]!=
-            l.tails[c_index]+bp &&
-            l.lrvDistances[c_index].Spine.back()==l.tails[c_index]+bp)
-        {
-          auto &d=l.lrvDistances[c_index].Spine;
-          for(auto s=d.rbegin();s!=d.rend();s++)
-          {
-            data << (s->x-cc.x)*ppm << ","
-              << (-s->y+cc.y)*ppm <<",";
-          }
-          rev=false;
+          f << LRVTRACK_DATE+"-data/" << l.updated_ID << ".csv";
         }
         else
-        {
-          cout << "Head tail confusion detected: Larva: " << it->second.larva_ID 
-               << " Frame: " << CURRENT_FRAME << endl;
-          if(l.blobs.size()-1==c_index)
-          {
-            lfds[l.larva_ID].close();
-          }
-          it++;
-          continue;
-        }
+          f << LRVTRACK_DATE+"-data/" << l.updated_ID << ".csv";
+        fs::path filename(f.str());
+        //stringstream data;
 
-        if(rev)
+        if(lfds[l.updated_ID].is_open()==false)
+          lfds[l.updated_ID].open(filename.string(),fstream::out | fstream::app);
+            string data;
+        l.csvLine(CURRENT_FRAME, 
+            VIDEO_FPS, 
+            cc, 
+            ppm, 
+            data);
+        if(data != "")
+          lfds[l.updated_ID] << data;
+        /*if(l.blobs.size()-1==c_index)
         {
-          data << (l.lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
-            <<  (-l.lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
-          for(auto &p: l.lrvDistances[c_index].spinePairs)
-          {
-            data  << (p.second.x-cc.x)*ppm << ","
-              << (-p.second.y+cc.y)*ppm <<",";
-          }
-          data << (l.lrvDistances[c_index].Spine.back().x-cc.x)*ppm
-            << ","
-            <<   (-l.lrvDistances[c_index].Spine.back().y+cc.y)*ppm
-            << ",";
-          auto &sp=l.lrvDistances[c_index].spinePairs;
-          for(auto p=sp.rbegin();p!=sp.rend();p++)
-          {
-            data << (p->first.x-cc.x)*ppm << ","
-              << (-p->first.y+cc.y)*ppm <<",";
-          }
-        }
-        else
-        {
-          data << (l.lrvDistances[c_index].Spine.back().x-cc.x)*ppm
-            << ","
-            <<   (-l.lrvDistances[c_index].Spine.back().y+cc.y)*ppm
-            << ",";
-          auto &sp=l.lrvDistances[c_index].spinePairs;
-          for(auto p=sp.rbegin();p!=sp.rend();p++)
-          {
-            data  << (p->first.x-cc.x)*ppm << ","
-              << (-p->first.y+cc.y)*ppm <<",";
-          }
-
-          data << (l.lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
-            <<  (-l.lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
-          for(auto &p: l.lrvDistances[c_index].spinePairs)
-          {
-            data << (p.second.x-cc.x)*ppm << ","
-              << (-p.second.y+cc.y)*ppm <<",";
-          }
-        }
-        data << (l.blobs[c_index].centroid.x-cc.x)*ppm << ","
-          << (l.blobs[c_index].centroid.x-cc.x)*ppm << ",";
-        data << it->second.round_flag[c_index];
-        data << endl;
-        lfds[l.larva_ID] << data.str();
-        if(l.blobs.size()-1==c_index)
-        {
-          lfds[l.larva_ID].close();
-        }
-
-        /*if(l.larva_ID==0)
-        {
-          Mat cutout;
-          double minx=l.lrvDistances[c_index].Spine[7].x-(8/ppm);
-          double miny=l.lrvDistances[c_index].Spine[7].y-(8/ppm);
-          Mat origROI=Mat(greyFrame,
-              Rect(minx,
-                miny,
-                16/ppm,
-                16/ppm));
-          Mat extROI=Mat(colorFrame,
-              Rect(minx,
-                miny,
-                16/ppm,
-                16/ppm));
-
-          stringstream n;
-          stringstream e;
-          vector<int> compression_params;
-#if CV_VERSION_MAJOR < 3
-          compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
-#else
-          compression_params.push_back(IMWRITE_PNG_COMPRESSION);
-#endif
-          compression_params.push_back(0);
-          n << "cutout/ff" << CURRENT_FRAME << ".png";
-          e << "cutout/ee" << CURRENT_FRAME << ".png";
-          try {
-            imwrite(n.str(), origROI, compression_params);
-            imwrite(e.str(), extROI, compression_params);
-          }
-          catch (runtime_error& ex) {
-            fprintf(stderr,
-                "Exception converting image to PNG format: %s\n",
-                ex.what());
-          }
+          lfds[l.updated_ID].close();
         }*/
       }
     }
     it++;
+  }
+  if(LRVTRACK_USE_MODEL)
+    showModels();
+  if(CURRENT_FRAME==TOTAL_FRAMES)
+  {
+    for(auto &f:lfds)
+    {
+      f.second.close();
+    }
   }
 }
 
@@ -835,19 +814,14 @@ void showTags(const cvb::CvBlobs &tracked_blobs)
 
         int PAD=2;
         Mat larvaROI;
-        try{
-          larvaROI=Mat(colorFrame,
-              Rect(blob->minx-ROI_PADDING-PAD,
-                blob->miny-ROI_PADDING-PAD,
-                blob->maxx-blob->minx+1+2*(ROI_PADDING+PAD),
-                blob->maxy-blob->miny+1+2*(ROI_PADDING+PAD))
-              );
-        }
-        catch(...)
-        {
-          BOOST_LOG_TRIVIAL(warning) << "larvaROI failed. continuing";
+        if(!createSimpleROI(colorFrame,
+              blob->minx,
+              blob->miny,
+              blob->maxx,
+              blob->maxy,
+              ROI_PADDING+PAD,
+              larvaROI))
           break;
-        }
         Point2f cr(blob->centroid.x-blob->minx,blob->centroid.y-blob->miny);
         //larvaSkel testSkel(larvaROI,cr);
         //testSkel.drawSkeleton(larvaROI,Scalar(0,0,255));
@@ -1837,6 +1811,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     blobToPointVector(blob,cntPoints);
     larvaDistanceMap Distances(cntPoints);
     //computeSpine(blob,Distances,frame);
+    //fixContourSimple(blob,Distances,
     fixContour(blob,Distances,
         LRVTRACK_CONTOUR_RESOLUTION,
         colorFrame,previousFrame);
@@ -2010,7 +1985,9 @@ void updateOneLarva(cvb::CvBlobs &In,
     // Compute all the inner distances for the larva
     //computeInnerDistances(blob,Distances,newLarvaSkel.MidPoint);
     //computeSpine(blob,Distances,frame);
+
     fixContour(blob,
+    /*fixContourSimple(blob,*/
         Distances,
         LRVTRACK_CONTOUR_RESOLUTION,
         colorFrame,
@@ -2018,6 +1995,7 @@ void updateOneLarva(cvb::CvBlobs &In,
         &cur_larva.heads,
         &cur_larva.tails,
         &cur_larva.blobs);
+
     double TIMEFRAME;
     if(cur_larva.inCluster.back()==0)
     {
@@ -2417,7 +2395,13 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
   if(LRVTRACK_PARALLEL)
     parallel_for_(Range(0, In.size()), body,LRVTRACK_THREADS);
   else
-    parallel_for_(Range(0, In.size()), body,1.0);
+  {
+    for(cvb::CvBlobs::iterator it=In.begin();it!=In.end();it++)
+    {
+      updateOneLarva(In,Prev,it,NEW_LARVA);
+    }
+    //parallel_for_(Range(0, In.size()), body,1.0);
+  }
 
   tbb::concurrent_hash_map<size_t, larvaObject>::iterator nit=
     NEW_LARVA.begin();
@@ -2696,9 +2680,15 @@ void newLarvaeTrack(cvb::CvBlobs &In,
 bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput,size_t step=1)
 {
   previousFrame=greyFrame;
+  if(TOTAL_FRAMES<CURRENT_FRAME+step && TOTAL_FRAMES!=0)
+    return false;
   if(step!=1)
     for(int i=0;i<step-1;i++)
-      capture.grab();
+    {
+      bool res=capture.grab();
+      if(!res)
+        return res;
+    }
   CURRENT_FRAME+=step;
 
   bool retval=capture.read(output);
@@ -2737,6 +2727,58 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput,size_t 
 //#endif
 }
 
+/*
+ * Function to take care of the various input possibilities.
+ * Set up the parameters in the capture device for direct camera
+ * input/file input and correct FPS.
+ */
+int setup_capture_input(VideoCapture &capture)
+{
+  // Check whether we have camera input or file
+  if(LRVTRACK_CAMERA_INPUT != -2)
+    {
+      //capture.open(CV_CAP_DC1394);
+      // These settings are for our setup.
+      // TODO: Autodetection is easy for windows but still need to look into this.
+      capture.open(300);
+      //capture.set(CV_CAP_PROP_FRAME_WIDTH,1280);
+      //capture.set(CV_CAP_PROP_FRAME_HEIGHT,1024);
+      capture.set(CV_CAP_PROP_FPS,24);
+    }
+  else if (LRVTRACK_FILE_INPUT != "")
+    {
+      capture.open(LRVTRACK_FILE_INPUT);
+    }
+  capture.set(CV_CAP_PROP_FORMAT,CV_8U);
+  TOTAL_FRAMES=capture.get(CV_CAP_PROP_FRAME_COUNT);
+  if (capture.get(CV_CAP_PROP_FPS)==0)
+    {
+      VIDEO_FPS=24.1;
+    }
+  else
+    {
+      // Funny case where the FPS are mentioned to be double what they actually are.
+      if ( capture.get(CV_CAP_PROP_FPS) > 30 )
+        {
+          VIDEO_FPS=capture.get(CV_CAP_PROP_FPS)/2;
+          LRVTRACK_FRAME_WIDTH=capture.get(CV_CAP_PROP_FRAME_WIDTH);
+          LRVTRACK_FRAME_HEIGHT=capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+          //cout << VIDEO_FPS << endl;
+        }
+      else
+        {
+          VIDEO_FPS=capture.get(CV_CAP_PROP_FPS);
+          //cout << VIDEO_FPS << endl;
+        }
+    }
+
+  if (!capture.isOpened())
+    return -1;
+
+  return 0;
+}
+
+
 void extract_background_offline(VideoCapture &capture,
                        Mat &greyBgFrame)
 {
@@ -2758,14 +2800,19 @@ void extract_background_offline(VideoCapture &capture,
     std::cerr << "B: " << CURRENT_FRAME << "/" << count << "\r";
   }
   cerr << endl;
-  capture.set(CV_CAP_PROP_POS_FRAMES ,0);
   CURRENT_FRAME=0;
+  if(setup_capture_input(capture) == -1)
+  {
+    BOOST_LOG_TRIVIAL(error)
+      << "Error setting up the capture device (camera or video file)";
+    exit(1);
+  }
   //resultframe*=(1.0/count);
   //normalize(resultframe,greyBgFrame,0,255,CV_MINMAX);
   //greyBgFrame.convertTo(greyBgFrame,CV_8UC1);
   resultframe.convertTo(greyBgFrame,CV_8UC1);
-  imshow("background",greyBgFrame);
-  waitKey(10000);
+  //imshow("background",greyBgFrame);
+  //waitKey(10000);
 }
 
 /*
@@ -2948,55 +2995,6 @@ void setROI(string &input)
   circles.push_back(b);
 }
 
-/*
- * Function to take care of the various input possibilities.
- * Set up the parameters in the capture device for direct camera
- * input/file input and correct FPS.
- */
-int setup_capture_input(VideoCapture &capture)
-{
-  // Check whether we have camera input or file
-  if(LRVTRACK_CAMERA_INPUT != -2)
-    {
-      //capture.open(CV_CAP_DC1394);
-      // These settings are for our setup.
-      // TODO: Autodetection is easy for windows but still need to look into this.
-      capture.open(300);
-      capture.set(CV_CAP_PROP_FRAME_WIDTH,1280);
-      capture.set(CV_CAP_PROP_FRAME_HEIGHT,1024);
-      capture.set(CV_CAP_PROP_FPS,24);
-    }
-  else if (LRVTRACK_FILE_INPUT != "")
-    {
-      capture.open(LRVTRACK_FILE_INPUT);
-    }
-  capture.set(CV_CAP_PROP_FORMAT,CV_8U);
-  TOTAL_FRAMES=capture.get(CV_CAP_PROP_FRAME_COUNT);
-  if (capture.get(CV_CAP_PROP_FPS)==0)
-    {
-      VIDEO_FPS=24.1;
-    }
-  else
-    {
-      // Funny case where the FPS are mentioned to be double what they actually are.
-      if ( capture.get(CV_CAP_PROP_FPS) > 30 )
-        {
-          VIDEO_FPS=capture.get(CV_CAP_PROP_FPS)/2;
-          //cout << VIDEO_FPS << endl;
-        }
-      else
-        {
-          VIDEO_FPS=capture.get(CV_CAP_PROP_FPS);
-          //cout << VIDEO_FPS << endl;
-        }
-    }
-
-  if (!capture.isOpened())
-    return -1;
-
-  return 0;
-}
-
 // Function to handle command-line arguments
 int handle_args(int argc, char* argv[])
 {
@@ -3105,6 +3103,12 @@ int handle_args(int argc, char* argv[])
        "Set a circle as Region of Interest. Input: x,y,radius"
       )
 
+      ("mpp",
+       po::value<double>(&LRVTRACK_MPP)->implicit_value(0.0),
+       "Milimeters per pixel. If not set will be calculated from region of interest and size of dish (see -z)."
+      )
+
+
       ("gamma,g",
        po::value<double> (&LRVTRACK_GAMMA)->implicit_value(1.0),
        "Gamma Correction value."
@@ -3147,7 +3151,11 @@ int handle_args(int argc, char* argv[])
       )
 
       ("use-model,k",
-       "Smoothing value for the contour reconstruction."
+       "Use model to resolve short collisions."
+      )
+      ("model-duration,",
+       po::value<double> (&LRVTRACK_MODEL_DURATION)->implicit_value(3.5),
+       "Duration of collisions on which to use the model in seconds."
       )
 
       ("normalize,n",
@@ -3307,6 +3315,10 @@ int handle_args(int argc, char* argv[])
         {
           LRVTRACK_ROI_INPUT=vm["roi"].as<string>();
           setROI(LRVTRACK_ROI_INPUT);
+        }
+      if (vm.count("mpp")==0)
+        {
+          LRVTRACK_MPP=0.0;
         }
 
       if (vm.count("camera-input")>0)
@@ -3601,168 +3613,156 @@ void determineHeadTail(larvaObject &f)
   stringstream d;
   size_t F=24;
   size_t sframe=f.start_frame;
-  try{
-  d << endl;
-  d << "|=============== Determine head/tail of: " << f.larva_ID
-    << " ============= " << endl;
-  if(f.isCluster==true)
+  try
   {
-    d << "|=============== Blob " << f.larva_ID << " is a cluster ========"
-      << endl ;
-    d << "|========================================= " << endl;
+    d << endl;
+    d << "|=============== Determine head/tail of: " << f.larva_ID
+      << " ============= " << endl;
+    if(f.isCluster==true)
+    {
+      d << "|=============== Blob " << f.larva_ID << " is a cluster ========"
+        << endl ;
+      d << "|========================================= " << endl;
+      BOOST_LOG_TRIVIAL(debug) << d.str();
+      return;
+    }
+    size_t range=f.blobs.size();
+    std::vector<size_t> breaks;
+    bool INBREAK=false;
+    for(size_t i=0;i<range;i++)
+    {
+      if(f.round_flag[i]==true && INBREAK==false)
+      {
+        breaks.push_back(i);
+        INBREAK=true;
+      }
+      else if(f.round_flag[i]==false && INBREAK==true)
+      {
+        if(f.round_flag.size()>i && f.round_flag[i+1]==true)
+          continue;
+        breaks.push_back(i);
+        INBREAK=false;
+      }
+    }
+
+    breaks.push_back(range-1);
+    d << "|  Range: " << range << endl;
+    d << "|  Breaks: " << breaks.size() << " " << printVector(breaks) << endl;
+
+    for(size_t i=0;i<breaks.size();i++)
+    {
+      d << "|    Break " << i << ":" << endl;
+      size_t endBreak=breaks[i];
+      size_t preBreak;
+      if(i>0)
+        preBreak=breaks[i-1]+1;
+      else
+        preBreak=0;
+
+      Point2f startPos(f.blobs[preBreak].centroid.x,
+          f.blobs[preBreak].centroid.y);
+      Point2f endPos(f.blobs[endBreak].centroid.x,
+          f.blobs[endBreak].centroid.y);
+
+      Point2f startbp(f.blobs[preBreak].minx,f.blobs[preBreak].miny);
+      Point2f endbp(f.blobs[endBreak].minx,f.blobs[endBreak].miny);
+
+      d << "|      Start[ " << preBreak+sframe <<"]: Centroid" << startPos << " "
+        << "IHead" << f.heads[preBreak]+startbp << " "
+        << "ITail" << f.tails[preBreak]+startbp
+        << endl;
+      d << "|      End[ " << endBreak+sframe <<"]: Centroid" << endPos << " "
+        << "IHead" << f.heads[endBreak]+endbp << " "
+        << "ITail" << f.tails[endBreak]+endbp
+        << endl;
+
+      double sumHeadDist=0.0; //Distance to endpoint
+      double sumTailDist=0.0;
+      double sumHeadGrey=0.0; //Grey value sum
+      double sumTailGrey=0.0;
+      double sumHeadDiff=0.0; //Difference of current centroid
+      //from previous endpoints
+      double sumTailDiff=0.0;
+      double sumHeadCnt=0.0;  //Distance covered by endpoint
+      double sumTailCnt=0.0;
+
+      for(size_t j=preBreak;j<=endBreak;j++)
+      {
+        Point2f bpPoint(f.blobs[j].minx,f.blobs[j].miny);
+        Point2f hPoint=filterPoint(f.heads,j,F,f.blobs);
+        Point2f tPoint=filterPoint(f.tails,j,F,f.blobs);
+        sumHeadGrey+=f.heads_brightness[j];
+        sumTailGrey+=f.tails_brightness[j];
+        if(j>preBreak)
+        {
+          Point2f prebpPoint(f.blobs[j-1].minx,f.blobs[j-1].miny);
+          Point2f prehPoint=filterPoint(f.heads,j-1,F,f.blobs);
+          Point2f pretPoint=filterPoint(f.tails,j-1,F,f.blobs);
+          Point2f centroid=filterCentroid(f.blobs,j,F);
+          Point2f midpoint=filterMidpoint(f.lrvDistances,j,F);
+          sumHeadDiff+=p2fdist(midpoint,prehPoint);
+          sumTailDiff+=p2fdist(midpoint,pretPoint);
+          sumHeadCnt+=p2fdist(hPoint,prehPoint);
+          sumTailCnt+=p2fdist(tPoint,pretPoint);
+        }
+      }
+      double vote_for_nochange=0;
+      size_t duration=endBreak-preBreak;
+
+      if(sumHeadDiff/duration<sumTailDiff/duration) //If head was infront most of the time vote for nochange
+        vote_for_nochange+=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
+      else
+        vote_for_nochange-=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
+
+      if(sumHeadGrey/duration<sumTailGrey/duration) //If head was darker vote for no change
+        vote_for_nochange+=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+      else
+        vote_for_nochange-=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+
+      if(sumHeadCnt/duration>sumTailCnt/duration) //If head made more distance vote for no change
+        vote_for_nochange+=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+      else
+        vote_for_nochange-=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+
+      d << "|" << endl;
+      d << "|      LarvaID, GHead, HeadForward, HeadDistance, Duration, Votes" << endl;
+      d << "|      " <<f.larva_ID*1000 + i << "0, ";
+      d << sumHeadGrey/duration<< ", ";
+      d << sumHeadDiff/duration<< ", ";
+      d << sumHeadCnt/duration<< ", " << endBreak-preBreak <<", ";
+      d << (vote_for_nochange>=0) << ",0" << endl;
+      d << "|      LarvaID, GTail, TailForward, TailDistance, Duration, Votes" << endl;
+      d << "|      " <<f.larva_ID*1000 + i << "1, ";
+      d << sumTailGrey/duration<< ", ";
+      d << sumTailDiff/duration<< ", ";
+      d << sumTailCnt/duration<< ", " << endBreak-preBreak <<", ";
+      d << (vote_for_nochange<0) << ",1" << endl;
+      d << "|" << endl;
+
+      if(vote_for_nochange<0 && breaks.size()==1)
+      {
+        f.heads.swap(f.tails);
+      }
+      else if(vote_for_nochange<0)
+      {
+        for(size_t k=preBreak;k<=endBreak;k++)
+        {
+          cv::Point2f b=f.heads[k];
+          f.heads[k]=f.tails[k];
+          f.tails[k]=b;
+        }
+      }
+      d << "|      Start[ " << preBreak <<"]: Centroid" << startPos << " "
+        << "RHead" << f.heads[preBreak]+startbp << " "
+        << "RTail" << f.tails[preBreak]+startbp
+        << endl;
+      d << "|      End[ " << endBreak <<"]: Centroid" << endPos << " "
+        << "RHead" << f.heads[endBreak]+endbp << " "
+        << "RTail" << f.tails[endBreak]+endbp
+        << endl;
+      d << "|========================================= " << endl;
+    }
     BOOST_LOG_TRIVIAL(debug) << d.str();
-    return;
-  }
-  size_t range=f.blobs.size();
-  std::vector<size_t> breaks;
-  bool INBREAK=false;
-  for(size_t i=0;i<range;i++)
-  {
-    if(f.round_flag[i]==true && INBREAK==false)
-    {
-      breaks.push_back(i);
-      INBREAK=true;
-    }
-    else if(f.round_flag[i]==false && INBREAK==true)
-    {
-      if(f.round_flag.size()>i && f.round_flag[i+1]==true)
-        continue;
-      breaks.push_back(i);
-      INBREAK=false;
-    }
-  }
-
-  breaks.push_back(range-1);
-   d << "|  Range: " << range << endl;
-   d << "|  Breaks: " << breaks.size() << " " << printVector(breaks) << endl;
-
-  for(size_t i=0;i<breaks.size();i++)
-  {
-    d << "|    Break " << i << ":" << endl;
-    size_t endBreak=breaks[i];
-    size_t preBreak;
-    if(i>0)
-      preBreak=breaks[i-1]+1;
-    else
-      preBreak=0;
-
-    Point2f startPos(f.blobs[preBreak].centroid.x,
-                     f.blobs[preBreak].centroid.y);
-    Point2f endPos(f.blobs[endBreak].centroid.x,
-                   f.blobs[endBreak].centroid.y);
-
-    Point2f startbp(f.blobs[preBreak].minx,f.blobs[preBreak].miny);
-    Point2f endbp(f.blobs[endBreak].minx,f.blobs[endBreak].miny);
-
-    d << "|      Start[ " << preBreak+sframe <<"]: Centroid" << startPos << " "
-      << "IHead" << f.heads[preBreak]+startbp << " "
-      << "ITail" << f.tails[preBreak]+startbp
-      << endl;
-    d << "|      End[ " << endBreak+sframe <<"]: Centroid" << endPos << " "
-      << "IHead" << f.heads[endBreak]+endbp << " "
-      << "ITail" << f.tails[endBreak]+endbp
-      << endl;
-
-    double sumHeadDist=0.0; //Distance to endpoint
-    double sumTailDist=0.0;
-    double sumHeadGrey=0.0; //Grey value sum
-    double sumTailGrey=0.0;
-    double sumHeadDiff=0.0; //Difference of current centroid
-                            //from previous endpoints
-    double sumTailDiff=0.0;
-    double sumHeadCnt=0.0;  //Distance covered by endpoint
-    double sumTailCnt=0.0;
-
-    for(size_t j=preBreak;j<=endBreak;j++)
-    {
-      Point2f bpPoint(f.blobs[j].minx,f.blobs[j].miny);
-      Point2f hPoint=filterPoint(f.heads,j,F,f.blobs);
-      Point2f tPoint=filterPoint(f.tails,j,F,f.blobs);
-      //Point2f hPoint=f.heads[j]+bpPoint;
-      //Point2f tPoint=f.tails[j]+bpPoint;
-      //sumHeadDist+=p2fdist(hPoint,endPos);
-      //sumTailDist+=p2fdist(tPoint,endPos);
-      sumHeadGrey+=f.heads_brightness[j];
-      sumTailGrey+=f.tails_brightness[j];
-      if(j>preBreak)
-      {
-        Point2f prebpPoint(f.blobs[j-1].minx,f.blobs[j-1].miny);
-        //Point2f prehPoint=f.heads[j-1]+prebpPoint;
-        Point2f prehPoint=filterPoint(f.heads,j-1,F,f.blobs);
-        Point2f pretPoint=filterPoint(f.tails,j-1,F,f.blobs);
-        //Point2f centroid(f.blobs[j].centroid.x,f.blobs[j].centroid.y);
-        Point2f centroid=filterCentroid(f.blobs,j,F);
-        Point2f midpoint=filterMidpoint(f.lrvDistances,j,F);
-        //Point2f midpoint=f.lrvDistances[j].MidPoint;
-        //sumHeadDiff+=p2fdist(centroid,prehPoint);
-        //sumTailDiff+=p2fdist(centroid,pretPoint);
-        sumHeadDiff+=p2fdist(midpoint,prehPoint);
-        sumTailDiff+=p2fdist(midpoint,pretPoint);
-        sumHeadCnt+=p2fdist(hPoint,prehPoint);
-        sumTailCnt+=p2fdist(tPoint,pretPoint);
-        /*BOOST_LOG_TRIVIAL(debug) << "HT: " << f.larva_ID << ", "
-                                 << prehPoint << ","
-                                 << midpoint << ","
-                                 << pretPoint;*/
-      }
-    }
-    double vote_for_nochange=0;
-    size_t duration=endBreak-preBreak;
-
-    if(sumHeadDiff/duration<sumTailDiff/duration) //If head was infront most of the time vote for nochange
-      vote_for_nochange+=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
-    else
-      vote_for_nochange-=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
-
-    if(sumHeadGrey/duration<sumTailGrey/duration) //If head was darker vote for no change
-      vote_for_nochange+=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
-    else
-      vote_for_nochange-=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
-
-    if(sumHeadCnt/duration>sumTailCnt/duration) //If head made more distance vote for no change
-      vote_for_nochange+=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
-    else
-      vote_for_nochange-=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
-
-    d << "|" << endl;
-    d << "|      LarvaID, GHead, HeadForward, HeadDistance, Duration, Votes" << endl;
-    d << "|      " <<f.larva_ID*1000 + i << "0, ";
-    d << sumHeadGrey/duration<< ", ";
-    d << sumHeadDiff/duration<< ", ";
-    d << sumHeadCnt/duration<< ", " << endBreak-preBreak <<", ";
-    d << (vote_for_nochange>=0) << ",0" << endl;
-    d << "|      LarvaID, GTail, TailForward, TailDistance, Duration, Votes" << endl;
-    d << "|      " <<f.larva_ID*1000 + i << "1, ";
-    d << sumTailGrey/duration<< ", ";
-    d << sumTailDiff/duration<< ", ";
-    d << sumTailCnt/duration<< ", " << endBreak-preBreak <<", ";
-    d << (vote_for_nochange<0) << ",1" << endl;
-    d << "|" << endl;
-
-    if(vote_for_nochange<0 && breaks.size()==1)
-    {
-      f.heads.swap(f.tails);
-    }
-    else if(vote_for_nochange<0)
-    {
-      for(size_t k=preBreak;k<=endBreak;k++)
-      {
-        cv::Point2f b=f.heads[k];
-        f.heads[k]=f.tails[k];
-        f.tails[k]=b;
-      }
-    }
-    d << "|      Start[ " << preBreak <<"]: Centroid" << startPos << " "
-      << "RHead" << f.heads[preBreak]+startbp << " "
-      << "RTail" << f.tails[preBreak]+startbp
-      << endl;
-    d << "|      End[ " << endBreak <<"]: Centroid" << endPos << " "
-      << "RHead" << f.heads[endBreak]+endbp << " "
-      << "RTail" << f.tails[endBreak]+endbp
-      << endl;
-    d << "|========================================= " << endl;
-  }
-  BOOST_LOG_TRIVIAL(debug) << d.str();
   }
   catch(...)
   {
@@ -3966,13 +3966,105 @@ void updateBlobSize(larvaObject &l,
   }
 }
 
+bool modelHeadTailRepair(larvaObject &l, lrvFit &f)
+{
+  Point2f bp(l.blobs[0].minx,l.blobs[0].miny);
+  double hh=p2fdist(f.spine[0],l.heads[0]+bp);
+  double ht=p2fdist(f.spine[0],l.tails[0]+bp);
+  double tt=p2fdist(f.spine.back(),l.tails[0]+bp);
+  double th=p2fdist(f.spine.back(),l.heads[0]+bp);
+  bool switched=false;
+  if(hh+tt>ht+th)
+    switched=true;
+
+  if(switched)
+  {
+    //Find longest consistent track and 
+    //change the shortest to match that
+    
+    //Length of track before model
+    larvaObject &pl=(reincarnations[f.ID].size()!=0) ? 
+      detected_larvae[reincarnations[f.ID].back()] :
+      detected_larvae[f.ID];
+
+    //TODO check the case where the Head/Tail are switched
+    //within model
+    size_t prelength=0;
+    auto preItHead=pl.heads.end();
+    auto preItTail=pl.tails.end();
+    for(auto b=pl.round_flag.rbegin();
+        b!=pl.round_flag.rend();b++)
+    {
+      preItHead--;
+      preItTail--;
+      if(!*b)
+        prelength++;
+      else
+        break;
+    }
+
+    size_t postlength=0;
+    auto postItHead=l.heads.begin();
+    for(auto b=l.round_flag.begin();b!=l.round_flag.end();b++)
+    {
+      postItHead++;
+      if(!*b)
+        postlength++;
+      else
+        break;
+    }
+
+    if(postlength>prelength && prelength < 2*VIDEO_FPS)
+    {
+      BOOST_LOG_TRIVIAL(debug) 
+        << "Head Tail doesn't match. Switching based on Post! Post Larva: " << l.larva_ID
+        << " model of: " << f.ID << " EndModel: " << l.start_frame
+        << endl;
+      std::reverse(f.spine.begin(),f.spine.end());
+      swap_ranges(preItHead,pl.heads.end(),preItTail);
+    }
+    if(prelength>postlength  && postlength < 2*VIDEO_FPS)
+    {
+      BOOST_LOG_TRIVIAL(debug) 
+        << "Head Tail doesn't match. Switching based on Pre! Post Larva: " << l.larva_ID
+        << " model of: " << f.ID << " EndModel: " << l.start_frame
+        << endl;
+      swap_ranges(l.heads.begin(),postItHead,l.tails.begin());
+    }
+
+  }
+  return true;
+}
+
 void collisionSearch()
 {
   int cid=0;
+  size_t COLLISIONS_RAW=0;
+  size_t COLLIDED_SINGLE_LARVA_IN_OBJECTS=0;
+  size_t COLLIDED_SINGLE_LARVA_OUT_OBJECTS=-1;
+  size_t COLLIDED_SINGLE_LARVAE_OUT=0;
+  size_t RESOLVED_BY_MODEL=0;
+  size_t PARTIAL_RESOLVED_BY_MODEL=0;
+  size_t ASSIGNMENTS_BY_MODEL=0;
   for(auto &p:detected_larvae)
   {
     if(p.second.isCluster && parent_blobs[p.first].size()>0)
     {
+      if(parent_blobs[p.first].size()>1)
+        COLLISIONS_RAW++;
+      if(any_of(parent_blobs[p.first].begin(),
+                parent_blobs[p.first].end(),
+                [](size_t i){return detected_larvae[i].isCluster==false;}))
+        COLLIDED_SINGLE_LARVA_IN_OBJECTS++;
+
+      size_t newlarvaeout=count_if(children_blobs[p.first].begin(),
+                children_blobs[p.first].end(),
+                [](size_t i){return detected_larvae[i].isCluster==false;});
+        COLLIDED_SINGLE_LARVAE_OUT+=newlarvaeout;
+
+        if(newlarvaeout>0)
+          COLLIDED_SINGLE_LARVA_OUT_OBJECTS++;
+
       //exclude cases with more than 2 in/out larvae
       if(parent_blobs[p.first].size()==1)
         std::cout << "Parentblobs of: " << p.first << " has size 1!!!" << endl;
@@ -3982,14 +4074,17 @@ void collisionSearch()
       if(parent_blobs[p.first].size()!=2 || children_blobs[p.first].size()!=2)
         continue;
       //exclude those collisions between clusters, we don't do this
-      if(any_of(parent_blobs[p.first].begin(),
+      if(all_of(parent_blobs[p.first].begin(),
+      //if(any_of(parent_blobs[p.first].begin(),
                 parent_blobs[p.first].end(),
                 [](size_t i){return detected_larvae[i].isCluster==true;})
         )
+      {
         continue;
+      }
       larvaObject &l=p.second;
       //exclude long collisions
-      if(l.lastFrameWithStats-l.start_frame > 600 )
+      if(l.lastFrameWithStats-l.start_frame > LRVTRACK_MODEL_DURATION*VIDEO_FPS)
         continue;
       //Eliminate those cases with wrong initial shape
       if(any_of(parent_blobs[p.first].begin(),
@@ -4000,7 +4095,16 @@ void collisionSearch()
       //Try to model the rest
       stringstream n;
       //n << "modelOutput" << cid++ << ".avi";
-      larvaeModels.emplace_back(parent_blobs[p.first],
+      vector<size_t> parent_larvae(parent_blobs[p.first].size());
+      auto it = std::copy_if (parent_blobs[p.first].begin(), 
+                              parent_blobs[p.first].end(), 
+                              parent_larvae.begin(), 
+                              [](size_t i){
+                              return !detected_larvae[i].isCluster;
+                              } );
+      parent_larvae.resize(std::distance(parent_larvae.begin(),it));
+      larvaeModels.emplace_back(parent_larvae,
+      //larvaeModels.emplace_back(parent_blobs[p.first],
                        l.blobs[0],
                        l.start_frame,
                        l.lastFrameWithStats);
@@ -4039,32 +4143,86 @@ void collisionSearch()
       }
       //modelOut.release();
       //Temporary assignment for testing
-      lrvFit &fit1 = C.larvae_models[0].back();
-      lrvFit &fit2 = C.larvae_models[1].back();
-      CvPoint2D64f cl1=detected_larvae[children_blobs[p.first][0]].blobs[0].centroid;
-      CvPoint2D64f cl2=detected_larvae[children_blobs[p.first][1]].blobs[0].centroid;
-      double da1=p2fdist(fit1.spine[5],cl1);
-      double da2=p2fdist(fit2.spine[5],cl2);
-      double db1=p2fdist(fit1.spine[5],cl2);
-      double db2=p2fdist(fit2.spine[5],cl1);
-      if(da1+da2<db1+db2)
+      if(C.larvae_models.size()==2)
       {
-        detected_larvae[children_blobs[p.first][0]].updated_ID=
-          fit1.ID;
-        detected_larvae[children_blobs[p.first][1]].updated_ID=
-          fit2.ID;
+        lrvFit &fit1 = C.larvae_models[0].back();
+        lrvFit &fit2 = C.larvae_models[1].back();
+        CvPoint2D64f cl1=detected_larvae[children_blobs[p.first][0]].blobs[0].centroid;
+        CvPoint2D64f cl2=detected_larvae[children_blobs[p.first][1]].blobs[0].centroid;
+        double da1=p2fdist(fit1.spine[5],cl1);
+        double da2=p2fdist(fit2.spine[5],cl2);
+        double db1=p2fdist(fit1.spine[5],cl2);
+        double db2=p2fdist(fit2.spine[5],cl1);
+        if(da1+da2<db1+db2)
+        {
+          reincarnations[fit1.ID].push_back(children_blobs[p.first][0]);
+          reincarnations[fit2.ID].push_back(children_blobs[p.first][1]);
+          //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit1);
+          //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit2);
+          detected_larvae[children_blobs[p.first][0]].updated_ID=
+            fit1.ID;
+          detected_larvae[children_blobs[p.first][1]].updated_ID=
+            fit2.ID;
+        }
+        else
+        {
+          reincarnations[fit2.ID].push_back(children_blobs[p.first][0]);
+          reincarnations[fit1.ID].push_back(children_blobs[p.first][1]);
+          //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit1);
+          //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit2);
+          detected_larvae[children_blobs[p.first][0]].updated_ID=
+            fit2.ID;
+          detected_larvae[children_blobs[p.first][1]].updated_ID=
+            fit1.ID;
+        }
+
+        RESOLVED_BY_MODEL++;
+        ASSIGNMENTS_BY_MODEL+=2;
+        C.SUCCESS=true;
       }
-      else
+      if(C.larvae_models.size()==1)
       {
-        detected_larvae[children_blobs[p.first][0]].updated_ID=
-          fit2.ID;
-        detected_larvae[children_blobs[p.first][1]].updated_ID=
-          fit1.ID;
+        lrvFit &fit1 = C.larvae_models[0].back();
+        CvPoint2D64f cl1=detected_larvae[children_blobs[p.first][0]].blobs[0].centroid;
+        CvPoint2D64f cl2=detected_larvae[children_blobs[p.first][1]].blobs[0].centroid;
+        double da1=p2fdist(fit1.spine[5],cl1);
+        double db1=p2fdist(fit1.spine[5],cl2);
+        if(da1<db1 && !detected_larvae[children_blobs[p.first][0]].isCluster)
+        {
+          reincarnations[fit1.ID].push_back(children_blobs[p.first][0]);
+          //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit1);
+          detected_larvae[children_blobs[p.first][0]].updated_ID=
+            fit1.ID;
+          PARTIAL_RESOLVED_BY_MODEL++;
+          ASSIGNMENTS_BY_MODEL++;
+          C.SUCCESS=true;
+        }
+        else if ( da1>db1 && !detected_larvae[children_blobs[p.first][1]].isCluster)
+        {
+          reincarnations[fit1.ID].push_back(children_blobs[p.first][1]);
+          //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit1);
+          detected_larvae[children_blobs[p.first][1]].updated_ID=
+            fit1.ID;
+          PARTIAL_RESOLVED_BY_MODEL++;
+          ASSIGNMENTS_BY_MODEL++;
+          C.SUCCESS=true;
+        }
+        else
+        {
+          C.SUCCESS=false;
+        }
       }
       cid++;
       std::cerr << endl;
     }
   }
+  BOOST_LOG_TRIVIAL(debug) << "COLLISIONS RAW: " <<  COLLISIONS_RAW << endl
+    << "COLLIDED_SINGLE_LARVA_IN_OBJECTS:" << COLLIDED_SINGLE_LARVA_IN_OBJECTS << endl
+    << "COLLIDED_SINGLE_LARVA_OUT_OBJECTS:" << COLLIDED_SINGLE_LARVA_OUT_OBJECTS << endl
+    << "COLLIDED_SINGLE_LARVAE_OUT:" << COLLIDED_SINGLE_LARVAE_OUT << endl
+    << "RESOLVED_BY_MODEL:" << RESOLVED_BY_MODEL << endl
+    << "PARTIAL_RESOLVED_BY_MODEL:" << PARTIAL_RESOLVED_BY_MODEL << endl
+    << "ASSIGNMENTS_BY_MODEL:" << ASSIGNMENTS_BY_MODEL << endl;
 }
 
 void secondPass()
@@ -4134,14 +4292,16 @@ int main(int argc, char* argv[])
 
 #ifdef LRVTRACK_WITH_CUDA
   gpu::printShortCudaDeviceInfo(gpu::getDevice());
-#elif defined(LRVTRACK_WITH_OPENCL)
-  std::cout << "Using OPENCL: " <<  ocl::useOpenCL() << endl;
-/* ocl::DevicesInfo oclinfo;
-  ocl::getOpenCLDevices(oclinfo);
-  cout << "Found " << oclinfo.size() << " OpenCL devices. Using: ";
-  cout << oclinfo[1]->deviceName << endl;
-  ocl::setDevice(oclinfo[1]);*/
+//#elif defined(LRVTRACK_WITH_OPENCL)
 #endif
+  std::cout << "Using OPENCL: " <<  ocl::useOpenCL() << endl;
+  if( ocl::useOpenCL())
+  {
+    ocl::Device oclD;
+    oclD=oclD.getDefault();
+    cout << "OpenCL device: " << oclD.name() << endl;
+  }
+//#endif
   // Initialize video capture device
   VideoCapture capture;
   // Handle command line arguments

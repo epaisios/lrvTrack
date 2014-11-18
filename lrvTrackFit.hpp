@@ -81,7 +81,6 @@ class lrvFit
   private:
     size_t orig_width;
     size_t orig_length;
-    std::vector<Point> cpoints;
     std::vector<Point2f> intSpine;
     vector<double> ga;
     vector<double> a1;
@@ -94,6 +93,8 @@ class lrvFit
     size_t PAD=10;
   public:
     std::vector<Point2f> spine;
+    std::vector<Point2f> contour;
+    std::vector<Point> cpoints;
     size_t ID;
     size_t minx;
     size_t maxx;
@@ -114,6 +115,16 @@ class lrvFit
         Point &cl,
         Point &cr);
 
+    void calculateContour2f();
+
+    void calculateContourPoint2f(Point2f &a,
+        Point2f &b,
+        Point2f &c,
+        double b_index,
+        double width,
+        Point2f &cl,
+        Point2f &cr);
+
     void calculateContourPoints(Point2f &a,
         Point2f &b,
         Point2f &c,
@@ -122,6 +133,14 @@ class lrvFit
         double width,
         Point &cl,
         Point &cr);
+
+    void csvLine(size_t CURRENT_FRAME, 
+        size_t SFRAME,
+        size_t EFRAME,
+        size_t VIDEO_FPS, 
+        cv::Point2f &cc, 
+        double ppm, 
+        std::string &csvline);
 
     void paintPoly(Mat &ROI, std::vector<Point> f,size_t fsize);
     void generate(std::vector<fitData> &l);
@@ -171,6 +190,7 @@ ostream& operator<<(ostream& cout,lrvFit &obj);
 
 class collisionModel {
   public:
+  bool SUCCESS;
   size_t SFRAME;
   size_t EFRAME;
   void createBg(int exclude,size_t FRAME,Mat &bg);

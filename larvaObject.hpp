@@ -153,6 +153,11 @@ public:
   std::vector<double> tails_brightness;
 
   std::vector<bool> round_flag;
+  void csvLine(size_t CURRENT_FRAME, 
+      size_t VIDEO_FPS, 
+      cv::Point2f &cc, 
+      double ppm, 
+      std::string &csvline);
 
   larvaObject():
     start_frame(0),

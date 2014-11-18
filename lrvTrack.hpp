@@ -16,6 +16,7 @@
 #elif defined(LRVTRACK_WITH_OPENCL)
 #include <opencv2/core/ocl.hpp>
 #endif
+#include <opencv2/core/ocl.hpp>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
@@ -44,7 +45,7 @@ std::string VIDEO_TYPE=".avi";
 //int VIDEO_CODEC=CV_FOURCC('H', 'D', 'Y', 'C');
 //int VIDEO_CODEC=CV_FOURCC('H','F','Y','U');
 //int VIDEO_CODEC=CV_FOURCC('L','A','G','S');
-int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
+//int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
 //int VIDEO_CODEC=CV_FOURCC('I', '4', '2', '0');
 //int VIDEO_CODEC=CV_FOURCC('J', 'P', 'G', 'L');
 //int VIDEO_CODEC=CV_FOURCC('Y', 'U', 'V', '4');
@@ -53,7 +54,7 @@ int VIDEO_CODEC=CV_FOURCC('I', 'Y', 'U', 'V');
 //int VIDEO_CODEC=CV_FOURCC('H','2','6','4');
 //int VIDEO_CODEC=CV_FOURCC('S','V','Q','3');
 //int VIDEO_CODEC=CV_FOURCC('M','P','4','S');
-//int VIDEO_CODEC=CV_FOURCC('M','J','P','G');
+int VIDEO_CODEC=CV_FOURCC('M','J','P','G');
 //int VIDEO_CODEC=CV_FOURCC('F','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('L','M','P','4');
 //int VIDEO_CODEC=CV_FOURCC('M','P','4','2');
@@ -86,10 +87,15 @@ int  LRVTRACK_CONTOUR_RESOLUTION=150;
 size_t LRVTRACK_MIN_OBJ_SIZE=20;
 size_t LRVTRACK_MAX_OBJ_SIZE=1200;
 size_t LRVTRACK_THREADS=8;
+size_t LRVTRACK_MIN_OUTPUT_DURATION=80;
+size_t LRVTRACK_FRAME_WIDTH=0;
+size_t LRVTRACK_FRAME_HEIGHT=0;
+double LRVTRACK_MODEL_DURATION=3.5;
 double LRVTRACK_GAMMA=1.0;
 double LRVTRACK_BRIGHTNESS=0.0;
 double LRVTRACK_CONTRAST=1.0;
 double LRVTRACK_SMOOTHING=2.0;
+double LRVTRACK_MPP=0.129;
 bool LRVTRACK_USE_MODEL=false;
 bool LRVTRACK_INVERT=false;
 bool LRVTRACK_PARALLEL=false;
@@ -126,6 +132,7 @@ size_t FRAME_ROWS;
 std::map<size_t, std::vector<size_t> > parent_blobs;
 std::map<size_t, std::vector<size_t> > children_blobs;
 std::map<size_t,larvaObject> detected_larvae;
+std::map<size_t,std::vector<size_t> > reincarnations;
 std::vector<collisionModel> larvaeModels;
 
 std::vector<size_t> lost_larvae;

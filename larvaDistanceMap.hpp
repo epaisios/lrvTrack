@@ -120,6 +120,16 @@ void fixContour(
     std::vector<cv::Point2f> *tails=NULL,
     std::vector<cvb::CvBlob> *blobs=NULL);
 
+void fixContourSimple(
+    cvb::CvBlob &blob,
+    larvaDistanceMap &Distances,
+    size_t RES,
+    cv::Mat &frame,
+    cv::Mat &previousFrame,
+    std::vector<cv::Point2f> *heads=NULL,
+    std::vector<cv::Point2f> *tails=NULL,
+    std::vector<cvb::CvBlob> *blobs=NULL);
+
 void computeSpine(
     cvb::CvBlob &blob,
     larvaDistanceMap &Distances,

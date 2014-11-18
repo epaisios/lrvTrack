@@ -76,6 +76,36 @@ class optimizeBody
     }
 };
 
+/*void collisionModel::csvLine(size_t CURRENT_FRAME, 
+                          size_t VIDEO_FPS, 
+                          cv::Point2f &cc, 
+                          double ppm, 
+                          std::map<size_t , std::string> &csvlines)
+{
+  if(SFRAME<CURRENT_FRAME || EFRAME>CURRENT_FRAME)
+    return;
+  for(auto &l: larvae_models)
+  {
+    size_t c_index=CURRENT_FRAME-SFRAME;
+    stringstream data;
+
+    data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+    int i=0;
+    for (auto &s : l[c_index].spine)
+    {
+      data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
+    }
+    for (auto &s : l[c_index].cpoints)
+    {
+        data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
+    }
+    data << (l[c_index].spine[5].x-cc.x)*ppm << ","
+      << (-l[c_index].spine[5].y+cc.x)*ppm << ",";
+    data << 2;
+    data << endl;
+    csvlines[l[c_index].ID] = data.str();
+  }
+}*/
 
 collisionModel::collisionModel(std::vector<size_t> clarvae,
                                     cvb::CvBlob &blob,
@@ -133,8 +163,8 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
     lrv++;
   }
   frameError[0]=modelError(CollisionROI,CollisionObj);
-  Mat exp;
-  tile2same(CollisionROI,CollisionObj,exp);
+  //Mat exp;
+  //tile2same(CollisionROI,CollisionObj,exp);
   /*imshow("Model Outcome",exp);
   waitKey(1);*/
 }
@@ -175,13 +205,10 @@ void collisionModel::updateModel(cvb::CvBlob &blob,size_t FRAME,Mat &ret)
   size_t idx=0;
   for(auto &cm: larvae_models)
   {
-    Mat dbg1;
     lrvFit &c=cm[FRAME-SFRAME];
     lrvFit &pc=cm[FRAME-SFRAME-1];
     c=pc;
-    c.createMatfromFit(dbg1);
     c.changeBaseCoords(blob.minx,blob.maxx,blob.miny,blob.maxy);
-    c.createMatfromFit(dbg1);
   }
   for(auto &cm: larvae_models)
   {
@@ -191,6 +218,15 @@ void collisionModel::updateModel(cvb::CvBlob &blob,size_t FRAME,Mat &ret)
     lrvFit &c=cm[FRAME-SFRAME];
     createBg(c.ID,FRAME,bg);
 
+    if(bg.empty())
+    {
+      Mat fg;
+      f.copyTo(bg);
+      c.createMatfromFit(fg);
+      dilate(fg,fg,Mat(),Point(-1,-1),2);
+      bitwise_not (fg,fg);
+      bitwise_and(bg,fg,bg);
+    }
     //c.createMatfromFit(pl,bg);
     c.optimize(f,bg,ret);
     c.createMatfromFit(pl);
@@ -232,6 +268,37 @@ ostream& operator<<(ostream& os,lrvFit &l)
         l.larvaFitData.global_angle << ", as:" <<
         printVector(l.larvaFitData.angles) << "]";
   return os;
+}
+
+void lrvFit::csvLine(size_t CURRENT_FRAME, 
+                          size_t SFRAME,
+                          size_t EFRAME,
+                          size_t VIDEO_FPS, 
+                          cv::Point2f &cc, 
+                          double ppm, 
+                          std::string &csvline)
+{
+  calculateContour2f();
+  if(SFRAME>CURRENT_FRAME || EFRAME<CURRENT_FRAME)
+    return;
+  size_t c_index=CURRENT_FRAME-SFRAME;
+  stringstream data;
+
+  data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+  int i=0;
+  for (auto &s : spine)
+  {
+    data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
+  }
+  for (auto &s : contour)
+  {
+    data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";
+  }
+  data << (spine[5].x-cc.x)*ppm << ","
+    << (-spine[5].y+cc.x)*ppm << ",";
+  data << 2;
+  data << endl;
+  csvline = data.str();
 }
 
 void lrvFit::paintPoly(Mat &ROI, vector<Point> f,size_t fsize)
@@ -440,7 +507,7 @@ double lrvFit::optimize(Mat &ref)
     for(auto i=fitSpace.begin();i!=fitSpace.end();++i)
     {
       larvaFitData=*i;
-      cout << *this << endl;
+      //cout << *this << endl;
       double r=errorFunc(ref);
 
       if(r<minerr)
@@ -484,7 +551,7 @@ double lrvFit::optimizeAndReturn(Mat &ref,Mat &ret)
     for(auto i=fitSpace.begin();i!=fitSpace.end();++i)
     {
       larvaFitData=*i;
-      cout << *this << endl;
+      //cout << *this << endl;
       double r=errorFunc(ref);
 
       if(r<minerr)
@@ -518,7 +585,7 @@ double lrvFit::optimize(Mat &ref,Mat &bg, Mat &ret)
     for(auto i=fitSpace.begin();i!=fitSpace.end();++i)
     {
       larvaFitData=*i;
-      cout << *this << endl;
+      //cout << *this << endl;
       double r=errorFunc(ref,bg);
 
       if(r<minerr)
@@ -561,7 +628,7 @@ double lrvFit::optimize(Mat &ref,Mat &bg)
     for(auto i=fitSpace.begin();i!=fitSpace.end();++i)
     {
       larvaFitData=*i;
-      cout << *this << endl;
+      //cout << *this << endl;
       double r=errorFunc(ref,bg);
 
       if(r<minerr)
@@ -644,18 +711,18 @@ void lrvFit::setup(larvaObject &l,
   angles[1]=((l.lrvDistances.back().Angles[3]));
   angles[2]=((l.lrvDistances.back().Angles[5]));
   angles[3]=((l.lrvDistances.back().Angles[7]));*/
-  angles[0]=angleD(l.lrvDistances.back().Spine[4],
-                   l.lrvDistances.back().Spine[2],
-                   l.lrvDistances.back().Spine[0]);
-  angles[1]=angleD(l.lrvDistances.back().Spine[6],
-                   l.lrvDistances.back().Spine[4],
-                   l.lrvDistances.back().Spine[2]);
-  angles[2]=angleD(l.lrvDistances.back().Spine[8],
-                   l.lrvDistances.back().Spine[6],
-                   l.lrvDistances.back().Spine[4]);
-  angles[3]=angleD(l.lrvDistances.back().Spine[6],
-                   l.lrvDistances.back().Spine[8],
-                   l.lrvDistances.back().Spine[11]);
+  angles[0]=angleD(spine[4],
+                   spine[2],
+                   spine[0]);
+  angles[1]=angleD(spine[6],
+                   spine[4],
+                   spine[2]);
+  angles[2]=angleD(spine[8],
+                   spine[6],
+                   spine[4]);
+  angles[3]=angleD(spine[6],
+                   spine[8],
+                   spine[11]);
   larvaFitData=fitData(spine[8],
                         length,
                         width/2,
@@ -793,10 +860,10 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
   vector<vector<Point> > C;
   C.push_back(cpoints);
   fillPoly(tmp,C,Scalar(255));
-  for(size_t i=1;i<spine.size();i++)
+  /*for(size_t i=1;i<spine.size();i++)
   {
     line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));
-  }
+  }*/
   larvaFitContour = tmp | fitBase;
 }
 
@@ -838,10 +905,10 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
   size_t csz=cpoints.size();
   const Point *p=&cpoints[0];
   fillPoly(tmp,(const Point **) &p,(int *) &csz,1,Scalar(255));
-  for(size_t i=1;i<spine.size();i++)
+  /*for(size_t i=1;i<spine.size();i++)
   {
     line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));
-  }
+  }*/
   tmp.copyTo(larvaFitContour);
 }
 
@@ -1014,3 +1081,105 @@ void lrvFit::calculateContourPoints(Point2f &a,
   }
 }
 
+void lrvFit::calculateContour2f()
+{
+  contour.resize((spine.size()*2)-2);
+  contour[0]=spine[0];
+  contour[spine.size()-1]=spine.back();
+  Point2f bp(minx-PADDING,miny-PADDING);
+  for(auto i=1;i<spine.size()-1;i++)
+  {
+    calculateContourPoint2f(spine[i-1],
+                           spine[i],
+                           spine[i+1],
+                           (double) i/spine.size(),
+                           larvaFitData.width,
+                           contour[i],
+                           contour[contour.size()-i]);
+  }
+
+}
+
+void lrvFit::calculateContourPoint2f(Point2f &a,
+                            Point2f &b,
+                            Point2f &c,
+                            double b_index,
+                            double width,
+                            Point2f &cl,
+                            Point2f &cr)
+{
+  //Make b our reference point
+  Point2f r=a-b;
+  Point2f f=c-b;
+  Point2f sp=r+f;
+  Point2f lPoint,rPoint;
+  width=w(b_index)*width;
+  if(fabs(sp.x)<0.0001 && fabs(sp.y)<0.0001) // On the same line
+  {
+    //We need the perpendicular vector
+    if (r.x!=0 && r.y!=0)
+    {
+      double pslope=-r.x/r.y;
+      double xc1=sqrt((width*width)/(1+pslope*pslope));
+      lPoint.x=xc1;
+      lPoint.y=pslope*xc1;
+      rPoint.x=-xc1;
+      rPoint.y=-pslope*xc1;
+    }
+    else if(r.x==0 && r.y==0)
+    {
+      cerr << "Weird case" << endl;
+      exit(0);
+    }
+    else if(r.x==0)
+    {
+      lPoint.x=width;
+      lPoint.y=0;
+      rPoint.x=-width;
+      rPoint.y=0;
+    }
+    else if(r.y==0)
+    {
+      lPoint.x=0;
+      lPoint.y=width;
+      rPoint.x=0;
+      rPoint.y=-width;
+    }
+
+  }
+  else
+  {
+    double ratio=width/sqrt(sp.x*sp.x+sp.y*sp.y);
+    lPoint.x=ratio*sp.x;
+    lPoint.y=ratio*sp.y;
+    rPoint.x=-lPoint.x;
+    rPoint.y=-lPoint.y;
+  }
+
+  double avals[4]={atan2f(r.y,r.x),
+                    atan2f(-r.y,-r.x),
+                    atan2f(rPoint.y,rPoint.x),
+                    atan2f(lPoint.y,lPoint.x)};
+  if(avals[0]<0)
+    avals[0]=2*CV_PI+avals[0];
+  if(avals[1]<0)
+    avals[1]=2*CV_PI+avals[1];
+  if(avals[2]<0)
+    avals[2]=2*CV_PI+avals[2];
+  if(avals[3]<0)
+    avals[3]=2*CV_PI+avals[3];
+  if((avals[2]>avals[0] || avals[2]<avals[1]) &&
+     (avals[3]<avals[0] || avals[3]>avals[1]))
+  {
+    //points are correct lPoint is to the left, rPoint is to the right
+    cl=lPoint+b;
+    cr=rPoint+b;
+  }
+  else if((avals[2]<=avals[0] || avals[2]>=avals[1]) &&
+          (avals[3]>=avals[0] || avals[3]<=avals[1]))
+  {
+    //points are reverse lPoint is to the left, rPoint is to the right
+    cl=rPoint+b;
+    cr=lPoint+b;
+  }
+}
