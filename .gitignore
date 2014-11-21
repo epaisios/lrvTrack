@@ -1,6 +1,7 @@
 lrvTrack
 src/*.swp
 *.swp
+*.pyc
 src/.DS_Store
 .DS_Store
 src/alglib/*
