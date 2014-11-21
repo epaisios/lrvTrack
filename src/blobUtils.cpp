@@ -985,7 +985,7 @@ void getBestCurvatureS(std::vector<float> &curv,
   //g1.plot_xy(idx,c,"curvature smoothened");
   //wait_for_key();
 
-  size_t dmaxsz=0;
+  //size_t dmaxsz=0;
   /*for(std::map<float,size_t>::reverse_iterator rit=curvatures.rbegin();
       rit!=curvatures.rend();rit++)
   {
@@ -1004,8 +1004,8 @@ void getBestCurvatureS(std::vector<float> &curv,
   double min=curv[0];
   for(size_t i=1;i<c.size();i++)
   {
-    double vp=c[i-1];
-    double va=c[i];
+    //double vp=c[i-1];
+    //double va=c[i];
     
     if(curv[i]>max)
       max=curv[i];
@@ -1286,7 +1286,6 @@ void spline3(std::vector<cv::Point2f> &cp,
   for (int i=0;i<RES;i++)
   {
     t=t0+i*step;
-    double x,y;
     //double dx,dy;
     //double d2x,d2y;
     //pspline2calc(p,t,x,y);
@@ -1329,7 +1328,7 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::integer_1d_array inu;
   inu.setlength(0);
   nu.setlength(0);
-  alglib::ae_int_t ink=0;                     
+  //alglib::ae_int_t ink=0;                     
   size_t extra=5;
   x.setlength(m+2*extra);                          
   y.setlength(m+2*extra);                          
@@ -1422,7 +1421,7 @@ void spline2(std::vector<cv::Point2f> &cp,
 {
   alglib::real_2d_array xy;
   xy.setlength(n+2,2);
-  int rot=10;
+  //int rot=10;
   //xyrot.setlength(n+2,2);
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;

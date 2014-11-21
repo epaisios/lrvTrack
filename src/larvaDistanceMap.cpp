@@ -48,9 +48,9 @@ void lBFS(int p1,
       Q.pop();
       for(size_t i=0; i<Points.size() ; ++i)
         {
-          PointPair cur_pi = PointPair(Points[cur],Points[i]);
+          //PointPair cur_pi = PointPair(Points[cur],Points[i]);
           PointPair p1_pi= PointPair(Points[p1],Points[i]);
-          PointPair p1_cur= PointPair(Points[p1],Points[cur]);
+          //PointPair p1_cur= PointPair(Points[p1],Points[cur]);
           if (Distances[cur][i]>0)
             {
               if (Distances[p1][i]<0)
@@ -191,7 +191,7 @@ void getArcSimple(size_t A,
 {
   size_t I=A;
   int step;
-  size_t contour_size=contour.size();
+  //size_t contour_size=contour.size();
   if(left)
     step=-1;
   else
@@ -1043,16 +1043,16 @@ void getCandidateSpine(cvb::CvBlob &blob,
   double cdist=0.0;
   cv::Point2f pp=cSpine[0];
   cv::Point2f mp=cSpine[1];
-  size_t idx=0;
+  //size_t idx=0;
   double wMax=0.0;
-  double maxDist=100;
+  //double maxDist=100;
   candidateMap.Spine.push_back(cSpine[0]);
 
   //for(int idx=2;idx<cSpine.size()-1;idx++)
   for(int idx=1;idx<cSpine.size()-1;idx++)
   {
     cv::Point2f &p=cSpine[idx];
-    cv::Point2f &np=cSpine[idx+1];
+    //cv::Point2f &np=cSpine[idx+1];
     double ndist=cdist+p2fdist(pp,p);
     cdist+=p2fdist(pp,p);
     if(ndist>distanceStep)
@@ -1413,7 +1413,7 @@ void fixContourSimple(
     std::vector<cv::Point2f> *tails,
     std::vector<cvb::CvBlob> *blobs)
 {
-  int ID=blob.label;
+  //int ID=blob.label;
   std::vector<cv::Point2f> ppoints;
   std::vector<cv::Point2f> xpoints;
   std::vector<float> centripetal;
@@ -1447,8 +1447,8 @@ void fixContourSimple(
              );
   cv::Mat cROI,final;
   ROI.copyTo(cROI);
-  float wmin=FLT_MAX;
-  float wmax=FLT_MIN;
+  //float wmin=FLT_MAX;
+  //float wmax=FLT_MIN;
 
   for(size_t i=0;i<xpoints.size();i++)
   {
@@ -1553,7 +1553,7 @@ for(auto &pair: Distances.spinePairs)
     i=0;
     std::vector<float> c;
     std::vector<float> c_tmp;
-    int sf=21;
+    //int sf=21;
     std::vector<double> idx;
   }
 if(Distances.Spine.size()==0)
@@ -1563,7 +1563,7 @@ if(Distances.Spine.size()==0)
   Distances.Spine.resize(2);
   return;
 }
-  double cvariance;
+  double cvariance=0.0;
   Distances.MaxDistPoints.first=Distances.Spine.front();
   Distances.MaxDistPoints.second=Distances.Spine.back();
   Distances.p20.x=Distances.Spine[2].x;
@@ -1585,7 +1585,7 @@ void fixContour(
     std::vector<cv::Point2f> *tails,
     std::vector<cvb::CvBlob> *blobs)
 {
-  int ID=blob.label;
+  //int ID=blob.label;
   std::vector<cv::Point2f> cntPoints;
   std::vector<cv::Point2f> tmpPoints;
   std::vector<cv::Point2f> ppoints;
@@ -1623,8 +1623,8 @@ void fixContour(
           )
         );
     cv::Mat d1,d2;
-    double diff1,diff2;
-    double total1, total2;
+    //double diff1,diff2;
+    //double total1, total2;
     d1=ROI-pROI;
     d2=pROI-ROI;
     cv::Mat pcROI;
@@ -1653,7 +1653,7 @@ void fixContour(
   //xpoints.push_back(xpoints[1]);
   /*xpoints.push_back(xpoints[2]);*/
   std::vector<float> w;
-  float AvgGrVal=0.0;
+  //float AvgGrVal=0.0;
   std::vector<float> dx;
   std::vector<float> dy;
   std::vector<float> d2x;
@@ -1890,7 +1890,7 @@ for(auto &pair: Distances.spinePairs)
     i=0;
     std::vector<float> c;
     std::vector<float> c_tmp;
-    int sf=21;
+    //int sf=21;
     std::vector<double> idx;
     /*for(size_t i=0;i<vcurv.size();i++)
     {

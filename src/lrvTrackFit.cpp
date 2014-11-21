@@ -281,11 +281,11 @@ void lrvFit::csvLine(size_t CURRENT_FRAME,
   calculateContour2f();
   if(SFRAME>CURRENT_FRAME || EFRAME<CURRENT_FRAME)
     return;
-  size_t c_index=CURRENT_FRAME-SFRAME;
+  //size_t c_index=CURRENT_FRAME-SFRAME;
   stringstream data;
 
   data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
-  int i=0;
+  //int i=0;
   for (auto &s : spine)
   {
     data << (s.x-cc.x)*ppm << "," << (-s.y+cc.y)*ppm <<",";

@@ -35,13 +35,13 @@ import ycm_core
 # compilation database set (by default, one is not set).
 # CHANGE THIS LIST OF FLAGS. YES, THIS IS THE DROID YOU HAVE BEEN LOOKING FOR.
 flags = [
+'-I.',
 '-I/opt/clang+llvm-3.4.1-x86_64-apple-darwin10.9/include',
 '-I/opt/clang+llvm-3.4.1-x86_64-apple-darwin10.9/lib/clang/3.4.1/include',
-'-I/opt/opencv/3.0.0-alpha/include/opencv',
-'-I/opt/opencv/3.0.0-alpha/include/opencv2',
-'-I/opt/opencv/3.0.0-alpha/include',
+'-I/opt/opencv/current/include/opencv',
+'-I/opt/opencv/current/include/opencv2',
+'-I/opt/opencv/current/include',
 '-I/usr/local/include',
-'-I.',
 '-Wall',
 # For a C project, you would set this to something like 'c99' instead of
 # 'c++11'.

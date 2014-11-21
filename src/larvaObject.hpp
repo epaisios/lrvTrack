@@ -188,11 +188,11 @@ public:
     width_sum(0),
     width_max(0),
     width_min(0),
-    round_flag(false),
     minHTDist_mean(0),
     minHTDist_sum(0),
     centroid_distance_x_sum(0),
-    centroid_distance_y_sum(0)
+    centroid_distance_y_sum(0),
+    round_flag(false)
   {}
   
   void dump() const;

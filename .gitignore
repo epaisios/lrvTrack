@@ -1,9 +1,10 @@
 lrvTrack
-tmp/
-tmp/*
-results/*
+src/*.swp
 *.swp
+src/.DS_Store
 .DS_Store
-alglib/*
-cvBlob/*
+src/alglib/*
+src/cvBlob/*
+src/gnuplot_i.hpp
 gnuplot_i.hpp
+build/*

@@ -8,6 +8,7 @@
 #include <boost/timer/timer.hpp>
 #include <iomanip>
 #include <numeric>
+#include <vector>
 #include <string>
 #include "lrvTrack.hpp"
 #include "cvblob.h"

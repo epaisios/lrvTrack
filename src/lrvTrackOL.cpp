@@ -1,7 +1,9 @@
 #include "lrvTrackOL.hpp"
+#include "lrvTrackConfig.h"
 #include "lrvTrackPartitionGenerator.hpp"
 #include <boost/tokenizer.hpp>
 #include <numeric>
+#include <vector>
 
 using namespace lrvTrack;
 
@@ -2412,6 +2414,40 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
     }
 }
 
+void ContourLarvaeTrack(cvb::CvBlobs &In,
+                    cvb::CvBlobs &Prev,
+                    cvb::CvBlobs &out)
+{
+  //Stores the assignments of a blob in 'In' (with the ID's given from
+  //the blob extraction routine) to either larvae from Prev or to new ids
+  //if there is a simple continuation.
+  assignedNew.clear();
+  
+  //Stores the actual assignments of a blob in the previous frame
+  //to a vector of blobs in the new frame
+  assignedPrevious.clear();
+  
+  //Map showing how many blobs in the new (In) set match
+  //the given blob from the previous frame
+  assignedPreMap.clear();
+  //TODO: I think this is not used anymore and can be removed.
+  //Stores all the new IDs assigned to larvae on this frame
+  newInFrame.clear();
+
+  //First step:
+  // Check larvae from the new frame matching contours of larvae in the previous
+  // frame.
+
+  for(auto &new_blob_p:In)
+  {
+    cvb::CvBlob &new_blob=*new_blob_p.second;
+    size_t new_blob_id=new_blob.label;
+    for(auto &pre_blob_p:Prev)
+    {
+    }
+  }
+
+}
 
 
 /*
@@ -3223,7 +3259,7 @@ int handle_args(int argc, char* argv[])
         }
       if (vm.count("version"))
         {
-          cout << "NO VERSION YET" << "\n";
+          cout << LRVTRACK_VERSION_MAJOR << "." << LRVTRACK_VERSION_MINOR << "\n";
           exit(1);
         }
       if (vm.count("results-folder"))
@@ -4036,6 +4072,22 @@ bool modelHeadTailRepair(larvaObject &l, lrvFit &f)
   return true;
 }
 
+void reAssignID()
+{
+  for(auto &p:detected_larvae)
+  {
+    //if cluster
+      //get output objects of cluster
+        //for all larvae output of cluster
+          //if larvae is already assigned (has an updated id != id ) then
+            //check if the original larva with larva_id = updated_id has an updated_id
+            //and replace value
+          //else
+            //See if paths are long enough
+            //get contents of the cluster
+  }
+}
+
 void collisionSearch()
 {
   int cid=0;
@@ -4153,27 +4205,32 @@ void collisionSearch()
         double da2=p2fdist(fit2.spine[5],cl2);
         double db1=p2fdist(fit1.spine[5],cl2);
         double db2=p2fdist(fit2.spine[5],cl1);
+
+        size_t replacingID1=detected_larvae[fit1.ID].updated_ID;
+        size_t replacingID2=detected_larvae[fit2.ID].updated_ID;
+        size_t replacedID1=children_blobs[p.first][0];
+        size_t replacedID2=children_blobs[p.first][1];
+
         if(da1+da2<db1+db2)
         {
-          reincarnations[fit1.ID].push_back(children_blobs[p.first][0]);
-          reincarnations[fit2.ID].push_back(children_blobs[p.first][1]);
+
+          reincarnations[replacingID1].push_back(replacedID1);
+          reincarnations[replacingID2].push_back(replacedID1);
+          
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit1);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit2);
-          detected_larvae[children_blobs[p.first][0]].updated_ID=
-            fit1.ID;
-          detected_larvae[children_blobs[p.first][1]].updated_ID=
-            fit2.ID;
+          
+          detected_larvae[replacedID1].updated_ID=replacingID1;
+          detected_larvae[replacedID2].updated_ID=replacingID2;
         }
         else
         {
-          reincarnations[fit2.ID].push_back(children_blobs[p.first][0]);
-          reincarnations[fit1.ID].push_back(children_blobs[p.first][1]);
+          reincarnations[replacingID2].push_back(replacedID1);
+          reincarnations[replacingID1].push_back(replacedID2);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit1);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit2);
-          detected_larvae[children_blobs[p.first][0]].updated_ID=
-            fit2.ID;
-          detected_larvae[children_blobs[p.first][1]].updated_ID=
-            fit1.ID;
+          detected_larvae[replacedID1].updated_ID=replacingID2;
+          detected_larvae[replacedID2].updated_ID=replacingID1;
         }
 
         RESOLVED_BY_MODEL++;
@@ -4182,27 +4239,31 @@ void collisionSearch()
       }
       if(C.larvae_models.size()==1)
       {
+
         lrvFit &fit1 = C.larvae_models[0].back();
         CvPoint2D64f cl1=detected_larvae[children_blobs[p.first][0]].blobs[0].centroid;
         CvPoint2D64f cl2=detected_larvae[children_blobs[p.first][1]].blobs[0].centroid;
         double da1=p2fdist(fit1.spine[5],cl1);
         double db1=p2fdist(fit1.spine[5],cl2);
+
+        size_t replacingID1=detected_larvae[fit1.ID].updated_ID;
+        size_t replacedID1=children_blobs[p.first][0];
+        size_t replacedID2=children_blobs[p.first][1];
+        
         if(da1<db1 && !detected_larvae[children_blobs[p.first][0]].isCluster)
         {
-          reincarnations[fit1.ID].push_back(children_blobs[p.first][0]);
+          reincarnations[replacingID1].push_back(replacedID1);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit1);
-          detected_larvae[children_blobs[p.first][0]].updated_ID=
-            fit1.ID;
+          detected_larvae[replacedID1].updated_ID=replacingID1;
           PARTIAL_RESOLVED_BY_MODEL++;
           ASSIGNMENTS_BY_MODEL++;
           C.SUCCESS=true;
         }
         else if ( da1>db1 && !detected_larvae[children_blobs[p.first][1]].isCluster)
         {
-          reincarnations[fit1.ID].push_back(children_blobs[p.first][1]);
+          reincarnations[replacingID1].push_back(replacedID2);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit1);
-          detected_larvae[children_blobs[p.first][1]].updated_ID=
-            fit1.ID;
+          detected_larvae[replacedID2].updated_ID=replacingID1;
           PARTIAL_RESOLVED_BY_MODEL++;
           ASSIGNMENTS_BY_MODEL++;
           C.SUCCESS=true;
