@@ -8,6 +8,7 @@
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
+#include <opencv2/video/tracking.hpp>
 #include "gnuplot_i.hpp"
 #include "alglib/ap.h"
 #include "alglib/stdafx.h"
@@ -1542,7 +1543,7 @@ for(auto &pair: Distances.spinePairs)
 #endif
 
 //if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label!=0)
+  if(blob.label==1)
   {
     size_t i;
 
@@ -1674,6 +1675,9 @@ void fixContour(
              );
   cv::Mat cROI,final;
   ROI.copyTo(cROI);
+#ifdef LRV_TRACK_VISUAL_DEBUG
+  normalize(cROI,cROI,0,255,CV_MINMAX);
+#endif
   float wmin=FLT_MAX;
   float wmax=FLT_MIN;
 
@@ -1693,7 +1697,7 @@ void fixContour(
   }
 
 #ifdef LRV_TRACK_VISUAL_DEBUG
-  for(size_t i=0;i<xpoints.size();++i)
+  /*for(size_t i=0;i<xpoints.size();++i)
   {
     cv::Vec3b val= cROI.at<cv::Vec3b>((xpoints[i]-bp)+cv::Point2f(PAD,PAD));
     cv::Scalar sval(0,0,std::min(val[0]+val[1]+val[2]+50,255));
@@ -1701,8 +1705,8 @@ void fixContour(
       (xpoints[i]-bp)+cv::Point2f(PAD,PAD),
       0,
       sval,-1);
-  }
-  static int MULT=24;
+  }*/
+  static int MULT=8;
   cv::resize(cROI,cROI,cv::Size(),MULT,MULT,cv::INTER_NEAREST);
 #endif
   //cv::imshow("LRV1",cROI);
@@ -1798,6 +1802,130 @@ catch(...)
       vcurv[0]=(vcurv.back()+vcurv[1])/2;
       smoothVec(vcurv,c_tmp,sf,(float)0.0);
       smoothVec(c_tmp,c,sf,(float)0.0);
+
+      /*double processNoiseC=0.00000001;
+      double measurementNoiseC=0.000001;
+      double errorCov=0.001;
+      if(heads && heads->size()>2)
+      {
+        cv::KalmanFilter KF(6, 2, 0);
+        cv::Mat_<float> state(6, 1); [> (x, y, Vx, Vy) <]
+        cv::Mat processNoise(6, 1, CV_32F);
+        cv::Mat_<float> measurement(2,1); measurement.setTo(cv::Scalar(0));
+
+        cv::Point2f BP(blobs->at(blobs->size()-3).minx,blobs->at(blobs->size()-3).miny);
+        cv::Point2f headP=heads->at(heads->size()-3);
+        headP+=BP;
+        
+        KF.statePre.at<float>(0) = headP.x;
+        KF.statePre.at<float>(1) = headP.y;
+        KF.statePre.at<float>(2) = 0;
+        KF.statePre.at<float>(3) = 0;
+        KF.statePre.at<float>(4) = 0;
+        KF.statePre.at<float>(5) = 0;
+        KF.transitionMatrix = (cv::Mat_<float>(6, 6) << 1,0,1,0,0.5,0, 0,1,0,1,0,0.5, 0,0,1,0,1,0, 0,0,0,1,0,1, 0,0,0,0,1,0, 0,0,0,0,0,1);
+        KF.measurementMatrix = (cv::Mat_<float>(2, 6) << 1,0,1,0,0.5,0, 0,1,0,1,0,0.5);
+        setIdentity(KF.processNoiseCov, cv::Scalar::all(processNoiseC));
+        setIdentity(KF.measurementNoiseCov, cv::Scalar::all(measurementNoiseC));
+        setIdentity(KF.errorCovPost, cv::Scalar::all(errorCov));
+        
+       cv::Point2f statePt(state(0),state(1));
+       cv::Mat prediction = KF.predict();
+
+       BP=cv::Point2f(blobs->at(blobs->size()-2).minx,blobs->at(blobs->size()-2).miny);
+       headP=heads->at(heads->size()-2);
+       headP+=BP;
+       measurement(0)=headP.x;
+       measurement(1)=headP.y;
+       cv::Mat estimated = KF.correct(measurement);
+
+       prediction = KF.predict();
+
+       BP=cv::Point2f(blobs->at(blobs->size()-1).minx,blobs->at(blobs->size()-1).miny);
+       headP=heads->at(heads->size()-1);
+       headP+=BP;
+       measurement(0)=headP.x;
+       measurement(1)=headP.y;
+       estimated = KF.correct(measurement);
+
+       size_t hi;
+       if(p2fdist(newPoints[di],headP)<=p2fdist(newPoints[dj],headP))
+         hi=di;
+       else
+         hi=dj;
+
+       measurement(0)=newPoints[hi].x;
+       measurement(1)=newPoints[hi].y;
+
+       estimated = KF.correct(measurement);
+       cv::Point2f kp(estimated.at<float>(0),estimated.at<float>(1));
+       size_t nth=findContourPointClosestTo(kp,newPoints);
+       if(hi==di)
+         di=nth;
+       else
+         dj=nth;
+      }
+      if(tails && tails->size()>2)
+      {
+        cv::KalmanFilter KF(6, 2, 0);
+        cv::Mat_<float> state(6, 1); [> (x, y, Vx, Vy) <]
+        cv::Mat processNoise(6, 1, CV_32F);
+        cv::Mat_<float> measurement(2,1); measurement.setTo(cv::Scalar(0));
+
+        cv::Point2f BP(blobs->at(blobs->size()-3).minx,blobs->at(blobs->size()-3).miny);
+        cv::Point2f tailP=tails->at(tails->size()-3);
+        tailP+=BP;
+        
+        KF.statePre.at<float>(0) = tailP.x;
+        KF.statePre.at<float>(1) = tailP.y;
+        KF.statePre.at<float>(2) = 0;
+        KF.statePre.at<float>(3) = 0;
+        KF.statePre.at<float>(4) = 0;
+        KF.statePre.at<float>(5) = 0;
+        KF.transitionMatrix = (cv::Mat_<float>(6, 6) << 1,0,1,0,0.5,0, 0,1,0,1,0,0.5, 0,0,1,0,1,0, 0,0,0,1,0,1, 0,0,0,0,1,0, 0,0,0,0,0,1);
+        KF.measurementMatrix = (cv::Mat_<float>(2, 6) << 1,0,1,0,0.5,0, 0,1,0,1,0,0.5);
+        setIdentity(KF.processNoiseCov, cv::Scalar::all(processNoiseC));
+        setIdentity(KF.measurementNoiseCov, cv::Scalar::all(measurementNoiseC));
+        setIdentity(KF.errorCovPost, cv::Scalar::all(errorCov));
+        
+       cv::Point2f statePt(state(0),state(1));
+       cv::Mat prediction = KF.predict();
+
+       BP=cv::Point2f(blobs->at(blobs->size()-2).minx,blobs->at(blobs->size()-2).miny);
+       tailP=tails->at(tails->size()-2);
+       tailP+=BP;
+       measurement(0)=tailP.x;
+       measurement(1)=tailP.y;
+       cv::Mat estimated = KF.correct(measurement);
+
+       prediction = KF.predict();
+
+       BP=cv::Point2f(blobs->at(blobs->size()-1).minx,blobs->at(blobs->size()-1).miny);
+       tailP=tails->at(tails->size()-1);
+       tailP+=BP;
+       measurement(0)=tailP.x;
+       measurement(1)=tailP.y;
+       estimated = KF.correct(measurement);
+
+       size_t hi;
+       if(p2fdist(newPoints[di],tailP)<=p2fdist(newPoints[dj],tailP))
+         hi=di;
+       else
+         hi=dj;
+
+       measurement(0)=newPoints[hi].x;
+       measurement(1)=newPoints[hi].y;
+
+       estimated = KF.correct(measurement);
+       cv::Point2f kp(estimated.at<float>(0),estimated.at<float>(1));
+       size_t nth=findContourPointClosestTo(kp,newPoints);
+       if(hi==di)
+         di=nth;
+       else
+         dj=nth;
+      }
+      if(di==dj)
+        continue;*/
       getCandidateSpine(blob,
           di,
           dj,
@@ -1837,7 +1965,7 @@ catch(...)
         2
         );
   }
-for(auto &pair: Distances.spinePairs)
+/*for(auto &pair: Distances.spinePairs)
 {
   cv::line(cROI, 
       MULT*(pair.first-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
@@ -1845,7 +1973,7 @@ for(auto &pair: Distances.spinePairs)
       cv::Scalar(255,0,0),
       1
       );
-}
+}*/
   cv::circle(cROI, 
       MULT*(Distances.Spine.back()-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
       4,
@@ -1863,14 +1991,13 @@ for(auto &pair: Distances.spinePairs)
     2,
     cv::Scalar(255,50,50),-1);
   
-  cv::circle(cROI, 
+  /*cv::circle(cROI, 
       MULT*(newPoints[0]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
       5,
-      cv::Scalar(0,0,255),-1);
-#endif
+      cv::Scalar(0,0,255),-1);*/
 
   //if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label==0)
+  if(blob.label!=0)
   {
     size_t i;
 
@@ -1914,6 +2041,7 @@ for(auto &pair: Distances.spinePairs)
     //g1.remove_tmpfiles();
     //g2.remove_tmpfiles();
   }
+#endif
 
 if(Distances.Spine.size()==0)
 {

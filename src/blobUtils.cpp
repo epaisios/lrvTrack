@@ -338,40 +338,75 @@ void blobToContourVector(cvb::CvBlob &blob,
   }
 }
 
+void blobToBlobOverlap(cvb::CvBlob &blob1,
+                       cvb::CvBlob &blob2,
+                       double &b1ratio,
+                       double &b2ratio)
+{
+  size_t rminx = std::min(blob1.minx,blob2.minx);
+  size_t rminy = std::min(blob1.miny,blob2.miny);
+  size_t rmaxx = std::max(blob1.maxx,blob2.maxx);
+  size_t rmaxy = std::max(blob1.maxy,blob2.maxy);
+  cv::Mat lrvROI1,lrvROI2;
+  createLarvaContour_custom(lrvROI1,
+                            blob1,
+                            CV_8UC1,
+                            rminx,
+                            rmaxx,
+                            rminy,
+                            rmaxy);
+  size_t b1pixels=countNonZero(lrvROI1);
+  createLarvaContour_custom(lrvROI2,
+                            blob2,
+                            CV_8UC1,
+                            rminx,
+                            rmaxx,
+                            rminy,
+                            rmaxy);
+  size_t b2pixels=countNonZero(lrvROI2);
+
+  cv::Mat lrvROI=lrvROI1 & lrvROI2;
+
+  size_t commonPixels=countNonZero(lrvROI);
+  b1ratio=(double)commonPixels/(double)b1pixels;
+  b2ratio=(double)commonPixels/(double)b2pixels;
+
+}
+
 void lengthAreaPerimeter(double a,double b,double &length, double &width)
 {
-double x1=-0.0459441*sqrt(a*a+25.1327*b)+0.0649747*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
-double y1=(0.0530516*(0.028715*a*a*sqrt(a*a+25.1327*b)-(0.866025*a*a*b)/sqrt(a*a+25.1327*b)+0.00574301*pow((a*a+25.1327*b),1.5)-1.01036*b*sqrt(a*a+25.1327*b)-(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)+0.0324874*a*a*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0281349*a*sqrt(a*a+25.1327*b)*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0162437*pow((-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)-2.24537*b*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
+  double x1=-0.0459441*sqrt(a*a+25.1327*b)+0.0649747*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
+  double y1=(0.0530516*(0.028715*a*a*sqrt(a*a+25.1327*b)-(0.866025*a*a*b)/sqrt(a*a+25.1327*b)+0.00574301*pow((a*a+25.1327*b),1.5)-1.01036*b*sqrt(a*a+25.1327*b)-(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)+0.0324874*a*a*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0281349*a*sqrt(a*a+25.1327*b)*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0162437*pow((-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)-2.24537*b*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
 
-double x2=-0.0459441*sqrt(a*a+25.1327*b)-0.0649747*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
-double y2=(0.0530516*(0.028715*a*a*sqrt(a*a+25.1327*b)-(0.866025*a*a*b)/sqrt(a*a+25.1327*b)+0.00574301*pow((a*a+25.1327*b),1.5)-1.01036*b*sqrt(a*a+25.1327*b)-(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)-0.0324874*a*a*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0281349*a*sqrt(a*a+25.1327*b)*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0162437*pow((-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)+2.24537*b*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
+  double x2=-0.0459441*sqrt(a*a+25.1327*b)-0.0649747*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
+  double y2=(0.0530516*(0.028715*a*a*sqrt(a*a+25.1327*b)-(0.866025*a*a*b)/sqrt(a*a+25.1327*b)+0.00574301*pow((a*a+25.1327*b),1.5)-1.01036*b*sqrt(a*a+25.1327*b)-(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)-0.0324874*a*a*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0281349*a*sqrt(a*a+25.1327*b)*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0162437*pow((-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)+2.24537*b*sqrt(-(43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a-(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
 
-double x3=0.0459441*sqrt(a*a+25.1327*b)+0.0649747*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
-double y3=(0.0530516*(-0.028715*a*a*sqrt(a*a+25.1327*b)+(0.866025*a*a*b)/sqrt(a*a+25.1327*b)-0.00574301*pow((a*a+25.1327*b),1.5)+1.01036*b*sqrt(a*a+25.1327*b)+(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)+0.0324874*a*a*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0281349*a*sqrt(a*a+25.1327*b)*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0162437*pow(((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)-2.24537*b*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
+  double x3=0.0459441*sqrt(a*a+25.1327*b)+0.0649747*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
+  double y3=(0.0530516*(-0.028715*a*a*sqrt(a*a+25.1327*b)+(0.866025*a*a*b)/sqrt(a*a+25.1327*b)-0.00574301*pow((a*a+25.1327*b),1.5)+1.01036*b*sqrt(a*a+25.1327*b)+(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)+0.0324874*a*a*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0281349*a*sqrt(a*a+25.1327*b)*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0162437*pow(((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)-2.24537*b*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
 
-double x4=0.0459441*sqrt(a*a+25.1327*b)-0.0649747*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
-double y4=(0.0530516*(-0.028715*a*a*sqrt(a*a+25.1327*b)+(0.866025*a*a*b)/sqrt(a*a+25.1327*b)-0.00574301*pow((a*a+25.1327*b),1.5)+1.01036*b*sqrt(a*a+25.1327*b)+(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)-0.0324874*a*a*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0281349*a*sqrt(a*a+25.1327*b)*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0162437*pow(((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)+2.24537*b*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
+  double x4=0.0459441*sqrt(a*a+25.1327*b)-0.0649747*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0795775*a;
+  double y4=(0.0530516*(-0.028715*a*a*sqrt(a*a+25.1327*b)+(0.866025*a*a*b)/sqrt(a*a+25.1327*b)-0.00574301*pow((a*a+25.1327*b),1.5)+1.01036*b*sqrt(a*a+25.1327*b)+(0.0344581*a*a*a*a)/sqrt(a*a+25.1327*b)-0.0324874*a*a*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)-0.0281349*a*sqrt(a*a+25.1327*b)*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+0.0162437*pow(((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b),1.5)+2.24537*b*sqrt((43.5312*a*b)/sqrt(a*a+25.1327*b)+2*a*a+(1.73205*a*a*a)/sqrt(a*a+25.1327*b)-62.8319*b)+1.5*a*b))/b;
 
-if(x1>0 && y1>0)
-{
-  length = std::max(x1,y1);
-  width = std::min(x1,y1);
-}
-if(x2>0 && y2>0)
-{
-  length = std::max(x2,y2);
-  width = std::min(x2,y2);
-}
-if(x3>0 && y3>0)
-{
-  length = std::max(x3,y3);
-  width = std::min(x3,y3);
-}
-if(x4>0 && y4>0)
-{
-  length = std::max(x4,y4);
-  width = std::min(x4,y4);
-}
+  if(x1>0 && y1>0)
+  {
+    length = std::max(x1,y1);
+    width = std::min(x1,y1);
+  }
+  if(x2>0 && y2>0)
+  {
+    length = std::max(x2,y2);
+    width = std::min(x2,y2);
+  }
+  if(x3>0 && y3>0)
+  {
+    length = std::max(x3,y3);
+    width = std::min(x3,y3);
+  }
+  if(x4>0 && y4>0)
+  {
+    length = std::max(x4,y4);
+    width = std::min(x4,y4);
+  }
 
 }
 
@@ -965,63 +1000,52 @@ void getBestCurvatureS(std::vector<float> &curv,
                       double &variance
                       )
 {
-  //std::map<float,size_t> c;
+  //Curvatures doubly smoothened
   std::vector<float> c;
+  //Temporary var to store smoothened curvatures
   std::vector<float> c_tmp;
+  //Size of filter
   int sf=11;
-  //std::vector<double> idx;
-  //for(size_t i=0;i<curv.size();i++)
-  //{
-  //  idx.push_back(i);
-  //}
-  //curv[0]=(curv.back()+curv[1])/2;
-  //Gnuplot g1("linespoints");
-  //Gnuplot g2("linespoints");
-  //g1.plot_xy(idx,curv,"curvature");
   smoothVec(curv,c_tmp,sf,(float)0.0);
-  //smoothVecMap(c_tmp,curvatures,c,sf/2,(float)0.0);
   smoothVecMap(c_tmp,curvatures,c,sf,(float)0.0);
 
-  //g1.plot_xy(idx,c,"curvature smoothened");
-  //wait_for_key();
-
-  //size_t dmaxsz=0;
-  /*for(std::map<float,size_t>::reverse_iterator rit=curvatures.rbegin();
-      rit!=curvatures.rend();rit++)
-  {
-    di[dmaxsz]=rit->second;
-    dmax[dmaxsz]=rit->first;
-    dmaxsz++;
-    if(dmaxsz>=di.size())
-      break;
-  }*/
+  //map storing maxima: curvature value, index
   std::map<float,std::vector<size_t> > maxima;
+  
+  //initialize starting from 0
   bool prePos=false;
+  //for position 0: if previous is seq then prePos==true
+  //(i.e. we're going up...)
   if(c[0]-c.back()>=0)
     prePos=true;
 
+  //set max and min to current position
   double max=curv[0];
   double min=curv[0];
+  
   for(size_t i=1;i<c.size();i++)
   {
-    //double vp=c[i-1];
-    //double va=c[i];
-    
+    //Check for min, max
     if(curv[i]>max)
       max=curv[i];
     if(curv[i]<min)
       min=curv[i];
 
+    //check if we're going up or stable
     if(c[i]-c[i-1]>=0 )
     {
+      //if yes, set the prePos to true
       prePos=true;
       continue;
     }
+    //if we're not going up
     if(c[i]-c[i-1]<0 )
     {
+      //If we have been going up, it means we have a local maximum
+      //save it in our maxima
       if(prePos)
         maxima[c[i-1]].push_back(i-1);
-
+      //Set prePos to false (we're not going up anymore)
       prePos=false;
     }
     //mean+=curv[i];
@@ -1036,12 +1060,14 @@ void getBestCurvatureS(std::vector<float> &curv,
     s3=s3+(curv[i]-mean); 
   }
   variance = (s2-s3*s3/c.size())/(c.size()-1);*/
+
+  //Check for position 0 again?
   if(c[0]-c.back()<0 )
   {
     if(prePos)
       maxima[c.back()].push_back(c.size()-1);
   }
-  
+  //If we didn't find enough maxima quit!!
   if(maxima.size()<2)
   {
     return;
@@ -1051,7 +1077,10 @@ void getBestCurvatureS(std::vector<float> &curv,
   float m1=10.0;
   int i1;
   size_t sz1;
-  while(m1>(float) 3.3)
+  //Look for largest maxima bigger than the threshold
+  //Since map is sorted we don't really need to do this no?
+  float minCurv=3.0;
+  while(m1>minCurv)
   {
     if(f==maxima.rend())
       return;
@@ -1064,7 +1093,9 @@ void getBestCurvatureS(std::vector<float> &curv,
   int sz2;
   float m2;
   i2=i1;
-  while(fabs(i2-i1)<40 || (c.size()-fabs(i2-i1))<40)
+  //Trying to find largest next maxima 
+  //that is of distance more than 40 points
+  while(abs(i2-i1)<40 || (c.size()-abs(i2-i1))<40)
   {
     if(f==maxima.rend())
       return;
@@ -1073,18 +1104,7 @@ void getBestCurvatureS(std::vector<float> &curv,
     i2=f->second[0];
     f++;
   }
-  double P=0.6;
-  /*std::vector<double> idx;
-  for(size_t i=0;i<curv.size();i++)
-  {
-    idx.push_back(i);
-  }
-  if(i1==5 && i2==146)
-  {
-    Gnuplot g1("linespoints");
-    g1.plot_xy(idx,c,"curvature smoothened");
-    //wait_for_key();
-  }*/
+  double P=0.8;
 
   int p1l=INT_MIN;
   int p1r=INT_MIN;
@@ -1092,7 +1112,7 @@ void getBestCurvatureS(std::vector<float> &curv,
   int p2l=INT_MIN;
   int p2r=INT_MIN;
 
-  //std::cerr << i1 << ", " << i2 << std::endl;
+  //Go downwards from i1 looking for a minimum
   for(int i=i1;i>i1-50;i--)
   {
     int j=i;
@@ -1107,10 +1127,11 @@ void getBestCurvatureS(std::vector<float> &curv,
     }
   }
 
+  //Go upwards from i1 looking for a minimum
   for(int i=i1;i<i1+50;i++)
   {
     int j=i;
-    if(j>c.size()-1)
+    if(j>(int) c.size()-1)
     {
       j=i-c.size();
     }
@@ -1120,6 +1141,7 @@ void getBestCurvatureS(std::vector<float> &curv,
       break;
     }
   }
+  //from the two minima get middle
   if(p1r!=INT_MIN && p1l!=INT_MIN)
   {
     i1=(p1r+p1l)/2;
@@ -1129,6 +1151,7 @@ void getBestCurvatureS(std::vector<float> &curv,
       i1=c.size()+i1;
   }
 
+  //same for the other local maximum
   for(int i=i2;i>i2-50;i--)
   {
     int j=i;
@@ -1146,7 +1169,7 @@ void getBestCurvatureS(std::vector<float> &curv,
   for(int i=i2;i<i2+50;i++)
   {
     int j=i;
-    if(i>c.size()-1)
+    if(i>(int) c.size()-1)
     {
       j=i-c.size();
     }
@@ -1165,13 +1188,12 @@ void getBestCurvatureS(std::vector<float> &curv,
     if(i2<0)
       i2=c.size()+i2;
   }
-
+  //return our two best options
   di[0]=i1;
   dmax[0]=m1;
 
   di[1]=i2;
   dmax[1]=m2;
-  //std::cerr << i1 << ", " << i2 << std::endl;
 
 }
 

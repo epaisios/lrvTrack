@@ -148,7 +148,8 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
       blobs[c_index].miny);
   stringstream data;
 
-  data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+  //data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+  data << CURRENT_FRAME << ",";
 
   bool rev=false;
   if(lrvDistances[c_index].Spine[0]==
@@ -264,7 +265,8 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
     }
   }
   data << (blobs[c_index].centroid.x-cc.x)*ppm << ","
-    << (blobs[c_index].centroid.x-cc.x)*ppm << ",";
+    << (blobs[c_index].centroid.y-cc.y)*ppm << ",";
+  data << cvAngle(&blobs[c_index]) << ",";
   data << round_flag[c_index];
   data << endl;
   csvline=data.str();

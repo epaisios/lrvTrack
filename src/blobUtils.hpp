@@ -87,6 +87,10 @@ template <typename point_type_a, typename point_type_b >
   
 }
 
+void blobToBlobOverlap(cvb::CvBlob &blob1,
+                       cvb::CvBlob &blob2,
+                       double &b1ratio,
+                       double &b2ratio);
 
 double diff(cv::Point2f &a, cv::Point2f &b);
 void blobToPointVector(cvb::CvBlob &p,std::vector<cv::Point2f> &points,size_t PAD=0);
@@ -106,6 +110,12 @@ bool createSimpleROI(cv::Mat &img,
                      size_t maxy,
                      size_t PADDING,
                      cv::Mat &res);
+
+/*void blobToContourVector(cvb::CvBlob &blob,
+                         cv::Mat &frame, 
+                         int PAD,
+                         std::vector<cv::Point2f> &points,
+                         std::vector<size_t> &baseContourPointIdx);*/
 
 void blobToContourVector(cvb::CvBlob &p,
                          cv::Mat &frame, 

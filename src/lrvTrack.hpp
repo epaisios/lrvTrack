@@ -85,7 +85,7 @@ int  LRVTRACK_CAMERA_INPUT;
 int  LRVTRACK_ODOUR_CUPS=0;
 int  LRVTRACK_CONTOUR_RESOLUTION=150;
 size_t LRVTRACK_MIN_OBJ_SIZE=20;
-size_t LRVTRACK_MAX_OBJ_SIZE=1200;
+size_t LRVTRACK_MAX_OBJ_SIZE=2000;
 size_t LRVTRACK_THREADS=8;
 size_t LRVTRACK_MIN_OUTPUT_DURATION=1;
 size_t LRVTRACK_FRAME_WIDTH=0;
@@ -102,6 +102,7 @@ bool LRVTRACK_PARALLEL=false;
 bool LRVTRACK_NORMALIZE=false;
 bool LRVTRACK_CHOREOGRAPHY_OUTPUT=false;
 bool LRVTRACK_EXTRACT_OFFLINEBG=false;
+bool LRVTRACK_EXTRACT_OFFLINEBG_MIN=false;
 bool LRVTRACK_CSV_OUTPUT=false;
 bool LRVTRACK_SHOW_LIVE=false;
 bool LRVTRACK_SHOW_SKELETON=false;
@@ -125,6 +126,7 @@ double VIDEO_FPS=24.1;
 size_t CURRENT_FRAME=0;
 static size_t TOTAL_FRAMES=0;
 size_t LARVAE_COUNT=0;
+size_t MAX_LARVAE_DETECTED=0;
 
 size_t FRAME_COLS;
 size_t FRAME_ROWS;
@@ -135,7 +137,9 @@ std::map<size_t,larvaObject> detected_larvae;
 std::map<size_t,std::vector<size_t> > reincarnations;
 std::vector<collisionModel> larvaeModels;
 
-std::vector<size_t> lost_larvae;
+std::map<size_t,vector<size_t> > lost_blobs;
+std::map<size_t,vector<size_t> > partial_lost_blobs;
+std::vector<size_t> certain_blobs;
 
 std::vector<cv::Vec3f> circles;
 std::vector<cv::Vec3f> cups;
@@ -203,9 +207,11 @@ const uint64_t factorial_vec[21]={1,
 
 cv::Mat processedFrame;
 cv::Mat greyFrame;
+cv::Mat unprocessedFrame;
 cv::Mat colorFrame;
 cv::Mat bgFrame;
 cv::Mat previousFrame;
+cv::Mat previousOrigFrame;
 IplImage *labelImg;
 int DEBUG_INFO=0;
 

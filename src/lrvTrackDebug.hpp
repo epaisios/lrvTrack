@@ -1,6 +1,7 @@
 #ifndef __LRVTRACK_DEBUG_HPP__
 #define __LRVTRACK_DEBUG_HPP__
 #include <string>
+#include <iostream>
 #include <sstream>
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>

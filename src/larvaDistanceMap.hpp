@@ -8,6 +8,7 @@
 #define SPINE_SEGMENTS 12
 
 extern size_t CURRENT_FRAME;
+extern double VIDEO_FPS;
 typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
 
 /*double p2fdist(cv::Point2f a, cv::Point2f b);
@@ -94,9 +95,9 @@ public:
     x=px;
     y=py;
   }
-  void getDistances(cv::Point2f p1)
+  /*void getDistances(cv::Point2f p1)
   {
-  }
+  }*/
 
 };
 void lBFS(int p1,
