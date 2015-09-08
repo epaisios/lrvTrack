@@ -1404,178 +1404,6 @@ void getNextPoint(std::vector<cv::Point2f> &a,
     n=a[idx+1];
 }
 
-void fixContourSimple(
-    cvb::CvBlob &blob,
-    larvaDistanceMap &Distances,
-    size_t RES,
-    cv::Mat &frame,
-    cv::Mat &previousFrame,
-    std::vector<cv::Point2f> *heads,
-    std::vector<cv::Point2f> *tails,
-    std::vector<cvb::CvBlob> *blobs)
-{
-  //int ID=blob.label;
-  std::vector<cv::Point2f> ppoints;
-  std::vector<cv::Point2f> xpoints;
-  std::vector<float> centripetal;
-  //blobToPointVector(blob,ppoints);
-  int PAD=1;
-  blobToContourVector(blob,frame,PAD,ppoints);
-  cv::Point2f bp(blob.minx,blob.miny);
-  if(ppoints.back()==ppoints[0])
-    ppoints.pop_back();
-
-  std::vector<float> curvatures;
-  std::vector<float> curvatures_smooth;
-  curvVec(ppoints,curvatures);
-  smoothVec(curvatures,curvatures_smooth,5,(float)0.0);
-  std::vector<double> contour_angles;
-  std::vector<double> contour_angles_smooth;
-  contourAngles(ppoints,contour_angles,3);
-  smoothVec(contour_angles,contour_angles_smooth,5,(double)0.0);
-
-  std::vector<size_t> localMaximaCIdx;
-  std::vector<size_t> localMaximaAIdx;
-  //findLocalMaxima(curvatures_smooth, localMaximaCIdx);
-  findLocalMaxima(contour_angles_smooth, localMaximaAIdx,false);
-  std::map<float,size_t> Mcurvatures;
-  cv::Mat ROI=cv::Mat(frame,
-              cv::Rect(blob.minx-PAD,
-                       blob.miny-PAD,
-                       blob.maxx-blob.minx+1+2*PAD,
-                       blob.maxy-blob.miny+1+2*PAD
-                      )
-             );
-  cv::Mat cROI,final;
-  ROI.copyTo(cROI);
-  //float wmin=FLT_MAX;
-  //float wmax=FLT_MIN;
-
-  for(size_t i=0;i<xpoints.size();i++)
-  {
-    cv::Vec3b val=cROI.at<cv::Vec3b>((xpoints[i]-bp)+cv::Point2f(PAD,PAD));
-  }
-
-#ifdef LRV_TRACK_VISUAL_DEBUG
-  for(size_t i=0;i<xpoints.size();++i)
-  {
-    cv::Vec3b val= cROI.at<cv::Vec3b>((xpoints[i]-bp)+cv::Point2f(PAD,PAD));
-    cv::Scalar sval(0,0,std::min(val[0]+val[1]+val[2]+50,255));
-    cv::circle(cROI, 
-      (xpoints[i]-bp)+cv::Point2f(PAD,PAD),
-      0,
-      sval,-1);
-  }
-  static int MULT=24;
-  cv::resize(cROI,cROI,cv::Size(),MULT,MULT,cv::INTER_NEAREST);
-#endif
-  getCandidateSpine(blob,
-                    localMaximaAIdx[0],
-                    localMaximaAIdx[1],
-                    ppoints,
-                    Distances,
-                    Mcurvatures,
-                    curvatures_smooth,
-                    SPINE_SEGMENTS,
-                    heads,
-                    tails,
-                    blobs);
-
-  bp=cv::Point2f(blob.minx-0.5,blob.miny-0.5);
-#ifdef LRV_TRACK_VISUAL_DEBUG
-  for(size_t i=0;i<ppoints.size();++i)
-  {
-    cv::circle(cROI, 
-        MULT*(ppoints[i]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-        1,
-        cv::Scalar(0,255,0),-1);
-  }
-  cv::circle(cROI, 
-      MULT*(ppoints[0]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-      2,
-      cv::Scalar(0,0,255),-1);
-#endif
-
-#ifdef LRV_TRACK_VISUAL_DEBUG
-  for(size_t i=1;i<Distances.Spine.size();++i)
-  {
-    cv::circle(cROI, 
-        MULT*(Distances.Spine[i]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-        3,
-        cv::Scalar(0,0,255),-1);
-    cv::line(cROI, 
-        MULT*(Distances.Spine[i]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-        MULT*(Distances.Spine[i-1]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-        cv::Scalar(255,255,0),
-        2
-        );
-  }
-for(auto &pair: Distances.spinePairs)
-{
-  cv::line(cROI, 
-      MULT*(pair.first-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-      MULT*(pair.second-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-      cv::Scalar(255,0,0),
-      1
-      );
-}
-  cv::circle(cROI, 
-      MULT*(Distances.Spine.back()-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-      4,
-      cv::Scalar(255,0,255),-1);
-
-  /*for(size_t i=0;i<dIdx.size();++i)
-  {
-    cv::circle(cROI, 
-        MULT*(newPoints[dIdx[i]]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-        3,
-        cv::Scalar(0,255-(i*4),0),-1);
-  }
-  cv::circle(cROI, 
-    MULT*(newPoints[dIdx.front()]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-    2,
-    cv::Scalar(255,50,50),-1);
-  
-  cv::circle(cROI, 
-      MULT*(newPoints[0]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
-      5,
-      cv::Scalar(0,0,255),-1);*/
-#endif
-
-//if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label==1)
-  {
-    size_t i;
-
-    cv::imshow("LRV1",cROI);
-    cv::waitKey(10000);
-    std::cout << CURRENT_FRAME << "," << blob.label << "," << Distances.WidthDist << "," <<
-      Distances.WidthSD << std::endl;
-    i=0;
-    std::vector<float> c;
-    std::vector<float> c_tmp;
-    //int sf=21;
-    std::vector<double> idx;
-  }
-if(Distances.Spine.size()==0)
-{
-  BOOST_LOG_TRIVIAL(debug) << "Error: generating spine: id: " << blob.label 
-    << "Frame: " << CURRENT_FRAME; 
-  Distances.Spine.resize(2);
-  return;
-}
-  double cvariance=0.0;
-  Distances.MaxDistPoints.first=Distances.Spine.front();
-  Distances.MaxDistPoints.second=Distances.Spine.back();
-  Distances.p20.x=Distances.Spine[2].x;
-  Distances.p20.y=Distances.Spine[2].y;
-  Distances.p80.x=Distances.Spine[9].x;
-  Distances.p80.y=Distances.Spine[9].y;
-  Distances.MidPoint=0.5*(Distances.Spine[5]+Distances.Spine[6]);
-  Distances.curvatureVariance=cvariance;
-  return;
-}
-
 void fixContour(
     cvb::CvBlob &blob,
     larvaDistanceMap &Distances,
@@ -1598,6 +1426,7 @@ void fixContour(
   cv::Point2f bp(blob.minx,blob.miny);
   int PAD=0;
   blobToPointVector(blob,ppoints);
+  //blobToContourVector(blob,frame,2,ppoints);
   std::vector<cv::Point2f> xpoints;
   //fixContourSimple(blob,frame);
   //cv::approxPolyDP(tmpPoints,ppoints,0.3,true);
@@ -1715,29 +1544,46 @@ void fixContour(
   dIdx.resize(2);
 
 std::vector<float> vcurv;
-try{
-spline4(xpoints,
-           d,
-           w,
-           xpoints.size(),
-           RES,
-           newPoints,
-           dIdx,
-           curvatures,
-           vcurv,
-           cvariance);
-}
-catch(alglib::ap_error &e)
+if(xpoints.size()<4*RES-10)
 {
-  std::cerr << "Spline Error:" << e.msg << std::endl;
-  std::cerr << printVector(xpoints) << std::endl;
-  std::cerr << printVector(d) << std::endl;
-  return;
+  try{
+    spline4(xpoints,
+        d,
+        w,
+        xpoints.size(),
+        RES,
+        newPoints,
+        dIdx,
+        curvatures,
+        vcurv,
+        cvariance);
+  }
+  catch(alglib::ap_error &e)
+  {
+    std::cerr << "Spline Error:" << e.msg << std::endl;
+    std::cerr << printVector(xpoints) << std::endl;
+    std::cerr << printVector(d) << std::endl;
+    return;
+  }
+  catch(...)
+  {
+    std::cerr << "Spline Error [" << blob.label << ", " << xpoints.size() << "]" << std::endl;
+    return;
+  }
 }
-catch(...)
+else
 {
-  std::cerr << "Spline Error [" << blob.label << ", " << xpoints.size() << "]" << std::endl;
-  return;
+    std::cerr << "No need to reconstruct contour" << std::endl;
+    nospline(xpoints,
+        d,
+        w,
+        xpoints.size(),
+        RES,
+        newPoints,
+        dIdx,
+        curvatures,
+        vcurv,
+        cvariance);
 }
 
 
@@ -1997,7 +1843,7 @@ catch(...)
       cv::Scalar(0,0,255),-1);*/
 
   //if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label!=0)
+  if(blob.label==7)
   {
     size_t i;
 
@@ -2298,7 +2144,7 @@ void computeInnerDistances(cvb::CvBlob &blob,
                   Distances.MaxDistPoints=p1p2;
                   Distances.MaxDist=MAX;
                 }
-              if(abs(j-i)>1)
+              if(abs((int)(j-i))>1)
                 {
                   std::vector<cv::Point2f> widthArc;
                   widthArc.push_back(p1);

@@ -10,6 +10,7 @@
 #include <boost/accumulators/statistics/mean.hpp>
 #include <boost/accumulators/statistics/moment.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
+#include "lrvTrackDebug.hpp"
 
 using namespace boost::accumulators;
 using namespace lrvTrack;
@@ -622,6 +623,57 @@ void createLarvaContour(cv::Mat &lrvROI,
   }
   free(ContourPoints[0]);
 }
+void createBlobContour(cv::Mat &ROI,
+                        cvb::CvBlob &blob,
+                        int type,
+                        int PADDING,
+                        bool FILL,
+                        cv::Scalar color,
+                        int connectivity,
+                        cv::Scalar bg)
+{
+  int sizes[1];
+  cvb::CvContourPolygon *cntPoly=
+    cvb::cvConvertChainCodesToPolygon(&blob.contour);
+
+  if (ROI.empty())
+    ROI=cv::Mat(blob.maxy-blob.miny+1+(2*PADDING),
+                        blob.maxx-blob.minx+1+(2*PADDING),
+                        type,bg);
+
+  cv::Point *ContourPoints[1];
+  ContourPoints[0]=(cv::Point*) malloc(
+                     blob.contour.chainCode.size()*sizeof(cv::Point)
+                   );
+  sizes[0]=static_cast<int> (cntPoly->size());
+
+  for (size_t i=0; i<cntPoly->size(); ++i)
+  {
+    ContourPoints[0][i].x=(*cntPoly)[i].x;
+    ContourPoints[0][i].y=(*cntPoly)[i].y;
+    if(!FILL && i>0)
+    {
+      cv::line(ROI,ContourPoints[0][i-1],ContourPoints[0][i],color,1,connectivity);
+    }
+  }
+  if(!FILL)
+    cv::line(ROI,ContourPoints[0][cntPoly->size()-1],ContourPoints[0][0],color,1,connectivity);
+
+
+  if(FILL)
+  {
+    cv::fillPoly(ROI,
+        (const cv::Point**) ContourPoints,
+        sizes,
+        1,
+        color,
+        connectivity
+        );
+  }
+  free(ContourPoints[0]);
+  delete(cntPoly);
+
+}
 
 void createLarvaContour(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,
@@ -686,7 +738,7 @@ bool intersection(cv::Point2f o1, cv::Point2f p1, cv::Point2f o2, cv::Point2f p2
   cv::Point2f d2 = p2 - o2;
 
   float cross = d1.x*d2.y - d1.y*d2.x;
-  if (abs(cross) < /*EPS*/1e-8)
+  if (fabs(cross) < /*EPS*/1e-8)
     return false;
 
   double t1 = (x.x * d2.y - x.y * d2.x)/cross;
@@ -1006,8 +1058,11 @@ void getBestCurvatureS(std::vector<float> &curv,
   std::vector<float> c_tmp;
   //Size of filter
   int sf=11;
+  //std::cout << printVector(curv) << std::endl;
   smoothVec(curv,c_tmp,sf,(float)0.0);
   smoothVecMap(c_tmp,curvatures,c,sf,(float)0.0);
+  //std::cout << printVector(c) << std::endl;
+  //std::cout << "=============================" << std::endl;
 
   //map storing maxima: curvature value, index
   std::map<float,std::vector<size_t> > maxima;
@@ -1329,6 +1384,84 @@ void spline3(std::vector<cv::Point2f> &cp,
   std::vector<float> scurvature;
   curvVec(np,pvals,scurvature);
   //getBestCurvatureS(scurvature,curvatures,di,dmax,cvariance);
+}
+
+void nospline(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures,
+           std::vector<float> &vcurv,
+           double &cvariance)
+{
+  alglib::real_1d_array x,y;                 
+  alglib::real_1d_array ad,aw;               
+  alglib::ae_int_t info;                     
+  alglib::ae_int_t m=n;
+  alglib::real_1d_array nu;
+  alglib::integer_1d_array inu;
+  inu.setlength(0);
+  nu.setlength(0);
+  //alglib::ae_int_t ink=0;                     
+  size_t extra=1;
+  x.setlength(m+2*extra);                          
+  y.setlength(m+2*extra);                          
+  ad.setlength(m+2*extra);                         
+  aw.setlength(m+2*extra);                         
+  alglib::spline1dinterpolant sx;            
+  alglib::spline1dinterpolant sy;            
+  alglib::spline1dfitreport rep;             
+  double rho=LRVTRACK_SMOOTHING;
+  alglib::pspline2interpolant p;
+  std::vector<cv::Point2f> NP;
+  for(int i=0;i<extra;i++)
+  {
+    x[i]=cp[cp.size()-extra+i].x;
+    y[i]=cp[cp.size()-extra+i].y;
+    //aw[i]=w[cp.size()-extra+i];
+    aw[i]=1e-15;
+  }
+  for(int i=0;i<m;i++)
+  {
+    x[i+extra]=cp[i].x;
+    y[i+extra]=cp[i].y;
+    aw[i+extra]=w[i];
+    //aw[i]=1e-15;
+  }
+  for(int i=0;i<extra;i++)
+  {
+    x[extra+m+i]=cp[i].x;
+    y[extra+m+i]=cp[i].y;
+    aw[i+m+extra]=w[i];
+    aw[i]=1e-15;
+  }
+  extractCentripetal(x,y,ad,d);
+  
+  double t0=ad[extra];
+  double tn=ad[extra+m];
+  double t;
+  double step=(tn-t0)/cp.size();
+  std::vector<float> dmax(di.size(),0);
+  std::vector<float> curvature;
+  std::vector<float> pvals;
+  std::vector<double> adfactor;
+  adfactor.push_back(step);
+  size_t j=0;
+  for (int i=0;i<cp.size();i++)
+  {
+    //step=adfactor[j];
+    t=t0+i*step;
+    np.push_back(cp[i]);
+    pvals.push_back(t);
+    while(t<ad[j])
+      j++;
+  }
+  pvals.push_back(t+step);
+  curvVec(np,pvals,vcurv);
+  getBestCurvatureS(vcurv,curvatures,di,dmax,cvariance);
 }
 
 void spline4(std::vector<cv::Point2f> &cp,

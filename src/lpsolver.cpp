@@ -9,8 +9,8 @@
 #include <map>
 #include "larvaObject.hpp"
 #include "lrvTrackDebug.hpp"
-#include <SWI-Prolog.h>
-#include <SWI-cpp.h>
+//#include <SWI-Prolog.h>
+//#include <SWI-cpp.h>
 
 using namespace cv;
 using namespace std;
@@ -20,7 +20,7 @@ extern std::map<size_t, std::vector<size_t> > parent_blobs;
 extern std::map<size_t, std::vector<size_t> > children_blobs;
 extern std::map<size_t,larvaObject> detected_larvae;
 
-bool testPLQuery()
+/*bool testPLQuery()
 {
   char *expression=strdup("library(clpfd)");
   char *plav[2];
@@ -50,7 +50,7 @@ bool testPLQuery()
 
   }
   return true;
-}
+}*/
 
 bool TUmatrixTest(Mat m)
 {

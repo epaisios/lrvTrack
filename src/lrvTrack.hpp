@@ -77,6 +77,8 @@ std::string LRVTRACK_NAME;
 std::string LRVTRACK_SAVE_VIDEO;
 std::string LRVTRACK_SAVE_PROCESSED_VIDEO="";
 std::string LRVTRACK_FILE_INPUT;
+std::string LRVTRACK_INPUT_METADATA;
+std::string LRVTRACK_ODOR_LR;
 std::string LRVTRACK_ROI_INPUT;
 // Larvae File Descriptors for output
 std::map<size_t,std::ofstream> lfds;
@@ -143,6 +145,9 @@ std::vector<size_t> certain_blobs;
 
 std::vector<cv::Vec3f> circles;
 std::vector<cv::Vec3f> cups;
+cvb::CvBlobs cupBlobs;
+cv::Mat cupContours;
+size_t cupContoursWhitePix;
 
 cvb::CvBlobs NEW;
 
@@ -212,6 +217,7 @@ cv::Mat colorFrame;
 cv::Mat bgFrame;
 cv::Mat previousFrame;
 cv::Mat previousOrigFrame;
+cv::Mat toRingTemplate;
 IplImage *labelImg;
 int DEBUG_INFO=0;
 

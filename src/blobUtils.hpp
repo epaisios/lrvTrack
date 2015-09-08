@@ -43,6 +43,16 @@ void spline2(std::vector<cv::Point2f> &cp,
            std::map<float,size_t> &cm,
            std::vector<float> &vcurv);
 
+void nospline(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures,
+           std::vector<float> &vcurv,
+           double &cvariance);
 
 namespace lrvTrack{
   
@@ -125,6 +135,15 @@ void blobToContourVector(cvb::CvBlob &p,
 void tile2same(cv::Mat &a, cv::Mat &b, cv::Mat &r);
 
 void createLarvaROI(cv::Mat &frame, cv::Mat &ROI, cvb::CvBlob &blob);
+
+void createBlobContour(cv::Mat &ROI,
+                        cvb::CvBlob &blob,
+                        int type=CV_8UC1,
+                        int PADDING=0,
+                        bool FILL=true,
+                        cv::Scalar color=cv::Scalar(255),
+                        int connectivity=8,
+                        cv::Scalar bg=cv::Scalar(0));
 
 void createLarvaContour(cv::Mat &lrvROI,
                         cvb::CvBlob &blob,

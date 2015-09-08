@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <functional>
 #include "lpSolver.hpp"
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include <vector>
 
 using namespace lrvTrack;
@@ -123,6 +125,34 @@ void dumpDetectedLarvae()
     (dlit->second).dump();
   }
   BOOST_LOG_TRIVIAL(trace) << d.str() << endl;
+}
+
+void readIni()
+{
+  boost::property_tree::ptree pt;
+  boost::property_tree::ini_parser::read_ini(LRVTRACK_INPUT_METADATA, pt);
+  LRVTRACK_ODOR_LR = pt.get<std::string>("Trial Data.OdorA");
+  cout << "Odor location from metadata: " << LRVTRACK_ODOR_LR << endl;
+}
+
+void writeIni(cv::Point2f odorA_centroid)
+{
+  stringstream s;
+  s << odorA_centroid.x << ", " << odorA_centroid.y;
+  boost::property_tree::ptree pt;
+  boost::property_tree::ini_parser::read_ini(LRVTRACK_INPUT_METADATA, pt);
+  pt.put<std::string>("Trial Data.OdorA_Position",s.str());
+  boost::property_tree::ini_parser::write_ini(LRVTRACK_INPUT_METADATA, pt);
+}
+
+void writeIni(double x, double y)
+{
+  stringstream s;
+  s << x << ", " << y;
+  boost::property_tree::ptree pt;
+  boost::property_tree::ini_parser::read_ini(LRVTRACK_INPUT_METADATA, pt);
+  pt.put<std::string>("Trial Data.OdorALocation",s.str());
+  boost::property_tree::ini_parser::write_ini(LRVTRACK_INPUT_METADATA, pt);
 }
 
 void detectHeadTail()
@@ -546,7 +576,8 @@ void brightnessContrastGamma(//Mat &f,
 {
   if(c!=1.0 || b!=0.0)
   {
-    addWeighted(o,0,o,c,b,o);
+    addWeighted(o,0,o,c,b-255,o);
+    //addWeighted(o,c,o,c,b,o);
   }
   if(g!=1.0)
   {
@@ -554,6 +585,14 @@ void brightnessContrastGamma(//Mat &f,
     pow(o,g,o);
     o.convertTo(o,CV_8UC1);
   }
+  /*Mat fgROI=Mat(o.rows , o.cols,o.depth(),Scalar(0));
+  circle(fgROI,
+      Point2f(o.rows/2.0,o.cols/2.0),
+      o.rows/5,Scalar(255),-1);
+  Mat f;
+  f=o&fgROI;
+  equalizeHist(f,f);
+  imshow("eqhist", f);*/
 }
 
 /*#ifdef LRVTRACK_WITH_OPENCL
@@ -1118,6 +1157,28 @@ bool larvaNearRing(cvb::CvBlob &blob)
 
 bool larvaToRing(cvb::CvBlob &blob)
 {
+  if(circles.empty() && cupContours.empty())
+    return false;
+  Mat ltrROI;
+  cupContours(cv::Rect(blob.minx,
+        blob.miny,
+        blob.maxx-blob.minx+1,
+        blob.maxy-blob.miny+1)).copyTo(ltrROI);
+  size_t nz=countNonZero(ltrROI);
+  if(nz==0)
+    return false; 
+  
+  createBlobContour(ltrROI,
+                    blob);
+
+  if((size_t) countNonZero(ltrROI) < nz+blob.area)
+    return true;
+  return false;
+
+}
+
+/*bool larvaToRing(cvb::CvBlob &blob)
+{
   if(circles.empty())
     return false;
   cv::Point2f cntr(circles[bestCircle][0],circles[bestCircle][1]);
@@ -1139,6 +1200,40 @@ bool larvaToRing(cvb::CvBlob &blob)
     }
   }
   return false;
+}*/
+
+bool larvaToCup(cvb::CvBlob &blob)
+{
+  Mat larvaROI;
+    if(!createSimpleROI(cupContours,
+          blob.minx,
+          blob.miny,
+          blob.maxx,
+          blob.maxy,
+          2,
+          larvaROI))
+      return true;
+
+    size_t white;
+    white=countNonZero(larvaROI);
+    if(white==0)
+      return false;
+    else
+    {
+      createLarvaContour(larvaROI,
+          blob,
+          CV_8UC3,2,true,
+          Scalar(255),8);
+      if((size_t) countNonZero(larvaROI)<white+blob.area)
+      {
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
 }
 
 /*
@@ -2429,6 +2524,7 @@ void process_frame(Mat &newFrame,
             Point2f(circles[bestCircle][0],circles[bestCircle][1]),
             int(circles[bestCircle][2]),
             Scalar(0,255,0),1);
+        //if(cups.em
       }
     }
     else
@@ -2487,7 +2583,7 @@ void process_frame(Mat &newFrame,
     processedFrame=fgImage&processedFrame;
     //imshow("PF",processedFrame);
     //processedFrame=processedFrame*2;
-    normalize(processedFrame,processedFrame,0,255,CV_MINMAX);
+    //normalize(processedFrame,processedFrame,0,255,CV_MINMAX);
     //equalizeHist(processedFrame, processedFrame);
 }
 
@@ -2539,6 +2635,7 @@ void updateLarvae(cvb::CvBlobs &In, cvb::CvBlobs &Prev)
   while (nit!=NEW_LARVA.end())
   {
     detected_larvae[nit->first]=nit->second;
+    is_larva(nit->second);
     ++nit;
     }
 }
@@ -3272,8 +3369,101 @@ void extract_background_offline(VideoCapture &capture,
     normalize(resultframe,greyBgFrame,0,255,CV_MINMAX);
   }
   greyBgFrame.convertTo(greyBgFrame,CV_8UC1);
+  
+  // Find the odour cups:
+  if (LRVTRACK_ODOUR_CUPS>0 || LRVTRACK_ODOUR_CUPS==-1)
+    {
+      Mat fgROI;
+      fgROI=Mat::zeros(greyBgFrame.rows ,
+                           greyBgFrame.cols,
+                           greyBgFrame.depth());
+
+      if(circles.size()>0)
+        {
+          circle(fgROI,
+                     Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+                     int(circles[bestCircle][2]),
+                     Scalar(255),
+                     -1);
+        }
+
+      Mat thr;
+      //thr=greyBgFrame&fgROI;
+      greyBgFrame.copyTo(thr);
+      morphologyEx(thr,thr,MORPH_OPEN,Mat(),Point2f(-1,-1),9);
+      /*
+      threshold(thr,
+                    thr,
+                    thresholdlow,
+                    thresholdhigh,
+                    THRESH_BINARY|THRESH_OTSU);
+                    */
+      HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
+          2,   // accumulator resolution (size of the image / 2)
+          500,  // minimum distance between two circles
+          120, // Canny high threshold
+          70, // minimum number of votes
+          60, 90); // min and max radiusV
+      if(cups.size()>2)
+      {
+        cups.erase(cups.begin()+2,cups.end());
+      }
+      Mat cupMap=Mat::zeros(greyBgFrame.rows,greyBgFrame.cols, greyBgFrame.type());
+      for(auto &cup:cups)
+      {
+        circle(cupMap,Point2f(cup[0],cup[1]),cup[2]*1.1,Scalar(255),-1);
+      }
+      cupMap=greyBgFrame&cupMap;
+      threshold(cupMap,cupMap,0,255,THRESH_OTSU+THRESH_BINARY);
+      IplImage ipl= cupMap;
+      labelImg=cvCreateImage(
+          cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
+      cvLabel(&ipl, labelImg, cupBlobs);
+      cvb::cvFilterByArea(cupBlobs, 11000 ,30000);
+      cout << "CupBlobs Size: " << cupBlobs.size() << endl;
+      //cout << "Blob Cup1" << endl;
   //imshow("background",greyBgFrame);
   //waitKey(10000);
+  }
+
+  if(circles.empty() && cupBlobs.empty())
+    return;
+
+  cupContours=Mat(greyBgFrame.rows,greyBgFrame.cols, greyBgFrame.type(),Scalar(255));
+  if(!circles.empty())
+      circle(cupContours,
+          Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+          int(circles[bestCircle][2]),
+          Scalar(0),
+          -1);
+
+  cv::Point2f cc=Point2f(circles[bestCircle][0],
+      circles[bestCircle][1]);
+
+  double ppm;
+  if(LRVTRACK_MPP==0.0)
+    ppm=LRVTRACK_PETRIDISH/(2*circles[bestCircle][2]);
+  else
+    ppm=LRVTRACK_MPP;
+
+  for(auto &b:cupBlobs)
+  {
+    if(LRVTRACK_ODOR_LR == "left")
+    {
+      if(b.second->centroid.x < greyBgFrame.cols/2)
+        writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(b.second->centroid.y-cc.y));
+    }
+    if(LRVTRACK_ODOR_LR == "right")
+    {
+      if(b.second->centroid.x > greyBgFrame.cols/2)
+        writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(b.second->centroid.y-cc.y));
+    }
+    createBlobContour(cupContours,
+        *b.second,
+        CV_8UC3,0,true,
+        Scalar(255),8);
+  }
+  //cupContoursWhitePix=countNonZero(cupContours);
 }
 
 /*
@@ -3302,6 +3492,7 @@ void extract_background(VideoCapture &capture,
   int votes=140; //For the HoughCircles call
   //int THRESH=THRESH_BINARY;
 
+  //Mat ctout=greyBgFrame;
   Mat ctout;
   Mat t;
   //size_t CMAX=255;
@@ -3312,7 +3503,7 @@ void extract_background(VideoCapture &capture,
   // TODO: Check if it's true.
   if(circles.size()==0)
   {
-    threshold(greyBgFrame,t,240,255,THRESH_BINARY|THRESH_OTSU);
+    //threshold(greyBgFrame,t,240,255,THRESH_BINARY|THRESH_OTSU);
     /*adaptiveThreshold(ctout,
       ctout,
       CMAX,
@@ -3321,17 +3512,19 @@ void extract_background(VideoCapture &capture,
       NB,
       THRESHOLD);*/
 
-    GaussianBlur(t, ctout, Size(15, 15), 4, 4 );
+    //addWeighted(greyBgFrame,0,greyBgFrame,2.0,0,ctout);
+    //GaussianBlur(ctout, ctout, Size(15, 15), 4, 4 );
+    GaussianBlur(greyBgFrame, ctout, Size(27, 27), 12, 12 );
     //Loop until we find a set of circles we can work with :)
     while (circles.size()==0 && votes >= 10)
     {
       HoughCircles(ctout, circles, CV_HOUGH_GRADIENT,
-          4,   // accumulator resolution (size of the image / 2)
-          2,  // minimum distance between two circles
-          2, // Canny high threshold
+          8,   // accumulator resolution (size of the image / 2)
+          300,  // minimum distance between two circles
+          60, // Canny high threshold
           votes, // minimum number of votes
-          greyBgFrame.rows/2.3, greyBgFrame.rows/1.95); // min and max radiusV
-      votes-=10;
+          greyBgFrame.rows/2.5, greyBgFrame.rows/1.95); // min and max radiusV
+      votes-=20;
     }
 
     // Once we have a set of circles we try to get the one that will give
@@ -3339,7 +3532,7 @@ void extract_background(VideoCapture &capture,
     double cutlim;
     cutlim=DBL_MAX;
     //size_t mysz=circles.size();
-    for(size_t i=0; i<circles.size();i++)
+    /*for(size_t i=0; i<circles.size();i++)
     {
       Mat cutout=Mat::zeros(ctout.rows,ctout.cols, ctout.type());
       circle(cutout,
@@ -3347,14 +3540,16 @@ void extract_background(VideoCapture &capture,
           circles[i][2],
           Scalar(255),-1);
       cutout=cutout&greyBgFrame;
-      double val=sum(t)[0];///
+      double val=((double) sum(cutout)[0])/(double)(CV_PI*circles[i][2]*circles[i][2]);
+      //val=(val*val)/(CV_PI*circles[i][2]*circles[i][2]);
       //(CV_PI*circles[i][2]*circles[i][2]);
       if(val<cutlim)
       {
         cutlim=val;
         bestCircle=i;
       }
-    }
+    }*/
+    bestCircle=0;
   }
   else{
     bestCircle=0;
@@ -3370,7 +3565,6 @@ void extract_background(VideoCapture &capture,
   //waitKey(1);
   //int z=0;
   // Find the odour cups:
-  //  TODO: More testing on this needed.
   if (LRVTRACK_ODOUR_CUPS>0 || LRVTRACK_ODOUR_CUPS==-1)
     {
       Mat fgROI;
@@ -3388,21 +3582,32 @@ void extract_background(VideoCapture &capture,
         }
 
       Mat thr;
-      thr=greyBgFrame&fgROI;
+      //thr=greyBgFrame&fgROI;
+      greyBgFrame.copyTo(thr);
       double thresholdlow=0;
       double thresholdhigh=0;
       morphologyEx(thr,thr,MORPH_OPEN,Mat(),Point2f(-1,-1),9);
+      /*
       threshold(thr,
                     thr,
                     thresholdlow,
                     thresholdhigh,
                     THRESH_BINARY|THRESH_OTSU);
-      HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
-                       2,   // accumulator resolution (size of the image / 2)
-                       1,  // minimum distance between two circles
-                       240, // Canny high threshold
-                       50, // minimum number of votes
-                       3, 40); // min and max radiusV
+                    */
+      HoughCircles(greyBgFrame, cups, CV_HOUGH_GRADIENT,
+          2,   // accumulator resolution (size of the image / 2)
+          500,  // minimum distance between two circles
+          120, // Canny high threshold
+          70, // minimum number of votes
+          60, 90); // min and max radiusV
+      /*for(auto &cup: cups)
+      {
+
+        cupROI=Mat::zeros(greyBgFrame.rows ,
+                           greyBgFrame.cols,
+                           greyBgFrame.depth());
+        
+      }*/
     }
 
   //Initialize a first background frame. Everything that is in the circle
@@ -3425,6 +3630,7 @@ void extract_background(VideoCapture &capture,
   }
   Mat tempFrame;
   Mat showFrame;
+  //origFrame.copyTo(showFrame);
   process_frame(origFrame,
                greyBgFrame,
                showFrame,
@@ -3527,6 +3733,11 @@ int handle_args(int argc, char* argv[])
       ("file-input,i",
        po::value<string>(&LRVTRACK_FILE_INPUT)->implicit_value(""),
        "Filename of video to be used as input for tracker."
+      )
+
+      ("metadata-file",
+       po::value<string>(&LRVTRACK_INPUT_METADATA)->implicit_value(""),
+       "Filename of metadata for video to be used as input for tracker."
       )
 
       ("camera-input,c",
@@ -3774,6 +3985,30 @@ int handle_args(int argc, char* argv[])
               BOOST_LOG_TRIVIAL(error)
               << "Error: Input file flag given but no file specified. Exiting...";
               exit(3);
+            }
+        }
+      if (vm.count("metadata-file")>0)
+        {
+          LRVTRACK_INPUT_METADATA=vm["metadata-file"].as<string>();
+          if (LRVTRACK_INPUT_METADATA=="")
+            {
+              cout << "METADATA file from: " << LRVTRACK_FILE_INPUT << endl;
+              boost::filesystem::path p(LRVTRACK_FILE_INPUT);
+              boost::filesystem::path dir = p.parent_path();
+              if(dir.string() == "")
+                LRVTRACK_INPUT_METADATA="./metadata.txt" ;
+              else
+                LRVTRACK_INPUT_METADATA=dir.string() + "/metadata.txt" ;
+              if(boost::filesystem::exists(LRVTRACK_INPUT_METADATA) )
+              {
+                cout << "METADATA file found: " << LRVTRACK_INPUT_METADATA << endl;
+                readIni();
+              }
+              else
+              {
+                LRVTRACK_INPUT_METADATA="";
+                cout << "Could not fine metadata file" << endl;
+              }
             }
         }
       if (vm.count("roi")>0)
@@ -4780,7 +5015,7 @@ void secondPass()
   for(auto &p: detected_larvae)
   {
     IDtoIndex[p.second.larva_ID]=nidx++;
-    is_larva(p.second);
+    //is_larva(p.second);
   }
   //LPconstr(mConstr,indexToID,IDtoIndex);
   //LPmaxFunction(mf);
@@ -5040,7 +5275,8 @@ int main(int argc, char* argv[])
     
     if(LRVTRACK_SHOW_LIVE)
     {
-      //make_Video(1,14,19);
+      //make_Video(1,15,17);
+      //make_Video(1,7,9);
       imshow("Extracted Frame",colorFrame);
       char k=waitKey(1);
       if(k=='x')
