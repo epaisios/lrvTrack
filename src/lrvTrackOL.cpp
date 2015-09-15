@@ -825,6 +825,22 @@ void showTags2()
   stringstream frm;
   frm << CURRENT_FRAME;
   map<size_t,larvaObject>::iterator it=detected_larvae.begin();
+  circle(unprocessedFrame,
+      Point2f(circles[bestCircle][0],circles[bestCircle][1]),
+      int(circles[bestCircle][2]),
+      Scalar(0,255,0),1);
+  int PAD=2;
+  for(auto &b:cupBlobs)
+  {
+    Mat cupROI;
+      createBlobContour(unprocessedFrame,
+                         *b.second,
+                         CV_8UC3,
+                         PAD,
+                         false,
+                         Scalar(0,0,255),
+                         8);
+  }
   while (it!=detected_larvae.end())
   {
     if(it->second.start_frame>CURRENT_FRAME ||
@@ -855,7 +871,6 @@ void showTags2()
         1,
         CV_AA);
 
-    int PAD=2;
     Mat larvaROI;
     if(!createSimpleROI(unprocessedFrame,
           blob->minx,
