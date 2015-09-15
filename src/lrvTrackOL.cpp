@@ -10,7 +10,7 @@
 #include <numeric>
 #include <algorithm>
 #include <functional>
-#include "lpSolver.hpp"
+#include "lpsolver.hpp"
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <vector>
@@ -3400,13 +3400,17 @@ void extract_background_offline(VideoCapture &capture,
                     */
       HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
           2,   // accumulator resolution (size of the image / 2)
-          500,  // minimum distance between two circles
-          120, // Canny high threshold
+          400,  // minimum distance between two circles
+          100, // Canny high threshold
           70, // minimum number of votes
-          60, 90); // min and max radiusV
+          60, 100); // min and max radiusV
       if(cups.size()>2)
       {
         cups.erase(cups.begin()+2,cups.end());
+      }
+      if(cups.size()<2)
+      {
+	cerr << "Only ONE cup found!!!" << endl;
       }
       Mat cupMap=Mat::zeros(greyBgFrame.rows,greyBgFrame.cols, greyBgFrame.type());
       for(auto &cup:cups)
@@ -5389,5 +5393,16 @@ int main(int argc, char* argv[])
       std::cerr << "R: " << CURRENT_FRAME << "/" << TOTAL_FRAMES << "\r";
     }
   }
+  cerr << "FINISHED!!!" << endl;
   std::cerr << endl;
+  cupContours.release();
+  processedFrame.release();
+  greyFrame.release();
+  unprocessedFrame.release();
+  colorFrame.release();
+  bgFrame.release();
+  previousFrame.release();
+  previousOrigFrame.release();
+  toRingTemplate.release();
+  return 0;
 }
