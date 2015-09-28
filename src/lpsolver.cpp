@@ -19,7 +19,7 @@ using namespace lrvTrack;
 extern std::map<size_t, std::vector<size_t> > parent_blobs;
 extern std::map<size_t, std::vector<size_t> > children_blobs;
 extern std::map<size_t,larvaObject> detected_larvae;
-
+extern double LRVTRACK_MPP;
 /*bool testPLQuery()
 {
   char *expression=strdup("library(clpfd)");
@@ -182,15 +182,27 @@ int LPconstr(std::vector<double> &solution,
         children_blobs[lID].size());
     if(minVal==0)
       minVal=1;
+    int con_type=GE;
+    if(p.second.area_mean*LRVTRACK_MPP*LRVTRACK_MPP>=3.65)
+    {
+      con_type=GE;
+      minVal=2;
+    }
+    /*if(p.second.area_mean*LRVTRACK_MPP*LRVTRACK_MPP<=2.95)
+    {
+      con_type=EQ;
+      minVal=1;
+    }*/
+
     vector<double> minConst(total_larvae,0.0);
     minConst[IDtoIndex[lID]]=1.0;
     //minConst.push_back(minVal);
     double* row = &minConst[0];
-    if(!add_constraintex(lp, vars, row, colno, GE, minVal))
+    if(!add_constraintex(lp, vars, row, colno, con_type, minVal))
       return(3);
     if(detected_larvae[lID].area_mean<minarea)
       minarea=detected_larvae[lID].area_mean<minarea;
-    for(auto &c: children_blobs[lID])
+    /*for(auto &c: children_blobs[lID])
     {
       for(auto &d: children_blobs[lID])
       {
@@ -208,9 +220,9 @@ int LPconstr(std::vector<double> &solution,
           }
         }
       }
-    }
+    }*/
   }
-  for (auto &p: detected_larvae)
+  /*for (auto &p: detected_larvae)
   {
     size_t lID=p.second.larva_ID;
     vector<double> constr(total_larvae,0.0);
@@ -221,7 +233,7 @@ int LPconstr(std::vector<double> &solution,
       if(!add_constraintex(lp, vars, row, colno, EQ,1.0))
         return(3);
     }
-  }
+  }*/
   for (auto &p: detected_larvae)
   {
     size_t lID=p.second.larva_ID;

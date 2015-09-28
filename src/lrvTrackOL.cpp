@@ -2035,7 +2035,10 @@ void updateOneLarva(cvb::CvBlobs &In,
     ++newLarva.lifetimeWithStats;
     newLarva.lastBlobWithStats=0;
 
-    newLarva.isCluster=false;
+    if(blob.area * LRVTRACK_MPP *LRVTRACK_MPP > 6.0)
+      newLarva.isCluster=true;
+    else
+      newLarva.isCluster=false;
 
     //Initialize the area values
     newLarva.area.push_back(blob.area);
@@ -2086,46 +2089,48 @@ void updateOneLarva(cvb::CvBlobs &In,
     larvaDistanceMap Distances(cntPoints);
     //computeSpine(blob,Distances,frame);
     //fixContourSimple(blob,Distances,
-    fixContour(blob,Distances,
-        LRVTRACK_CONTOUR_RESOLUTION,
-        colorFrame,previousFrame);
-    newLarva.lrvDistances.push_back(Distances);
-    newLarva.length.push_back(Distances.MaxDist);
-    newLarva.length_mean = Distances.MaxDist;
-    newLarva.length_sum= Distances.MaxDist;
-    newLarva.length_max = Distances.MaxDist;
-    newLarva.length_min = Distances.MaxDist;
-    Point2f Head,Tail;
-    Point2f bp(newLarva.blobs.back().minx,newLarva.blobs.back().miny);
-    Head=Distances.Spine[0]-bp;
-    Tail=Distances.Spine.back()-bp;
-    newLarva.heads_brightness.push_back(getSurroundingSize(Head,blob,greyFrame));
-    newLarva.tails_brightness.push_back(getSurroundingSize(Tail,blob,greyFrame));
-    newLarva.angular_speed.push_back(0);
+    if(!newLarva.isCluster)
+    {
+      fixContour(blob,Distances,
+          LRVTRACK_CONTOUR_RESOLUTION,
+          colorFrame,previousFrame);
+      newLarva.lrvDistances.push_back(Distances);
+      newLarva.length.push_back(Distances.MaxDist);
+      newLarva.length_mean = Distances.MaxDist;
+      newLarva.length_sum= Distances.MaxDist;
+      newLarva.length_max = Distances.MaxDist;
+      newLarva.length_min = Distances.MaxDist;
+      Point2f Head,Tail;
+      Point2f bp(newLarva.blobs.back().minx,newLarva.blobs.back().miny);
+      Head=Distances.Spine[0]-bp;
+      Tail=Distances.Spine.back()-bp;
+      newLarva.heads_brightness.push_back(getSurroundingSize(Head,blob,greyFrame));
+      newLarva.tails_brightness.push_back(getSurroundingSize(Tail,blob,greyFrame));
+      newLarva.angular_speed.push_back(0);
 
-    newLarva.heads.push_back(Head);
-    newLarva.tails.push_back(Tail);
+      newLarva.heads.push_back(Head);
+      newLarva.tails.push_back(Tail);
 
-    Point2f MP;
-    MP.x=Distances.MidPoint.x-newLarva.blobs.back().minx;
-    MP.y=Distances.MidPoint.y-newLarva.blobs.back().miny;
-    Point2f AxS(MP.x,Tail.y);
-    newLarva.headBodyAngle.push_back(angleD(Tail,MP,Head));
-    newLarva.orientationAngle.push_back(cvb::cvAngle(&blob));
+      Point2f MP;
+      MP.x=Distances.MidPoint.x-newLarva.blobs.back().minx;
+      MP.y=Distances.MidPoint.y-newLarva.blobs.back().miny;
+      Point2f AxS(MP.x,Tail.y);
+      newLarva.headBodyAngle.push_back(angleD(Tail,MP,Head));
+      newLarva.orientationAngle.push_back(cvb::cvAngle(&blob));
 
-    newLarva.width.push_back(Distances.WidthDist);
-    newLarva.width_mean = Distances.WidthDist;
-    newLarva.width_sum= Distances.WidthDist;
-    newLarva.width_max = Distances.WidthDist;
-    newLarva.width_min = Distances.WidthDist;
+      newLarva.width.push_back(Distances.WidthDist);
+      newLarva.width_mean = Distances.WidthDist;
+      newLarva.width_sum= Distances.WidthDist;
+      newLarva.width_max = Distances.WidthDist;
+      newLarva.width_min = Distances.WidthDist;
 
-    double distMin=min(
-            p2fdist(Head,newLarva.heads.back())+p2fdist(Tail,newLarva.tails.back()),
-            p2fdist(Tail,newLarva.heads.back())+p2fdist(Head,newLarva.tails.back()));
-    newLarva.minHTDist.push_back(distMin);
-    newLarva.minHTDist_sum=newLarva.minHTDist.back();
-    newLarva.minHTDist_mean=newLarva.minHTDist_sum;
-
+      double distMin=min(
+          p2fdist(Head,newLarva.heads.back())+p2fdist(Tail,newLarva.tails.back()),
+          p2fdist(Tail,newLarva.heads.back())+p2fdist(Head,newLarva.tails.back()));
+      newLarva.minHTDist.push_back(distMin);
+      newLarva.minHTDist_sum=newLarva.minHTDist.back();
+      newLarva.minHTDist_mean=newLarva.minHTDist_sum;
+    }
     newLarva.round_flag.push_back(false);
 
 
@@ -2196,7 +2201,11 @@ void updateOneLarva(cvb::CvBlobs &In,
       cur_larva.lastFrameWithStats=CURRENT_FRAME;
       return;
     }
-
+    if(cur_larva.isCluster)
+    {
+      cur_larva.lastFrameWithStats=CURRENT_FRAME;
+      return;
+    }
     // Try to find Head and Tail
     //larvaSkel newLarvaSkel(larvaROI,centroid);
     //cur_larva.lrvskels.push_back(newLarvaSkel);
@@ -2518,10 +2527,15 @@ void process_frame(Mat &newFrame,
     // .
     //absdiff(newFrame,greyBgFrame,fgFrame);
     if(LRVTRACK_EXTRACT_OFFLINEBG)
+      //absdiff(newFrame,greyBgFrame,fgFrame);
       addWeighted(newFrame, 1.0, greyBgFrame, -1.0, 0.0, fgFrame);
     else
       addWeighted(newFrame, 1.0, greyBgFrame, -4.0, 0.0, fgFrame);
-
+    //equalizeHist(fgFrame,fgFrame);
+    normalize(fgFrame,fgFrame,0,255,CV_MINMAX);
+    
+    //imshow("foreground",fgFrame);
+    //waitKey(-1);
     fgROI=Mat(fgFrame.rows , fgFrame.cols,fgFrame.depth(),Scalar(0));
 
     //Use the registered bestCircle to get construct the ROI as a circle
@@ -2551,8 +2565,20 @@ void process_frame(Mat &newFrame,
           Scalar(255));
     }
 
+    for(auto &b:cupBlobs)
+    {
+      Mat cupROI;
+      createBlobContour(showFrame,
+          *b.second,
+          CV_8UC3,
+          2,
+          false,
+          Scalar(0,0,255),
+          8);
+    }
+
     // Same process for odor cups
-    if(cups.size()>0)
+    /*if(cups.size()>0)
     {
       for(size_t i=0; i<cups.size(); ++i)
       {
@@ -2567,7 +2593,7 @@ void process_frame(Mat &newFrame,
             Scalar(0,0,255),
             1);
       }
-    }
+    }*/
 
     // Construct a complete image of the BW fgROI and the whole frame
     fgImage=fgFrame&fgROI;
@@ -3200,6 +3226,96 @@ void contourLarvaeTrack(cvb::CvBlobs &In,
 }*/
 
 /* Function to extract and process each frame so that the background is dark
+ * and the forground white. Working with UMat
+ *   Input:
+ *       * capture: the capture device
+ *   Output:
+ *       * output: the processed frame
+ *       * origFrame: the RGB version of the image
+ */
+bool u_get_next_frame(VideoCapture &capture, UMat &output, UMat &colorOutput,size_t step=1)
+{
+  if(TOTAL_FRAMES<CURRENT_FRAME+step && TOTAL_FRAMES!=0)
+  {
+    previousOrigFrame=Mat();
+    return false;
+  }
+  if(step!=1)
+    for(int i=0;i<(int) step-1;i++)
+    {
+      bool res=capture.grab();
+      if(!res)
+      {
+        previousOrigFrame=Mat();
+        return res;
+      }
+    }
+  CURRENT_FRAME+=step;
+
+  bool retval=capture.read(unprocessedFrame);
+  unprocessedFrame.copyTo(output);
+  if(retval==false)
+  {
+    previousOrigFrame=Mat();
+    return retval;
+  }
+
+  if(step==1)
+  {
+    if( !previousOrigFrame.empty())
+    {
+      UMat dif;
+      absdiff(output,previousOrigFrame,dif);
+      //cout << "NORM: " << norm(dif) << endl;
+      if(norm(dif)>(output.cols*output.rows*0.095))
+      {
+        //Frame corrupted, we keep the previous
+        previousOrigFrame.copyTo(output);
+      }
+      else
+        output.copyTo(previousOrigFrame);
+    }
+    else{
+      output.copyTo(previousOrigFrame);
+    }
+  }
+
+
+  UMat xchange;
+  if(output.channels()==3)
+  {
+    cvtColor(output,output,CV_BGR2GRAY);
+  }
+
+  if(LRVTRACK_INVERT==true)
+  {
+    UMat ctout;
+    //double MF=1.3;
+    //size_t PF=0;
+    int THRESHOLD=255;
+    //double cpow=1.25;
+    //output=output*MF+PF;
+    addWeighted(output,1.0,output,-2.0,THRESHOLD,output);
+    output.convertTo(output,CV_32F);
+    //pow(output,cpow,output);
+    convertScaleAbs(output,output,1,0);
+  }
+  /*brightnessContrastGamma(//output,
+                          output,
+                          LRVTRACK_BRIGHTNESS,
+                          LRVTRACK_CONTRAST,
+                          LRVTRACK_GAMMA);*/
+
+  cvtColor(output,colorOutput,CV_GRAY2BGR);
+
+  //imshow("OUTPUT",output);
+  //waitKey(1);
+  return retval;
+//#endif
+}
+
+
+/* Function to extract and process each frame so that the background is dark
  * and the forground white.
  *   Input:
  *       * capture: the capture device
@@ -3347,6 +3463,7 @@ void extract_background_offline(VideoCapture &capture,
   Mat tmpFrame32f;
   size_t width=capture.get(CV_CAP_PROP_FRAME_WIDTH);
   size_t height=capture.get(CV_CAP_PROP_FRAME_HEIGHT);
+  // LRVTRACK_EXTRACT_OFFLINEBG_MIN=true;
   Mat resultframe;
   if(LRVTRACK_EXTRACT_OFFLINEBG_MIN) 
     resultframe= Mat(height,width,CV_8UC1,Scalar(255));
@@ -3359,11 +3476,11 @@ void extract_background_offline(VideoCapture &capture,
   while(get_next_frame(capture,tmpFrame,origFrame,10))
   {
     if(LRVTRACK_EXTRACT_OFFLINEBG_MIN) 
-      resultframe=cv::min(resultframe,tmpFrame);
+      min(resultframe,tmpFrame,resultframe);
     else
     {
       tmpFrame.convertTo(tmpFrame32f,CV_32FC1);
-      resultframe+=tmpFrame32f;
+      add(resultframe,tmpFrame32f,resultframe);
     }
     std::cerr << "B: " << CURRENT_FRAME << "/" << total << "\r";
     count++;
@@ -3380,10 +3497,129 @@ void extract_background_offline(VideoCapture &capture,
     resultframe.convertTo(greyBgFrame,CV_8UC1);
   else
   {
-    resultframe*=(1.0/count);
+
+    //resultframe*=(1.0/count);
+    //resultframe.mul(resultframe,1.0/count);
+    resultframe.convertTo(resultframe,resultframe.type(),1.0/count);
     normalize(resultframe,greyBgFrame,0,255,CV_MINMAX);
   }
   greyBgFrame.convertTo(greyBgFrame,CV_8UC1);
+
+  // Find the petri-dish if not already defined from command line
+  if(circles.size()==0)
+  {
+    //threshold(greyBgFrame,t,240,255,THRESH_BINARY|THRESH_OTSU);
+    /*adaptiveThreshold(ctout,
+      ctout,
+      CMAX,
+      METHOD,
+      THRESH,
+      NB,
+      THRESHOLD);*/
+
+    //addWeighted(greyBgFrame,0,greyBgFrame,2.0,0,ctout);
+    Mat ctout;
+
+    //int votes=270;
+    double bgNorm=norm(greyBgFrame,NORM_L1)/(greyBgFrame.rows * greyBgFrame.cols);
+    cout << "NORM: " << bgNorm << endl;
+    //GaussianBlur(greyBgFrame, ctout, Size(0, 0), (2*(int)bgNorm), (2*(int)bgNorm));
+    //bilateralFilter(greyBgFrame,ctout,128,128,128);
+    //bilateralFilter(greyBgFrame,ctout,164,350,350);
+    /*Mat element = getStructuringElement(MORPH_CROSS, Size(11, 11));
+    dilate(ctout,ctout,element);
+    dilate(ctout,ctout,element);
+    dilate(ctout,ctout,element);*/
+    //GaussianBlur(greyBgFrame, ctout, Size(0, 0), 32, 32 );
+    //greyBgFrame.copyTo(ctout);
+    //equalizeHist(ctout,ctout);
+    greyBgFrame.copyTo(ctout);
+    normalize(ctout,ctout,0,255,CV_MINMAX);
+    //threshold(ctout,ctout,bgNorm-20,255,THRESH_BINARY_INV);
+    adaptiveThreshold(ctout,ctout,255,ADAPTIVE_THRESH_GAUSSIAN_C,THRESH_BINARY_INV,355,0);
+    //threshold(ctout,ctout,70,255,THRESH_OTSU);
+    //bitwise_not(ctout, ctout);
+      IplImage ipl= ctout;
+      labelImg=cvCreateImage(
+          cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
+      cvLabel(&ipl, labelImg, dishBlob);
+      cvb::cvFilterByArea(dishBlob, 1100400 ,3292529);
+      cout << "DishBlob Size: " << dishBlob.size() << endl;
+      if(dishBlob.size() !=1 )
+      {
+        cout << "More than one dish blobs found!!!" << endl;
+      }
+      CvBlob *pdish=dishBlob.begin()->second;
+      float cx=pdish->minx+((pdish->maxx-pdish->minx)/2);
+      cerr << "cx: " << cx << endl;
+      float cy=pdish->miny+((pdish->maxy-pdish->miny)/2);
+      cerr << "cy: " << cy << endl;
+      float radius=min((pdish->maxx-pdish->minx), (pdish->maxx-pdish->minx));
+      radius = 0.48 * radius;
+      if ( (int) radius % 2 == 1 )
+        radius++;
+      Vec3f petridish(cx,cy,radius);
+      circles.push_back(petridish);
+    //Loop until we find a set of circles we can work with :)
+    //while (circles.size()==0 && votes >= 10)
+    //{
+      //HoughCircles(ctout, circles, CV_HOUGH_GRADIENT,
+          //4,   // accumulator resolution (size of the image / 2)
+          //10,  // minimum distance between two circles
+          //100, // Canny high threshold
+          //votes, // minimum number of votes
+          //greyBgFrame.rows/3.0, greyBgFrame.rows/2.0); // min and max radiusV
+    //  votes-=20;
+    //}
+    cout << "Petri dish circles size: "  << circles.size() << endl;
+    cout << "X,Y,R: " << circles[0][0] << ", " << circles[0][1] << ", " << circles[0][2] << endl;
+    
+    cvtColor(ctout,ctout,CV_GRAY2BGR);
+    for(size_t i=0; i<circles.size();i++)
+    {
+      circle(ctout,
+          Point2f(circles[i][0],circles[i][1]),
+          circles[i][2],
+          Scalar(0,255,0),1);
+    }
+
+    // Once we have a set of circles we try to get the one that will give
+    // us the best ratio brigthness/size. Assign its ID to bestCircle
+    double cutlim;
+    cutlim=DBL_MAX;
+    //size_t mysz=circles.size();
+    /*for(size_t i=0; i<circles.size();i++)
+    {
+      Mat cutout=Mat::zeros(ctout.rows,ctout.cols, ctout.type());
+      circle(cutout,
+          Point2f(circles[i][0],circles[i][1]),
+          circles[i][2],
+          Scalar(255),-1);
+      cutout=cutout&greyBgFrame;
+      double val=((double) sum(cutout)[0])/(double)(CV_PI*circles[i][2]*circles[i][2]);
+      //val=(val*val)/(CV_PI*circles[i][2]*circles[i][2]);
+      //(CV_PI*circles[i][2]*circles[i][2]);
+      if(val<cutlim)
+      {
+        cutlim=val;
+        bestCircle=i;
+      }
+    }*/
+    bestCircle=0;
+    /*Mat copyMat;
+    greyBgFrame.copyTo(copyMat);
+    cvtColor(copyMat,copyMat,CV_GRAY2BGR);
+    circle(copyMat,
+        Point2f(circles[0][0],circles[0][1]),
+        circles[0][2],
+        Scalar(0,255,0),1);
+
+    imshow("BG with circle", copyMat);
+    waitKey(1000000000);*/
+  }
+  else{
+    bestCircle=0;
+  }
   
   // Find the odour cups:
   if (LRVTRACK_ODOUR_CUPS>0 || LRVTRACK_ODOUR_CUPS==-1)
@@ -3430,7 +3666,7 @@ void extract_background_offline(VideoCapture &capture,
       Mat cupMap=Mat::zeros(greyBgFrame.rows,greyBgFrame.cols, greyBgFrame.type());
       for(auto &cup:cups)
       {
-        circle(cupMap,Point2f(cup[0],cup[1]),cup[2]*1.1,Scalar(255),-1);
+        circle(cupMap,Point2f(cup[0],cup[1]),cup[2]*1.3,Scalar(255),-1);
       }
       cupMap=greyBgFrame&cupMap;
       threshold(cupMap,cupMap,0,255,THRESH_OTSU+THRESH_BINARY);
@@ -3461,7 +3697,10 @@ void extract_background_offline(VideoCapture &capture,
 
   double ppm;
   if(LRVTRACK_MPP==0.0)
+  {
     ppm=LRVTRACK_PETRIDISH/(2*circles[bestCircle][2]);
+    LRVTRACK_MPP=ppm;
+  }
   else
     ppm=LRVTRACK_MPP;
 
@@ -5031,9 +5270,26 @@ void secondPass()
   vector<size_t> indexToID;
   map<size_t,size_t> IDtoIndex;
   size_t nidx=0;
+  cout << "MPP: " << LRVTRACK_MPP << endl;
   for(auto &p: detected_larvae)
   {
     IDtoIndex[p.second.larva_ID]=nidx++;
+
+    vector<double> clLenStDevArr;
+    vector<double> clLenMeanArr;
+    vector<double> clWidStDevArr;
+    vector<double> clWidMeanArr;
+    vector<double> clPerStDevArr;
+    vector<double> clPerMeanArr;
+    meanStdDev(p.second.length,clLenMeanArr,clLenStDevArr);
+    meanStdDev(p.second.width,clWidMeanArr,clWidStDevArr);
+    meanStdDev(p.second.perimeter,clPerMeanArr,clPerStDevArr);
+    cout << "AVG LARVA SIZE: " << p.second.larva_ID << ", " 
+         << p.second.area_sum/p.second.area.size() << ", "
+         << clLenStDevArr[0] << ", "
+         << clWidStDevArr[0] << ", "
+         << clPerStDevArr[0]
+         << endl;
     //is_larva(p.second);
   }
   //LPconstr(mConstr,indexToID,IDtoIndex);

@@ -146,6 +146,7 @@ std::vector<size_t> certain_blobs;
 std::vector<cv::Vec3f> circles;
 std::vector<cv::Vec3f> cups;
 cvb::CvBlobs cupBlobs;
+cvb::CvBlobs dishBlob;
 cv::Mat cupContours;
 size_t cupContoursWhitePix;
 

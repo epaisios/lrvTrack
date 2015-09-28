@@ -1544,7 +1544,7 @@ void fixContour(
   dIdx.resize(2);
 
 std::vector<float> vcurv;
-if(xpoints.size()<4*RES-10)
+if(xpoints.size()<100*RES-10)
 {
   try{
     spline4(xpoints,
