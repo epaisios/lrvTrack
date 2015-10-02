@@ -1055,12 +1055,16 @@ void getBestCurvatureS(std::vector<float> &curv,
   //Curvatures doubly smoothened
   std::vector<float> c;
   //Temporary var to store smoothened curvatures
-  std::vector<float> c_tmp;
+  std::vector<float> c_tmp1;//, c_tmp2, c_tmp3, c_tmp4;
   //Size of filter
-  int sf=11;
+  //std::cout << printVector(curv) << std::endl; 
+  int sf=(curv.size()*0.05);
   //std::cout << printVector(curv) << std::endl;
-  smoothVec(curv,c_tmp,sf,(float)0.0);
-  smoothVecMap(c_tmp,curvatures,c,sf,(float)0.0);
+  smoothVec(curv,c_tmp1,sf,(float)0.0);
+  //smoothVecMap(c_tmp,curvatures,c,sf,(float)0.0);
+  
+  smoothVecMap(c_tmp1,curvatures,c,sf,(float)0.0);
+  
   //std::cout << printVector(c) << std::endl;
   //std::cout << "=============================" << std::endl;
 
@@ -1397,71 +1401,28 @@ void nospline(std::vector<cv::Point2f> &cp,
            std::vector<float> &vcurv,
            double &cvariance)
 {
-  alglib::real_1d_array x,y;                 
-  alglib::real_1d_array ad,aw;               
-  alglib::ae_int_t info;                     
-  alglib::ae_int_t m=n;
-  alglib::real_1d_array nu;
-  alglib::integer_1d_array inu;
-  inu.setlength(0);
-  nu.setlength(0);
-  //alglib::ae_int_t ink=0;                     
-  size_t extra=1;
-  x.setlength(m+2*extra);                          
-  y.setlength(m+2*extra);                          
-  ad.setlength(m+2*extra);                         
-  aw.setlength(m+2*extra);                         
-  alglib::spline1dinterpolant sx;            
-  alglib::spline1dinterpolant sy;            
-  alglib::spline1dfitreport rep;             
-  double rho=LRVTRACK_SMOOTHING;
-  alglib::pspline2interpolant p;
-  std::vector<cv::Point2f> NP;
-  for(int i=0;i<extra;i++)
-  {
-    x[i]=cp[cp.size()-extra+i].x;
-    y[i]=cp[cp.size()-extra+i].y;
-    //aw[i]=w[cp.size()-extra+i];
-    aw[i]=1e-15;
-  }
-  for(int i=0;i<m;i++)
-  {
-    x[i+extra]=cp[i].x;
-    y[i+extra]=cp[i].y;
-    aw[i+extra]=w[i];
-    //aw[i]=1e-15;
-  }
-  for(int i=0;i<extra;i++)
-  {
-    x[extra+m+i]=cp[i].x;
-    y[extra+m+i]=cp[i].y;
-    aw[i+m+extra]=w[i];
-    aw[i]=1e-15;
-  }
-  extractCentripetal(x,y,ad,d);
-  
-  double t0=ad[extra];
-  double tn=ad[extra+m];
-  double t;
-  double step=(tn-t0)/cp.size();
+  double sigma=LRVTRACK_SMOOTHING;
+  cv::Mat G;
+  int sz=cp.size()*0.05*2+1;
+  std::vector<cv::Point2f> tcp;
+  std::vector<cv::Point2f> tnp;
+  tcp.insert(tcp.end(),cp.begin(),cp.end());
+  tcp.insert(tcp.end(),cp.begin(),cp.end());
+  tcp.insert(tcp.end(),cp.begin(),cp.end());
+  cv::transpose(cv::getGaussianKernel(sz,sigma,CV_64FC1),G);
+  //cv::flip(G,G,0);
+  //cv::Point anchor(G.cols - sz -1, G.rows -0 -1);
+  //cv::filter2D(tcp,tnp,-1,G,anchor);
+  cv::filter2D(tcp,tnp,-1,G);
+  np.insert(np.begin(),tnp.begin()+cp.size(),tnp.begin()+2*cp.size());
+  //std::cout << "CP SIZE: " << cp.size() << std::endl;
+  //std::cout << "NP SIZE: " << np.size() << std::endl;
+  //std::cout << printVector(cp) << std::endl;
+  //std::cout << printVector(np) << std::endl;
+  curvVec(np,vcurv);
   std::vector<float> dmax(di.size(),0);
-  std::vector<float> curvature;
-  std::vector<float> pvals;
-  std::vector<double> adfactor;
-  adfactor.push_back(step);
-  size_t j=0;
-  for (int i=0;i<cp.size();i++)
-  {
-    //step=adfactor[j];
-    t=t0+i*step;
-    np.push_back(cp[i]);
-    pvals.push_back(t);
-    while(t<ad[j])
-      j++;
-  }
-  pvals.push_back(t+step);
-  curvVec(np,pvals,vcurv);
   getBestCurvatureS(vcurv,curvatures,di,dmax,cvariance);
+
 }
 
 void spline4(std::vector<cv::Point2f> &cp,
@@ -1492,7 +1453,7 @@ void spline4(std::vector<cv::Point2f> &cp,
   alglib::spline1dinterpolant sx;            
   alglib::spline1dinterpolant sy;            
   alglib::spline1dfitreport rep;             
-  double rho=LRVTRACK_SMOOTHING;
+  double rho=LRVTRACK_SMOOTHING/10;
   alglib::pspline2interpolant p;
   std::vector<cv::Point2f> NP;
   for(int i=0;i<extra;i++)

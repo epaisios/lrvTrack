@@ -1425,8 +1425,16 @@ void fixContour(
   double cvariance;
   cv::Point2f bp(blob.minx,blob.miny);
   int PAD=0;
-  blobToPointVector(blob,ppoints);
-  //blobToContourVector(blob,frame,2,ppoints);
+  //blobToPointVector(blob,ppoints);
+  blobToContourVector(blob,frame,2,ppoints);
+  bool RECONSTRUCT_SPINE=false;
+  if(ppoints.size()<0.7*RES)
+  {
+    ppoints.clear();
+    RECONSTRUCT_SPINE=true;
+    blobToPointVector(blob,ppoints);
+  }
+
   std::vector<cv::Point2f> xpoints;
   //fixContourSimple(blob,frame);
   //cv::approxPolyDP(tmpPoints,ppoints,0.3,true);
@@ -1544,8 +1552,10 @@ void fixContour(
   dIdx.resize(2);
 
 std::vector<float> vcurv;
-if(xpoints.size()<100*RES-10)
+//if(xpoints.size()<1000*RES)
+if(RECONSTRUCT_SPINE)
 {
+    //std::cout << "Y" << std::endl;
   try{
     spline4(xpoints,
         d,
@@ -1573,7 +1583,7 @@ if(xpoints.size()<100*RES-10)
 }
 else
 {
-    std::cerr << "No need to reconstruct contour" << std::endl;
+    //std::cout << "N" << std::endl;
     nospline(xpoints,
         d,
         w,
@@ -1843,7 +1853,7 @@ else
       cv::Scalar(0,0,255),-1);*/
 
   //if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label==7)
+  if(blob.label!=0)
   {
     size_t i;
 
@@ -1855,7 +1865,7 @@ else
     for(i=0;i<Distances.Angles.size()-1;i++)
       std::cerr << Distances.Angles[i] << ", " ;
     std::cerr << Distances.Angles.back() << std::endl;*/
-    cv::waitKey(10000);
+    cv::waitKey(-1);
     std::cout << CURRENT_FRAME << "," << blob.label << "," << Distances.WidthDist << "," <<
       Distances.WidthSD << std::endl;
     //g1.remove_tmpfiles();
