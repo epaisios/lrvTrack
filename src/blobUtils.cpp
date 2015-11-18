@@ -1045,6 +1045,16 @@ void contourAngles(std::vector<cv::Point2f> &in,
   }
 }
 
+void getBestCurvaturePoints(std::vector<cv::Point2f> &np)
+{
+  double dmin,dmax,amax;
+  for(int pidx=0 ; pidx<np.size() ; pidx++)
+  {
+    int lidx=pidx+1;
+    if(lidx>=np.size()) lidx=0;
+  }
+}
+
 void getBestCurvatureS(std::vector<float> &curv,
                       std::map<float,size_t> &curvatures,
                       std::vector<size_t> &di,
@@ -1055,15 +1065,17 @@ void getBestCurvatureS(std::vector<float> &curv,
   //Curvatures doubly smoothened
   std::vector<float> c;
   //Temporary var to store smoothened curvatures
-  std::vector<float> c_tmp1;//, c_tmp2, c_tmp3, c_tmp4;
+  std::vector<float> c_tmp1, c_tmp2, c_tmp3;// c_tmp4;
   //Size of filter
   //std::cout << printVector(curv) << std::endl; 
   int sf=(curv.size()*0.05);
   //std::cout << printVector(curv) << std::endl;
   smoothVec(curv,c_tmp1,sf,(float)0.0);
+  smoothVec(c_tmp1,c_tmp2,sf,(float)0.0);
+  smoothVec(c_tmp2,c_tmp3,sf,(float)0.0);
   //smoothVecMap(c_tmp,curvatures,c,sf,(float)0.0);
   
-  smoothVecMap(c_tmp1,curvatures,c,sf,(float)0.0);
+  smoothVecMap(c_tmp3,curvatures,c,sf,(float)0.0);
   
   //std::cout << printVector(c) << std::endl;
   //std::cout << "=============================" << std::endl;

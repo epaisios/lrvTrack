@@ -1,5 +1,5 @@
 #include <opencv2/core.hpp>
-#include <lp_lib.h>
+#include <lpsolve/lp_lib.h>
 #undef REAL
 #undef NORMAL
 #include <string>
@@ -85,6 +85,272 @@ void LPmaxFunction(Mat &mf)
   }
   Mat m(mf_vec);
   m.copyTo(mf);
+}
+int LPconstrAvg(std::vector<double> &solution,
+             std::vector<size_t> &indexToID, 
+            std::map<size_t,size_t> &IDtoIndex,
+	    double avgSize)
+{
+  size_t total_larvae=detected_larvae.size();
+  int ret;
+  //The vector containing the contraints to be converted to Mat
+  //List of nodes that have been scanned as parents either directly
+  //or through the deep search loop.
+  vector<vector<double> > constraints;
+  vector<size_t> parents_scanned;
+  /*//List of nodes that converge to themselves in two steps:
+  [>           
+   *  \ /        A
+       |        / \
+       |       B   C
+       |        \ /
+       V         D
+  <]
+  vector<size_t> marked_nodes;
+  size_t idx=0;
+  for(auto &p: detected_larvae)
+  {
+    size_t lID=p.second.larva_ID;
+
+    indexToID.push_back(lID);
+    IDtoIndex[lID]=idx;
+    idx++;
+    //If all children of current node have only one parent
+    // HERE we assume that these assignments must be correct
+    // and if a parent has a child then that child has him as parent
+    if((all_of(children_blobs[lID].begin(),children_blobs[lID].end(),
+            [](size_t i){return 
+            (parent_blobs[i].size()==1);})) && 
+        //If there's more than one children
+        children_blobs[lID].size()>1 &&
+        //If all children have only one parent
+        (all_of(children_blobs[lID].begin(),children_blobs[lID].end(),
+                [](size_t i){return 
+                (children_blobs[i].size()==1);})) )
+    {
+      //Check if they all converge to the same node
+      size_t ccID=children_blobs[children_blobs[lID].front()].front();
+      class ccomp{
+        public:
+          ccomp(size_t a):
+            comp_cID(a){}
+          bool converges(size_t a){return children_blobs[a].front()==comp_cID;}
+        private:
+          size_t comp_cID;
+      };
+      ccomp cur_ccomp(ccID);
+      //See here for explanation:
+      //http://stackoverflow.com/a/6854152
+      if(all_of(children_blobs[lID].begin(),children_blobs[lID].end(),
+            std::bind(&ccomp::converges, &cur_ccomp,std::placeholders::_1)
+            )
+        )
+      {
+        marked_nodes.push_back(lID);
+      }
+    }
+  }*/
+
+  /*if(testPLQuery())
+    cout << "PL TRUE" << endl;*/
+  lprec *lp;
+  lp = make_lp(0, detected_larvae.size());
+  set_add_rowmode(lp, TRUE);
+  size_t vars=detected_larvae.size();
+  vector<int> cols;
+  for(size_t i=0;i<vars;i++)
+    cols.push_back(i+1);
+  int  *colno=&cols[0];
+  double minarea=DBL_MAX;
+  for(auto &p: detected_larvae)
+  {
+    size_t lID=p.second.larva_ID;
+    //cout << "CONSTRAINT_CONSTRUCT: P[" << lID << "]=" << printVector(parent_blobs[lID]) << endl;
+    //cout << "CONSTRAINT_CONSTRUCT: C[" << lID << "]=" << printVector(children_blobs[lID]) << endl;
+    size_t minVal=max(parent_blobs[lID].size(),
+        children_blobs[lID].size());
+    if(minVal==0)
+      minVal=1;
+    int con_type=GE;
+    if(p.second.area_mean>=2*avgSize)
+    {
+      con_type=GE;
+      minVal=2;
+    }
+    if(p.second.area_mean<=0.9*avgSize)
+    {
+      con_type=EQ;
+      minVal=1;
+    }
+
+    vector<double> minConst(total_larvae,0.0);
+    minConst[IDtoIndex[lID]]=1.0;
+    //minConst.push_back(minVal);
+    double* row = &minConst[0];
+    if(!add_constraintex(lp, vars, row, colno, con_type, minVal))
+      return(3);
+    if(detected_larvae[lID].area_mean<minarea)
+      minarea=detected_larvae[lID].area_mean<minarea;
+    /*for(auto &c: children_blobs[lID])
+    {
+      for(auto &d: children_blobs[lID])
+      {
+        if(c!=d)
+        {
+          if(detected_larvae[c].area_mean>
+             detected_larvae[d].area_mean)
+          {
+            vector<double> leConst(total_larvae,0.0);
+            leConst[IDtoIndex[c]]=1.0;
+            leConst[IDtoIndex[d]]=-1.0;
+            double* lerow = &leConst[0];
+            if(!add_constraintex(lp, vars, lerow, colno, GE, 0.0))
+              return(3);
+          }
+        }
+      }
+    }*/
+  }
+  /*for (auto &p: detected_larvae)
+  {
+    size_t lID=p.second.larva_ID;
+    vector<double> constr(total_larvae,0.0);
+    if(detected_larvae[lID].area_mean<minarea*1.5)
+    {
+      constr[IDtoIndex[lID]]=1.0;
+      double* row = &constr[0];
+      if(!add_constraintex(lp, vars, row, colno, EQ,1.0))
+        return(3);
+    }
+  }*/
+  int col=0;
+  for (auto &p: detected_larvae)
+  {
+    set_int(lp,col++,TRUE);
+    size_t lID=p.second.larva_ID;
+    //If this parent is in the parents_scanned, skip
+    if(find(parents_scanned.begin(),parents_scanned.end(),lID)
+        !=parents_scanned.end())
+      continue;
+
+    vector<double> constr(total_larvae,0.0);
+    //vector<double> rconstr(total_larvae,0.0);
+
+    //Stack of parents for the search of parents sharing children
+    //with the current node.
+    stack<size_t> sParents;
+    vector<size_t> cChildren;
+    vector<size_t> cParents;
+    sParents.push(lID);
+    while(!sParents.empty())
+    {
+      size_t pID=sParents.top();
+      sParents.pop();
+      parents_scanned.push_back(pID);
+      cParents.push_back(pID);
+      
+      for(auto &child: children_blobs[pID])
+      {
+        if(find(cChildren.begin(),cChildren.end(),child)
+            ==cChildren.end())
+        {
+          cChildren.push_back(child);
+          for(auto &parent: parent_blobs[child])
+          {
+            if(find(cParents.begin(),cParents.end(),parent)
+                ==cParents.end())
+            {
+              sParents.push(parent);
+            }
+          }
+        }
+      }
+    }
+    for(auto &p:cParents)
+    {
+      constr[IDtoIndex[p]]=-1.0;
+      //rconstr[IDtoIndex[p]]=1.0;
+    }
+    for(auto &c:cChildren)
+    {
+      constr[IDtoIndex[c]]=1.0;
+      //rconstr[IDtoIndex[c]]=-1.0;
+    }
+    //constr.push_back(0);
+    //rconstr.push_back(0);
+
+
+    if(children_blobs[lID].size()!=0)
+    {
+      double* row = &constr[0];
+      if(!add_constraintex(lp, vars, row, colno, EQ, 0.0))
+        return(3);
+    }
+  }
+  
+  set_add_rowmode(lp, FALSE);
+
+  vector<double> mf_vec;
+  for (auto &p: detected_larvae)
+  {
+    larvaObject &l=p.second;
+    mf_vec.push_back(1.0-(l.area_mean/20000.0));
+  }
+  double* row = &mf_vec[0];
+  /* set the objective in lpsolve */
+  if(!set_obj_fnex(lp, vars, row, colno))
+    return(4);
+
+  set_minim(lp);
+  write_LP(lp, stdout);
+  /* write_lp(lp, "model.lp"); */
+
+  /* I only want to see important messages on screen while solving */
+  set_verbose(lp, IMPORTANT);
+  ret = solve(lp);
+  if(ret == OPTIMAL)
+  {
+    ret = 0;
+    cout << "LPSOLVE: Found " << get_solutioncount(lp) << " solutions." << endl;
+  }
+  else
+  {
+    cerr << "LPSOLVE: Couldn't solve system" << ret << endl;
+    return(5);
+  }
+  /* a solution was calculated, now lets get some results */
+  /* variable values */
+
+  double *results = (double *) malloc(vars * sizeof(double));
+  get_variables(lp, results);
+  for(size_t i=0;i<vars;i++)
+    solution.push_back(static_cast<int>(results[i]+0.5));
+
+  cerr << "LP Solution : [";
+  for(auto &v:solution)
+    cerr << v << " ";
+  cerr << "]" <<endl;
+  /* free allocated memory */
+  if(results != NULL)
+    free(results);
+  if(lp != NULL) {
+    /* clean up such that all used memory by lpsolve is freed */
+    delete_lp(lp);
+  }
+  return 0;
+
+  /*Mat MatConstr=Mat(constraints.size(),total_larvae+1,CV_64FC1);
+  for(int r=0;r<MatConstr.rows;r++)
+  {
+    Mat crow(constraints[r]);
+    crow=crow.t();
+    crow.copyTo(MatConstr.row(r));
+  }
+  MatConstr.copyTo(mConstr);
+  [>if(!TUmatrixTest(mConstr(Range(0,mConstr.rows),Range(0,mConstr.cols-1))))
+    BOOST_LOG_TRIVIAL(debug) << "CONSTRAINTS: WARN!! : Constraints matrix is not TU" << endl;
+  else
+    BOOST_LOG_TRIVIAL(debug) << "CONSTRAINTS: Constraints matrix is TU" << endl;<]*/
 }
 
 //Construct constraints for Simplex:
@@ -183,11 +449,11 @@ int LPconstr(std::vector<double> &solution,
     if(minVal==0)
       minVal=1;
     int con_type=GE;
-    if(p.second.area_mean*LRVTRACK_MPP*LRVTRACK_MPP>=3.65)
+    /*if(p.second.area_mean*LRVTRACK_MPP*LRVTRACK_MPP>=3.95)
     {
       con_type=GE;
       minVal=2;
-    }
+    }*/
     /*if(p.second.area_mean*LRVTRACK_MPP*LRVTRACK_MPP<=2.95)
     {
       con_type=EQ;
@@ -234,8 +500,10 @@ int LPconstr(std::vector<double> &solution,
         return(3);
     }
   }*/
+  int col=0;
   for (auto &p: detected_larvae)
   {
+    set_int(lp,col++,TRUE);
     size_t lID=p.second.larva_ID;
     //If this parent is in the parents_scanned, skip
     if(find(parents_scanned.begin(),parents_scanned.end(),lID)
@@ -318,7 +586,10 @@ int LPconstr(std::vector<double> &solution,
   set_verbose(lp, IMPORTANT);
   ret = solve(lp);
   if(ret == OPTIMAL)
+  {
     ret = 0;
+    cout << "LPSOLVE: Found " << get_solutioncount(lp) << " solutions." << endl;
+  }
   else
   {
     cerr << "LPSOLVE: Couldn't solve system" << ret << endl;

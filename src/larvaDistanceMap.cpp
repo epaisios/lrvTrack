@@ -9,7 +9,7 @@
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
 #include <opencv2/video/tracking.hpp>
-#include "gnuplot_i.hpp"
+//#include "gnuplot_i.hpp"
 #include "alglib/ap.h"
 #include "alglib/stdafx.h"
 #include "alglib/interpolation.h"

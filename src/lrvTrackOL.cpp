@@ -17,7 +17,7 @@
 
 using namespace lrvTrack;
 
-VideoWriter combOut;
+//VideoWriter combOut;
 
 Point2f filterMidpoint(vector<larvaDistanceMap> &in,
                     int idx, size_t size)
@@ -132,7 +132,11 @@ void readIni()
   boost::property_tree::ptree pt;
   boost::property_tree::ini_parser::read_ini(LRVTRACK_INPUT_METADATA, pt);
   LRVTRACK_ODOR_LR = pt.get<std::string>("Trial Data.OdorA");
-  cout << "Odor location from metadata: " << LRVTRACK_ODOR_LR << endl;
+  if(LRVTRACK_ODOR_LR=="left" || LRVTRACK_ODOR_LR=="right")
+  	cout << "Odor location from metadata: " << LRVTRACK_ODOR_LR << endl;
+  else
+  	LRVTRACK_ODOR_LR = pt.get<std::string>("Trial Data.OdorA_Side");
+  	cout << "Odor location from metadata: " << LRVTRACK_ODOR_LR << endl;
 }
 
 void writeIni(cv::Point2f odorA_centroid)
@@ -815,7 +819,7 @@ void make_Video(size_t id1, size_t id2, size_t id3)
   tile2same(intF1,intF2,f);
   Mat fout;
   cvtColor(f,fout,CV_GRAY2BGR);
-  combOut << fout ;
+  //combOut << fout ;
   imshow("Comb",f);
   waitKey(1);
 }
@@ -3649,12 +3653,15 @@ void extract_background_offline(VideoCapture &capture,
                     thresholdhigh,
                     THRESH_BINARY|THRESH_OTSU);
                     */
+      double minRadius=4980/LRVTRACK_PETRIDISH;
+      double maxRadius=8300/LRVTRACK_PETRIDISH;
       HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
           2,   // accumulator resolution (size of the image / 2)
           400,  // minimum distance between two circles
           100, // Canny high threshold
           70, // minimum number of votes
-          60, 100); // min and max radiusV
+	  minRadius,maxRadius);
+      //    60, 100); // min and max radiusV
       if(cups.size()>2)
       {
         cups.erase(cups.begin()+2,cups.end());
@@ -3670,11 +3677,14 @@ void extract_background_offline(VideoCapture &capture,
       }
       cupMap=greyBgFrame&cupMap;
       threshold(cupMap,cupMap,0,255,THRESH_OTSU+THRESH_BINARY);
+      waitKey(-1);
       IplImage ipl= cupMap;
       labelImg=cvCreateImage(
           cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
       cvLabel(&ipl, labelImg, cupBlobs);
-      cvb::cvFilterByArea(cupBlobs, 11000 ,30000);
+      double minArea=1000*(913/LRVTRACK_PETRIDISH);
+      double maxArea=1000*(2490/LRVTRACK_PETRIDISH);
+      cvb::cvFilterByArea(cupBlobs, minArea, maxArea);
       cout << "CupBlobs Size: " << cupBlobs.size() << endl;
       //cout << "Blob Cup1" << endl;
   //imshow("background",greyBgFrame);
@@ -4575,6 +4585,18 @@ void determineHeadTail(larvaObject &f)
   stringstream d;
   size_t F=24;
   size_t sframe=f.start_frame;
+  if (f.tails.size() == 0 )
+  {
+      	d << "|=============== Blob " << f.larva_ID << " has 0 info for tail: turning to cluster ========";
+	  f.isCluster=true;
+	  return;
+  }
+  if (f.heads.size() == 0 )
+  {
+      	d << "|=============== Blob " << f.larva_ID << " has 0 info for head: turning to cluster ========";
+	  f.isCluster=true;
+	  return;
+  }
   try
   {
     d << endl;
@@ -4628,7 +4650,8 @@ void determineHeadTail(larvaObject &f)
 
       Point2f startbp(f.blobs[preBreak].minx,f.blobs[preBreak].miny);
       Point2f endbp(f.blobs[endBreak].minx,f.blobs[endBreak].miny);
-
+	
+      std::cerr << "Prebreak: " << preBreak << " Tail size: " << f.tails.size() << std::endl;
       d << "|      Start[ " << preBreak+sframe <<"]: Centroid" << startPos << " "
         << "IHead" << f.heads[preBreak]+startbp << " "
         << "ITail" << f.tails[preBreak]+startbp
@@ -4655,11 +4678,11 @@ void determineHeadTail(larvaObject &f)
         Point2f tPoint=filterPoint(f.tails,j,F,f.blobs);
         sumHeadGrey+=f.heads_brightness[j];
         sumTailGrey+=f.tails_brightness[j];
-        if(j>preBreak)
+        if(j>preBreak+1)
         {
-          Point2f prebpPoint(f.blobs[j-1].minx,f.blobs[j-1].miny);
-          Point2f prehPoint=filterPoint(f.heads,j-1,F,f.blobs);
-          Point2f pretPoint=filterPoint(f.tails,j-1,F,f.blobs);
+          Point2f prebpPoint(f.blobs[j-2].minx,f.blobs[j-2].miny);
+          Point2f prehPoint=filterPoint(f.heads,j-2,F,f.blobs);
+          Point2f pretPoint=filterPoint(f.tails,j-2,F,f.blobs);
           //Point2f centroid=filterCentroid(f.blobs,j,F);
           Point2f midpoint=filterMidpoint(f.lrvDistances,j,F);
           sumHeadDiff+=p2fdist(midpoint,prehPoint);
@@ -4672,19 +4695,25 @@ void determineHeadTail(larvaObject &f)
       size_t duration=endBreak-preBreak;
 
       if(sumHeadDiff/duration<sumTailDiff/duration) //If head was infront most of the time vote for nochange
-        vote_for_nochange+=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
+	vote_for_nochange++;
+        //vote_for_nochange+=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
       else
-        vote_for_nochange-=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
+	vote_for_nochange--;
+        //vote_for_nochange-=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
 
       if(sumHeadGrey/duration<sumTailGrey/duration) //If head was darker vote for no change
-        vote_for_nochange+=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+	vote_for_nochange++;
+        //vote_for_nochange+=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
       else
-        vote_for_nochange-=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+	vote_for_nochange--;
+        //vote_for_nochange-=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
 
       if(sumHeadCnt/duration>sumTailCnt/duration) //If head made more distance vote for no change
-        vote_for_nochange+=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+	vote_for_nochange++;
+        //vote_for_nochange+=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
       else
-        vote_for_nochange-=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+	vote_for_nochange--;
+        //vote_for_nochange-=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
 
       d << "|" << endl;
       d << "|      LarvaID, GHead, HeadForward, HeadDistance, Duration, Votes" << endl;
@@ -5324,7 +5353,7 @@ void secondPass()
       LAST_FRAME=p.second.lastFrameWithStats;
   }
   cout << endl;
-  /*size_t single_larvae_objects=0;
+  size_t single_larvae_objects=0;
   double single_larvae_total=0.0;
   for(size_t f=1;f<=LAST_FRAME;f++)
   {
@@ -5348,7 +5377,8 @@ void secondPass()
     "Second Pass: Updated Larvae on Dish guess: " << MAX_LARVAE_DETECTED;
 
   solution.clear();
-  LPout=LPconstr(solution,indexToID,IDtoIndex,AVG_LARVA_SIZE);
+  //LPout=LPconstr(solution,indexToID,IDtoIndex,AVG_LARVA_SIZE);
+  LPout=LPconstrAvg(solution,indexToID,IDtoIndex,AVG_LARVA_SIZE);
 
   if(LPout>=0)
     cout << "RES: OK ";// << res.t() << endl;
@@ -5375,7 +5405,7 @@ void secondPass()
     }
   }
   cout << endl;
-  */
+
   std::map<size_t,larvaObject>::iterator dlit;
   dlit=detected_larvae.begin();
   for(;dlit!=detected_larvae.end();++dlit)
@@ -5394,7 +5424,7 @@ int main(int argc, char* argv[])
   bool STOP=false;
   VideoWriter vidOut,vidPOut;
 
-  if (!combOut.isOpened())
+  /*if (!combOut.isOpened())
   {
     combOut.open("combMov.avi",
         VIDEO_CODEC,
@@ -5406,7 +5436,7 @@ int main(int argc, char* argv[])
         "Problems with video codec. Exiting..." << std::endl;
       exit(5);
     }
-  }
+  }*/
   
   log_init();
 

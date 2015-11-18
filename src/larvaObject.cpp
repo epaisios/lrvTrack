@@ -267,6 +267,11 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
   data << (blobs[c_index].centroid.x-cc.x)*ppm << ","
     << (blobs[c_index].centroid.y-cc.y)*ppm << ",";
   data << cvAngle(&blobs[c_index]) << ",";
+  data << area[c_index] << ",";
+  data << grey_value[c_index] << ",";
+  data << length[c_index] << ",";
+  data << width[c_index] << ",";
+  data << perimeter[c_index] << ",";
   data << round_flag[c_index];
   data << endl;
   csvline=data.str();

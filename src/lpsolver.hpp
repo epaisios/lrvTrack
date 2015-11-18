@@ -13,5 +13,9 @@ int LPconstr(std::vector<double> &solution,
              std::vector<size_t> &indexToID, 
             std::map<size_t,size_t> &IDtoIndex,
             double avg_size);
+int LPconstrAvg(std::vector<double> &solution,
+             std::vector<size_t> &indexToID, 
+            std::map<size_t,size_t> &IDtoIndex,
+	    double avgSize);
 //bool testPLQuery();
 #endif
