@@ -284,7 +284,8 @@ void lrvFit::csvLine(size_t CURRENT_FRAME,
   //size_t c_index=CURRENT_FRAME-SFRAME;
   stringstream data;
 
-  data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+  //data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
+  data << (float) CURRENT_FRAME << ",";
   //int i=0;
   for (auto &s : spine)
   {
@@ -296,6 +297,12 @@ void lrvFit::csvLine(size_t CURRENT_FRAME,
   }
   data << (spine[5].x-cc.x)*ppm << ","
     << (-spine[5].y+cc.x)*ppm << ",";
+  data <<  ",";
+  data <<  ",";
+  data <<  ",";
+  data <<  ",";
+  data <<  ",";
+  data <<  ",";
   data << 2;
   data << endl;
   csvline = data.str();
@@ -889,7 +896,19 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
 
   cpoints[0]=intSpine[0]-bp;
   cpoints[cpoints.size()/2]=intSpine.back()-bp;
-  for(auto i=1;i<intSpine.size()-1;i++)
+  for(int i=1;i<(int)spine.size()-1;i++)
+  {
+    circle(tmp,
+           0.5*(spine[i-1]+spine[i])-bp,
+           w((double)(i)/(double)spine.size())*(larvaFitData.width),
+           Scalar(255),
+           -1);
+    circle(tmp,
+           spine[i]-bp,
+           w((double)i/(double)spine.size())*(larvaFitData.width),
+           Scalar(255),-1);
+  }
+  /*for(auto i=1;i<intSpine.size()-1;i++)
   {
     calculateContourPoints(intSpine[i-1],
                            intSpine[i],
@@ -900,11 +919,11 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
                            larvaFitData.width,
                            cpoints[i],
                            cpoints[cpoints.size()-i]);
-  }
+  }*/
 
-  size_t csz=cpoints.size();
-  const Point *p=&cpoints[0];
-  fillPoly(tmp,(const Point **) &p,(int *) &csz,1,Scalar(255));
+  //size_t csz=cpoints.size();
+  //const Point *p=&cpoints[0];
+  //fillPoly(tmp,(const Point **) &p,(int *) &csz,1,Scalar(255));
   /*for(size_t i=1;i<spine.size();i++)
   {
     line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));

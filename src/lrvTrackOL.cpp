@@ -490,22 +490,24 @@ void createMatfromSpine(Mat &larvaFitContour,
   cpoints.resize(2*spine.size()-2);
   cpoints[0]=spine[0]-bp;
   cpoints[cpoints.size()/2]=spine.back()-bp;
-  cerr << cpoints[0] << cpoints[cpoints.size()/2] << endl;
+  cout << cpoints[0] << cpoints[cpoints.size()/2] << endl;
   for(int i=1;i<(int)spine.size()-1;i++)
   {
-    calculateContourPoints(spine[i-1],
-                           spine[i],
-                           spine[i+1],
-                           bp,
-                           (double) i/spine.size(),
-                           o.width_mean,
-                           cpoints[i],
-                           cpoints[cpoints.size()-i]);
+    circle(tmp,
+           0.5*(spine[i-1]+spine[i])-bp,
+           w((double)(i)/(double)spine.size())*(o.width_mean/2.0),
+           Scalar(255),
+           -1);
+    circle(tmp,
+           spine[i]-bp,
+           w((double)i/(double)spine.size())*(o.width_mean/2.0),
+           Scalar(255),-1);
   }
 
-  size_t csz=cpoints.size();
-  const Point *p=&cpoints[0];
-  fillPoly(tmp,(const Point **) &p,(int *) &csz,1,Scalar(255));
+  //size_t csz=cpoints.size();
+  //const Point *p=&cpoints[0];
+  //cout << printVector(cpoints) << endl;
+  //fillPoly(tmp,(const Point **) &p,(int *) &csz,1,Scalar(255));
   for(size_t i=1;i<spine.size();i++)
   {
     line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));
@@ -516,9 +518,20 @@ void createMatfromSpine(Mat &larvaFitContour,
 bool check_contour(larvaObject &o)
 {
   Mat larvaFitContour;
+  Mat larvaContour;
+  if(o.lrvDistances.size()<1)
+    return false;
   createMatfromSpine(larvaFitContour,o);
+  createLarvaContour(larvaContour,
+      o.blobs.back(),
+      o.lrvDistances.back().spinePairs,
+      o.lrvDistances.back().Spine,
+      CV_8UC3,0,false,
+      Scalar(255),8);
+
   imshow("MatFromSpine",larvaFitContour);
-  waitKey(1);
+  imshow("Larva",larvaContour);
+  waitKey(-1);
   return true;
 }
 
@@ -654,21 +667,21 @@ void showModels()
         int i=0;
         for (auto &p:l[IDX].spine)
         {
-          circle(colorFrame,
+          circle(unprocessedFrame,
               p,
               0,
               Scalar(0,255,0),
               -1);
           if(p!=l[IDX].spine[0])
-            line(colorFrame,p,l[IDX].spine[i-1],Scalar(0,0,255));
+            line(unprocessedFrame,p,l[IDX].spine[i-1],Scalar(0,0,255));
           i++;
         }
-        circle(colorFrame,
+        circle(unprocessedFrame,
             l[IDX].spine[0],
             1,
             Scalar(255,255,0),
             -1);
-        circle(colorFrame,
+        circle(unprocessedFrame,
             l[IDX].spine.back(),
             1,
             Scalar(0,0,255),
@@ -701,7 +714,7 @@ void getAnglesFromSpine(vector<Point2f> &spine, vector<double> &angles, bool rev
 bool checkLarvaLength(size_t ID)
 {
   larvaObject &o=detected_larvae[ID];
-  size_t length=o.end_frame-o.start_frame;
+  size_t length=o.end_frame-o.start_frame+1;
   if(o.larva_ID == o.updated_ID)
   {
       return (length>LRVTRACK_MIN_OUTPUT_DURATION);
@@ -2145,6 +2158,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     tbb::concurrent_hash_map<size_t,larvaObject>::accessor a;
     NEW_LARVA.insert(a,ID);
     a->second=newLarva;
+    //check_contour(newLarva);
   }
   // UPDATED LARVA OBJECT!
   else
@@ -2459,6 +2473,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     }*/
 
     cur_larva.lastFrameWithStats=CURRENT_FRAME;
+    //check_contour(cur_larva);
   }
 }
 

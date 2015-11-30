@@ -1428,11 +1428,13 @@ void fixContour(
   //blobToPointVector(blob,ppoints);
   blobToContourVector(blob,frame,2,ppoints);
   bool RECONSTRUCT_SPINE=false;
-  if(ppoints.size()<0.7*RES)
+  std::string rec="NOREC";
+  if(ppoints.size()<0.8*RES)
   {
     ppoints.clear();
     RECONSTRUCT_SPINE=true;
     blobToPointVector(blob,ppoints);
+    rec="REC";
   }
 
   std::vector<cv::Point2f> xpoints;
@@ -1570,20 +1572,20 @@ if(RECONSTRUCT_SPINE)
   }
   catch(alglib::ap_error &e)
   {
-    std::cerr << "Spline Error:" << e.msg << std::endl;
+    std::cerr << "Spline Error: [" << rec << "] "  << e.msg << std::endl;
     std::cerr << printVector(xpoints) << std::endl;
     std::cerr << printVector(d) << std::endl;
     return;
   }
   catch(...)
   {
-    std::cerr << "Spline Error [" << blob.label << ", " << xpoints.size() << "]" << std::endl;
+    std::cerr << "Spline Error [" << blob.label << ", " << xpoints.size() << ", " << rec << "]" << std::endl;
     return;
   }
 }
 else
 {
-    //std::cout << "N" << std::endl;
+    std::cout << "N" << std::endl;
     nospline(xpoints,
         d,
         w,
@@ -1808,6 +1810,16 @@ else
   maxDist=maxLength;
 
 #ifdef LRV_TRACK_VISUAL_DEBUG
+  std::cout << "DIDX SIZE: " << dIdx.size() << std::endl;
+  std:: cout << "DIDX: " << printVector(dIdx) << std::endl;
+    cv::circle(cROI, 
+        MULT*(newPoints[dIdx[0]]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
+        7,
+        cv::Scalar(0,255,255),-1);
+    cv::circle(cROI, 
+        MULT*(newPoints[dIdx[1]]-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
+        7,
+        cv::Scalar(0,255,255),-1);
   for(size_t i=1;i<Distances.Spine.size();++i)
   {
     cv::circle(cROI, 
@@ -1830,7 +1842,8 @@ else
       1
       );
 }*/
-  cv::circle(cROI, 
+  if(Distances.Spine.size() > 0)
+    cv::circle(cROI, 
       MULT*(Distances.Spine.back()-bp)+cv::Point2f(MULT*PAD,MULT*PAD),
       4,
       cv::Scalar(255,0,255),-1);
