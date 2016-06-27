@@ -1,4 +1,4 @@
-OPENCV_VER=3.0.0
+OPENCV_VER=3.1.0
 #INCLUDES=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I/usr/local/Cellar/swi-prolog/HEAD/libexec/lib/swipl-7.1.28/include -I.
 INCLUDES=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I.
 #INCLUDES_GPU=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_VER}/include -I/usr/local/Cellar/swi-prolog/HEAD/libexec/lib/swipl-7.1.28/include -I.
@@ -9,11 +9,12 @@ INCLUDES_QT=-I/opt/opencv/${OPENCV_VER}-qt/include/opencv -I/opt/opencv/${OPENCV
 GCCFLAGS=-std=c++0x -Wno-c++11-extensions -DBOOST_LOG_DYN_LINK
 GCCFLAGS_GPU=-DLRVTRACK_WITH_CUDA
 GCCFLAGS_OCL=-DLRVTRACK_WITH_OPENCL
-OPTFLAGS=-O3 -msse2 -DAE_CPU=AE_INTEL -march=native 
+OPTFLAGS=-Ofast -m64 -flto -funroll-loops -msse2 -DAE_CPU=AE_INTEL -march=native 
 DEBUGFLAGS=-g -O0
 OPENCL_LIBS=-lopencv_ocl
      #-lopencv_contrib#
 LIBS=-lm\
+     -lpthread\
      -lopencv_core\
      -lopencv_highgui\
      -lopencv_videoio\
@@ -25,12 +26,14 @@ LIBS=-lm\
      -lcvblob\
      -ltbb\
      -llpsolve55\
-     -lboost_log-mt\
-     -lboost_log_setup-mt\
-     -lboost_program_options-mt\
-     -lboost_filesystem-mt\
-     -lboost_system-mt\
-     -lboost_timer-mt
+     -lcolamd\
+     -lboost_log\
+     -lboost_log_setup\
+     -lboost_program_options\
+     -lboost_filesystem\
+     -lboost_system\
+     -lboost_timer\
+     -ldl
      #-lswipl
 
 ALG_OBJ=alglib/alglibinternal.o\
@@ -69,7 +72,7 @@ alglib/%.o: alglib/%.cpp
 	g++ $(GCCFLAGS) $(DEBUGFLAGS) $(INCLUDES) -c $<
 
 lrvTrack: $(ALG_OBJ) $(LT_OBJ)
-	g++ $(GCCFLAGS) $(DEBUGFLAGS) $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib $(LIBS) -o $@ $^
+	g++ $(GCCFLAGS) $(DEBUGFLAGS) $(INCLUDES) -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib -o $@ $^ $(LIBS) 
 	#g++ $(GCCFLAGS) $(DEBUGFLAGS) $(INCLUDES) -L/usr/local/Cellar/swi-prolog/HEAD/libexec/lib/swipl-7.1.28/lib/x86_64-darwin13.4.0 -L/opt/opencv/${OPENCV_VER}/lib -L/usr/local/lib $(LIBS) -o $@ $^
 
 all: lrvTrack

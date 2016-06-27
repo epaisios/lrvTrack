@@ -1585,7 +1585,7 @@ if(RECONSTRUCT_SPINE)
 }
 else
 {
-    std::cout << "N" << std::endl;
+    //std::cout << "N" << std::endl;
     nospline(xpoints,
         d,
         w,

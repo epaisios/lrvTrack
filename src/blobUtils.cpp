@@ -366,6 +366,13 @@ void blobToBlobOverlap(cvb::CvBlob &blob1,
                             rmaxy);
   size_t b2pixels=countNonZero(lrvROI2);
 
+  if(lrvROI1.cols != lrvROI2.cols || 
+     lrvROI1.rows != lrvROI2.rows)
+  {	
+  	b1ratio=0;
+	b2ratio=0;
+	return;
+  }
   cv::Mat lrvROI=lrvROI1 & lrvROI2;
 
   size_t commonPixels=countNonZero(lrvROI);
@@ -537,14 +544,41 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
                         bool FILL,
                         cv::Scalar color,
                         int connectivity,
-                        cv::Scalar bg)
+                        cv::Scalar bg,
+			bool verbose)
 {
   cv::Mat lrvROIlocal;
   int dxu,dyu,dxb,dyb;
-  createLarvaContour(lrvROIlocal,blob,type,0,FILL,color,connectivity,bg);
-  if(! ( (dxu=blob.minx-minx)+PAD<0 || (dyu=blob.miny-miny)+PAD<0 || (dxb=maxx-blob.maxx)+PAD<0 || (dyb=maxy-blob.maxy)+PAD<0))
+  int MAXBORDER=blob.area;
+  /*if(verbose)
   {
+	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : blob area: " << blob.area << std::endl;
+	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : blob minx: " << blob.minx << std::endl;
+	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : blob maxx: " << blob.maxx << std::endl;
+	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : blob miny: " << blob.miny << std::endl;
+	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : blob maxx: " << blob.maxy << std::endl;
+  }*/
+  createLarvaContour(lrvROIlocal,blob,type,0,FILL,color,connectivity,bg);
+  //if(verbose)
+  //{
+  //    	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : lrvROIlocal: " << lrvROIlocal.size() << std::endl;
+  //}
+  if(! ( (dxu=(int) blob.minx-(int) minx)+PAD<0 || (dyu=(int)blob.miny-(int)miny)+PAD<0 || (dxb=(int)maxx-(int)blob.maxx)+PAD<0 || (dyb=(int)maxy-(int)blob.maxy)+PAD<0))
+  {
+    if(dxu>MAXBORDER)
+      dxu=0;
+    if(dyu>MAXBORDER)
+      dyu=0;
+    if(dxb>MAXBORDER)
+      dxb=0;
+    if(dyb>MAXBORDER)
+      dyb=0;
+    if(verbose)
+    {
+      std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : cmb: " << dyu << "," << dyb <<"," << dxu <<"," << dxb << " PAD: " << PAD << std::endl;
+    }
     cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
+
   }
   else
   {
@@ -556,7 +590,20 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
       dxb=0;
     if(dyb<0)
       dyb=0;
+    if(dxu>MAXBORDER)
+      dxu=0;
+    if(dyu>MAXBORDER)
+      dyu=0;
+    if(dxb>MAXBORDER)
+      dxb=0;
+    if(dyb>MAXBORDER)
+      dyb=0;
+    if(verbose)
+    {
+      std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : cmb: " << dyu << "," << dyb <<"," << dxu <<"," << dxb << " PAD: " << PAD << std::endl;
+    }
     cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
+
   }
   dxu=0;
 }

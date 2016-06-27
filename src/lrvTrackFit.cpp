@@ -10,6 +10,8 @@ using namespace lrvTrack;
 double modelError(Mat &real,Mat &model)
 {
   Mat Diff;
+  if(real.cols != model.cols || real.rows != model.rows)
+	  return INT_MAX;
   bitwise_xor(real,model*2.5,Diff);
   size_t nz=countNonZero(Diff);
   return nz;
@@ -129,7 +131,12 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
       blob.maxx,
       blob.miny,
       blob.maxy,
-      PADDING);
+      PADDING,
+      true,
+      cv::Scalar(255),
+      8,
+      cv::Scalar(0),
+      false);
 
   for(auto &cl : clarvae)
   {
@@ -148,7 +155,12 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
         blob.maxx,
         blob.miny,
         blob.maxy,
-        PADDING);
+        PADDING,
+        true,
+	cv::Scalar(255),
+	8,
+	cv::Scalar(0),
+	false);
     f.copyTo(sp);
     for(auto &spp : o.lrvDistances[idx].Spine)
     {
@@ -318,6 +330,13 @@ double lrvFit::errorFunc(Mat &b1C)
   Mat l1C,Diff;
 
   createMatfromFit(l1C);
+  //std::cout << "l1C size: " << l1C.cols << "x" << l1C.rows << std::endl;
+  //std::cout << "b1C size: " << b1C.cols << "x" << b1C.rows << std::endl;
+  if(l1C.cols != b1C.cols || l1C.rows != b1C.rows)
+  {
+	  //std::cout << "DIFFERENCE BETWEEN SIZES OF MODEL AND REFERENCE!!!" << std::endl;
+	  return INT_MAX;
+  }
   bitwise_xor(b1C,l1C*2.5,Diff);
   size_t nz=countNonZero(Diff);
   return nz;
@@ -330,6 +349,11 @@ double lrvFit::errorFunc(Mat &real,
   Mat l1C,Diff;
 
   createMatfromFit(l1C,bg,true);
+  if(l1C.cols != real.cols || l1C.rows != real.rows)
+  {
+	  std::cout << "DIFFERENCE BETWEEN SIZES OF MODEL AND REFERENCE!!!" << std::endl;
+	  return INT_MAX;
+  }
   bitwise_xor(real,l1C*2.5,Diff);
   size_t nz=countNonZero(Diff);
   return nz;
@@ -851,7 +875,19 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
 
   cpoints[0]=intSpine[0]-bp;
   cpoints[cpoints.size()/2]=intSpine.back()-bp;
-  for(auto i=1;i<intSpine.size()-1;i++)
+  for(int i=1;i<(int)spine.size()-1;i++)
+  {
+    circle(tmp,
+           0.5*(spine[i-1]+spine[i])-bp,
+           w((double)(i)/(double)spine.size())*(larvaFitData.width),
+           Scalar(255),
+           -1);
+    circle(tmp,
+           spine[i]-bp,
+           w((double)i/(double)spine.size())*(larvaFitData.width),
+           Scalar(255),-1);
+  }
+  /*for(auto i=1;i<intSpine.size()-1;i++)
   {
     calculateContourPoints(intSpine[i-1],
                            intSpine[i],
@@ -862,11 +898,11 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
                            larvaFitData.width,
                            cpoints[i],
                            cpoints[cpoints.size()-i]);
-  }
+  }*/
   //size_t csz=cpoints.size();
-  vector<vector<Point> > C;
-  C.push_back(cpoints);
-  fillPoly(tmp,C,Scalar(255));
+  //vector<vector<Point> > C;
+  //C.push_back(cpoints);
+  //fillPoly(tmp,C,Scalar(255));
   /*for(size_t i=1;i<spine.size();i++)
   {
     line(tmp,spine[i-1]-bp,spine[i]-bp,Scalar(100));

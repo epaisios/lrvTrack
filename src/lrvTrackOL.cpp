@@ -2851,10 +2851,82 @@ void contourLarvaeTrack(cvb::CvBlobs &In,
     else if(new_matches_pre[cid].size()==0)
     {
       size_t CLUSTER_ID=++LARVAE_COUNT;
+      int OUTVAL;
       new_blob.n20=new_blob.label;
       new_blob.label=CLUSTER_ID;
       new_assigned[new_blob.n20]=new_blob.label;
-      BOOST_LOG_TRIVIAL(debug) << "CNTTRACK: " << CURRENT_FRAME << ",NEW ,0" 
+      Point2f pcentroid;
+      pcentroid.x=new_blob.centroid.x;
+      pcentroid.y=new_blob.centroid.y;
+      Point2f center(circles[bestCircle][0],circles[bestCircle][1]);
+      Point2f cupleft;
+      Point2f cupright;
+      vector<size_t> cIds;
+      for (auto &i : cupBlobs)
+      {
+	      cIds.push_back(i.first);
+      }
+      if(cupBlobs.size() > 0)
+      {
+	      std::cout << "DBG: pcentroid,center:" << pcentroid << " | " << center <<  endl;
+	      if(cupBlobs[cIds[0]]->centroid.x<cupBlobs[cIds[1]]->centroid.x)
+	      {
+		      std::cout << "DBG: 0 is left"<<  endl;
+		      cupleft.x=cupBlobs[cIds[0]]->centroid.x;
+		      cupleft.y=cupBlobs[cIds[0]]->centroid.y;
+		      cupright.x=cupBlobs[cIds[1]]->centroid.x;
+		      cupright.y=cupBlobs[cIds[1]]->centroid.y;
+	      }
+	      else
+	      {
+		      std::cout << "DBG: 1 is left"<<  endl;
+		      cupleft.x=cupBlobs[cIds[1]]->centroid.x;
+		      cupleft.y=cupBlobs[cIds[1]]->centroid.y;
+		      cupright.x=cupBlobs[cIds[0]]->centroid.x;
+		      cupright.y=cupBlobs[cIds[0]]->centroid.y;
+	      }
+	      std::cout << "DBG: cupleft, cupright: " << cupleft << " | " << cupright << endl;
+
+	      if(p2fdist(pcentroid,cupleft) < p2fdist(pcentroid,cupright))
+	      {
+		      //left side
+		      std::cout << "DBG: left side" << endl;
+		      if(p2fdist(pcentroid,cupleft)<
+				      (circles[bestCircle][2]-p2fdist(pcentroid,center)))
+		      {
+			      std::cout << "DBG: left cup" << endl;
+			      //left cup
+			      OUTVAL=-1;
+		      }
+		      else
+		      {
+			      std::cout << "DBG: ring" << endl;
+			      //ring
+			      OUTVAL=0;
+		      }
+	      }
+	      else
+	      {
+		      std::cout << "DBG: right side" << endl;
+		      //right side
+		      if(p2fdist(pcentroid,cupright)<
+				      (circles[bestCircle][2]-p2fdist(pcentroid,center)))
+		      {
+			      //right cup
+			      OUTVAL=-2;
+		      }
+		      else
+		      {
+			      //ring
+			      OUTVAL=0;
+		      }
+	      }
+      }
+      else
+      {
+	      OUTVAL=0;
+      }
+      BOOST_LOG_TRIVIAL(debug) << "CNTTRACK: " << CURRENT_FRAME << ",NEW ," << OUTVAL
                                << "->" << cid<<"(" << new_blob.label <<")";
     }
     //If the current cvblobID matched more than one larva in the previous frame
@@ -2893,12 +2965,85 @@ void contourLarvaeTrack(cvb::CvBlobs &In,
   for(auto &pre_blob_p:Prev)
   {
     size_t pid=pre_blob_p.second->label;
+    int OUTVAL;
     if(pre_matched_by_new[pid].size()==0)
     {
+      std::cout << "DBG: Larva Lost." << endl;
       //Larva is lost so we add its id to the lost_blobs vector
+      Point2f pcentroid;
+      pcentroid.x=pre_blob_p.second->centroid.x;
+      pcentroid.y=pre_blob_p.second->centroid.y;
+      Point2f center(circles[bestCircle][0],circles[bestCircle][1]);
+      Point2f cupleft;
+      Point2f cupright;
+      vector<size_t> cIds;
+      for (auto &i : cupBlobs)
+      {
+	      cIds.push_back(i.first);
+      }
+      if(cupBlobs.size() > 0)
+      {
+	      std::cout << "DBG: pcentroid,center:" << pcentroid << " | " << center <<  endl;
+	      if(cupBlobs[cIds[0]]->centroid.x<cupBlobs[cIds[1]]->centroid.x)
+	      {
+		      std::cout << "DBG: 0 is left"<<  endl;
+		      cupleft.x=cupBlobs[cIds[0]]->centroid.x;
+		      cupleft.y=cupBlobs[cIds[0]]->centroid.y;
+		      cupright.x=cupBlobs[cIds[1]]->centroid.x;
+		      cupright.y=cupBlobs[cIds[1]]->centroid.y;
+	      }
+	      else
+	      {
+		      std::cout << "DBG: 1 is left"<<  endl;
+		      cupleft.x=cupBlobs[cIds[1]]->centroid.x;
+		      cupleft.y=cupBlobs[cIds[1]]->centroid.y;
+		      cupright.x=cupBlobs[cIds[0]]->centroid.x;
+		      cupright.y=cupBlobs[cIds[0]]->centroid.y;
+	      }
+	      std::cout << "DBG: cupleft, cupright: " << cupleft << " | " << cupright << endl;
+
+	      if(p2fdist(pcentroid,cupleft) < p2fdist(pcentroid,cupright))
+	      {
+		      //left side
+		      std::cout << "DBG: left side" << endl;
+		      if(p2fdist(pcentroid,cupleft)<
+				      (circles[bestCircle][2]-p2fdist(pcentroid,center)))
+		      {
+			      std::cout << "DBG: left cup" << endl;
+			      //left cup
+			      OUTVAL=-1;
+		      }
+		      else
+		      {
+			      std::cout << "DBG: ring" << endl;
+			      //ring
+			      OUTVAL=0;
+		      }
+	      }
+	      else
+	      {
+		      std::cout << "DBG: right side" << endl;
+		      //right side
+		      if(p2fdist(pcentroid,cupright)<
+				      (circles[bestCircle][2]-p2fdist(pcentroid,center)))
+		      {
+			      //right cup
+			      OUTVAL=-2;
+		      }
+		      else
+		      {
+			      //ring
+			      OUTVAL=0;
+		      }
+	      }
+      }
+      else
+      {
+	      OUTVAL=0;
+      }
       lost_blobs[CURRENT_FRAME].push_back(pid);
       BOOST_LOG_TRIVIAL(debug) << "CNTTRACK: " << CURRENT_FRAME 
-                               << ",LOST," << pid << "->" << "0" ;
+                               << ",LOST," << pid << "->" << OUTVAL ;
     }
     else if(pre_matched_by_new[pid].size()==1)
     {
@@ -3492,7 +3637,7 @@ void extract_background_offline(VideoCapture &capture,
   size_t count=0;//capture.get(CV_CAP_PROP_FRAME_COUNT);
   size_t total=capture.get(CV_CAP_PROP_FRAME_COUNT);
   cerr << "Background computation" << endl;
-  while(get_next_frame(capture,tmpFrame,origFrame,10))
+  while(get_next_frame(capture,tmpFrame,origFrame,5))
   {
     if(LRVTRACK_EXTRACT_OFFLINEBG_MIN) 
       min(resultframe,tmpFrame,resultframe);
@@ -3697,8 +3842,8 @@ void extract_background_offline(VideoCapture &capture,
       labelImg=cvCreateImage(
           cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
       cvLabel(&ipl, labelImg, cupBlobs);
-      double minArea=1000*(913/LRVTRACK_PETRIDISH);
-      double maxArea=1000*(2490/LRVTRACK_PETRIDISH);
+      double minArea=1000*(613/LRVTRACK_PETRIDISH);
+      double maxArea=1000*(3090/LRVTRACK_PETRIDISH);
       cvb::cvFilterByArea(cupBlobs, minArea, maxArea);
       cout << "CupBlobs Size: " << cupBlobs.size() << endl;
       //cout << "Blob Cup1" << endl;
@@ -5064,12 +5209,16 @@ void collisionSearch()
   size_t COLLISIONS_RAW=0;
   size_t COLLIDED_SINGLE_LARVA_IN_OBJECTS=0;
   size_t COLLIDED_SINGLE_LARVA_OUT_OBJECTS=-1;
-  size_t COLLIDED_SINGLE_LARVAE_OUT=0;
+  //size_t COLLIDED_SINGLE_LARVAE_OUT=0;
+  size_t ASSIGNABLE_SINGLE_LARVAE=0;
   size_t RESOLVED_BY_MODEL=0;
   size_t PARTIAL_RESOLVED_BY_MODEL=0;
   size_t ASSIGNMENTS_BY_MODEL=0;
   for(auto &p:detected_larvae)
   {
+    if(!p.second.isCluster)
+        ASSIGNABLE_SINGLE_LARVAE++;
+
     if(p.second.isCluster && parent_blobs[p.first].size()>0)
     {
       if(parent_blobs[p.first].size()>1)
@@ -5079,13 +5228,18 @@ void collisionSearch()
                 [](size_t i){return detected_larvae[i].isCluster==false;}))
         COLLIDED_SINGLE_LARVA_IN_OBJECTS++;
 
-      size_t newlarvaeout=count_if(children_blobs[p.first].begin(),
+      // This part below is a mistake. It counts the 
+      // 	blob->blob->single larva first appearance
+      // as well
+      // The best way to calculate the possible assignments is to calculate
+      // all single detected larvae minus the total number of larvae on the plate
+      /*size_t newlarvaeout=count_if(children_blobs[p.first].begin(),
                 children_blobs[p.first].end(),
                 [](size_t i){return detected_larvae[i].isCluster==false;});
         COLLIDED_SINGLE_LARVAE_OUT+=newlarvaeout;
 
         if(newlarvaeout>0)
-          COLLIDED_SINGLE_LARVA_OUT_OBJECTS++;
+          COLLIDED_SINGLE_LARVA_OUT_OBJECTS++;*/
 
       //exclude cases with more than 2 in/out larvae
       if(parent_blobs[p.first].size()==1)
@@ -5166,10 +5320,21 @@ void collisionSearch()
       }
       //modelOut.release();
       //Temporary assignment for testing
+      std::cerr << endl;
       if(C.larvae_models.size()==2)
       {
         lrvFit &fit1 = C.larvae_models[0].back();
         lrvFit &fit2 = C.larvae_models[1].back();
+      	if( accumulate(C.frameError.begin(),C.frameError.end(),0.0)
+			>
+			C.frameError.size() * 8.0  * (detected_larvae[fit1.ID].area_sum
+			 /
+			 detected_larvae[fit1.ID].area.size()))
+	{
+		cerr << "Skipping this assignment. Error too big" << endl;	
+	  	continue;
+	}
+
         CvPoint2D64f cl1=detected_larvae[children_blobs[p.first][0]].blobs[0].centroid;
         CvPoint2D64f cl2=detected_larvae[children_blobs[p.first][1]].blobs[0].centroid;
         double da1=p2fdist(fit1.spine[5],cl1);
@@ -5193,6 +5358,8 @@ void collisionSearch()
           
           detected_larvae[replacedID1].updated_ID=replacingID1;
           detected_larvae[replacedID2].updated_ID=replacingID2;
+	  cout << "MODEL: ID: " << replacedID1 << ">" << replacingID1 << endl;
+	  cout << "MODEL: ID: " << replacedID2 << ">" << replacingID2 << endl;
         }
         else
         {
@@ -5202,6 +5369,8 @@ void collisionSearch()
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit2);
           detected_larvae[replacedID1].updated_ID=replacingID2;
           detected_larvae[replacedID2].updated_ID=replacingID1;
+	  cout << "MODEL: ID: " << replacedID1 << ">" << replacingID2 << endl;
+	  cout << "MODEL: ID: " << replacedID2 << ">" << replacingID1 << endl;
         }
 
         RESOLVED_BY_MODEL++;
@@ -5212,6 +5381,15 @@ void collisionSearch()
       {
 
         lrvFit &fit1 = C.larvae_models[0].back();
+      	if( accumulate(C.frameError.begin(),C.frameError.end(),0.0)
+			>
+			C.frameError.size() * 4.0  * (detected_larvae[fit1.ID].area_sum
+			 /
+			 detected_larvae[fit1.ID].area.size()))
+	{
+		cerr << "Skipping this assignment. Error too big" << endl;	
+	  	continue;
+	}
         CvPoint2D64f cl1=detected_larvae[children_blobs[p.first][0]].blobs[0].centroid;
         CvPoint2D64f cl2=detected_larvae[children_blobs[p.first][1]].blobs[0].centroid;
         double da1=p2fdist(fit1.spine[5],cl1);
@@ -5226,6 +5404,7 @@ void collisionSearch()
           reincarnations[replacingID1].push_back(replacedID1);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][0]],fit1);
           detected_larvae[replacedID1].updated_ID=replacingID1;
+	  cout << "MODEL: ID: " << replacedID1 << ">" << replacingID1 << endl;
           PARTIAL_RESOLVED_BY_MODEL++;
           ASSIGNMENTS_BY_MODEL++;
           C.SUCCESS=true;
@@ -5235,6 +5414,7 @@ void collisionSearch()
           reincarnations[replacingID1].push_back(replacedID2);
           //modelHeadTailRepair(detected_larvae[children_blobs[p.first][1]],fit1);
           detected_larvae[replacedID2].updated_ID=replacingID1;
+	  cout << "MODEL: ID: " << replacedID2 << ">" << replacingID1 << endl;
           PARTIAL_RESOLVED_BY_MODEL++;
           ASSIGNMENTS_BY_MODEL++;
           C.SUCCESS=true;
@@ -5248,10 +5428,11 @@ void collisionSearch()
       std::cerr << endl;
     }
   }
+  ASSIGNABLE_SINGLE_LARVAE -= MAX_LARVAE_DETECTED;
   BOOST_LOG_TRIVIAL(debug) << "COLLISIONS RAW: " <<  COLLISIONS_RAW << endl
     << "COLLIDED_SINGLE_LARVA_IN_OBJECTS:" << COLLIDED_SINGLE_LARVA_IN_OBJECTS << endl
     << "COLLIDED_SINGLE_LARVA_OUT_OBJECTS:" << COLLIDED_SINGLE_LARVA_OUT_OBJECTS << endl
-    << "COLLIDED_SINGLE_LARVAE_OUT:" << COLLIDED_SINGLE_LARVAE_OUT << endl
+    << "ASSIGNABLE_SINGLE_LARVAE:" << ASSIGNABLE_SINGLE_LARVAE << endl
     << "RESOLVED_BY_MODEL:" << RESOLVED_BY_MODEL << endl
     << "PARTIAL_RESOLVED_BY_MODEL:" << PARTIAL_RESOLVED_BY_MODEL << endl
     << "ASSIGNMENTS_BY_MODEL:" << ASSIGNMENTS_BY_MODEL << endl;

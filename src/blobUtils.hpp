@@ -178,8 +178,9 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
                         bool FILL=true,
                         cv::Scalar color=cv::Scalar(255),
                         int connectivity=8,
-                        cv::Scalar bg=cv::Scalar(0)
-    );;
+                        cv::Scalar bg=cv::Scalar(0),
+			bool verbose=false
+    );
 
 /*
 void createLarvaContourCV(cv::Mat &lrvROI,

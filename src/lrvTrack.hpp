@@ -141,6 +141,9 @@ std::map<size_t,std::vector<size_t> > reincarnations;
 std::vector<collisionModel> larvaeModels;
 
 std::map<size_t,vector<size_t> > lost_blobs;
+std::map<size_t,vector<size_t> > lost_blobs_ring;
+std::map<size_t,vector<size_t> > lost_blobs_odor_left;
+std::map<size_t,vector<size_t> > lost_blobs_odor_right;
 std::map<size_t,vector<size_t> > partial_lost_blobs;
 std::vector<size_t> certain_blobs;
 
