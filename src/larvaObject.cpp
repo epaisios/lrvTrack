@@ -147,7 +147,7 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
   cv::Point2f bp=cv::Point2f(blobs[c_index].minx,
       blobs[c_index].miny);
   stringstream data;
-
+  bool DATA_OK=true;
   //data << (float) CURRENT_FRAME/VIDEO_FPS << ",";
   data << CURRENT_FRAME << ",";
 
@@ -219,11 +219,17 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
   {
     cout << "Head tail confusion detected: Larva: " << larva_ID 
       << " Frame: " << CURRENT_FRAME << endl;
-    csvline="";
-    return;
+    round_flag[c_index]=1;
+    DATA_OK=false;
+    //csvline="";
+    //return;
+    for(int di=0;di<12;di++)
+    {
+        data << "na,na,";
+    }
   }
 
-  if(rev)
+  if(rev & DATA_OK)
   {
     data << (lrvDistances[c_index].Spine[0].x-cc.x)*ppm << ","
       <<  (-lrvDistances[c_index].Spine[0].y+cc.y)*ppm << ",";
@@ -243,7 +249,7 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
         << (-p->first.y+cc.y)*ppm <<",";
     }
   }
-  else
+  else if(!rev & DATA_OK)
   {
     data << (lrvDistances[c_index].Spine.back().x-cc.x)*ppm
       << ","
@@ -262,6 +268,13 @@ void larvaObject::csvLine(size_t CURRENT_FRAME,
     {
       data << (p.second.x-cc.x)*ppm << ","
         << (-p.second.y+cc.y)*ppm <<",";
+    }
+  }
+  else
+  {
+    for(int di=0;di<22;di++)
+    {
+        data << "na,na,";
     }
   }
   data << (blobs[c_index].centroid.x-cc.x)*ppm << ","

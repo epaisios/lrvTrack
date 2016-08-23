@@ -120,7 +120,7 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
   frameError.resize(abs((long) (START_FRAME-END_FRAME))+1);
   size_t lrv=0;
   larvae_models[0].resize(clarvae.size());
-  Point2f bp(blob.minx-PADDING,blob.miny-PADDING);
+  Point2f bp(blob.minx-PADDING-1,blob.miny-PADDING-1);
   Mat CollisionROI; 
   Mat CollisionObj; 
 
@@ -131,7 +131,7 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
       blob.maxx,
       blob.miny,
       blob.maxy,
-      PADDING,
+      PADDING+1,
       true,
       cv::Scalar(255),
       8,
@@ -155,7 +155,7 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
         blob.maxx,
         blob.miny,
         blob.maxy,
-        PADDING,
+        PADDING+1,
         true,
 	cv::Scalar(255),
 	8,
@@ -212,7 +212,7 @@ void collisionModel::updateModel(cvb::CvBlob &blob,size_t FRAME,Mat &ret)
       blob.maxx,
       blob.miny,
       blob.maxy,
-      PADDING);
+      PADDING+1);
 
   size_t idx=0;
   for(auto &cm: larvae_models)
@@ -423,25 +423,25 @@ void lrvFit::setloops()
     a1.push_back(0);
     a1.push_back(degree_step);
     a1.push_back(2*degree_step);
-/*
+
     a2.clear();
-    a2.push_back(-2*degree_step);
-    a2.push_back(-degree_step);
+    //a2.push_back(-2*degree_step);
+    //a2.push_back(-degree_step);
     a2.push_back(0);
-    a2.push_back(degree_step);
-    a2.push_back(2*degree_step);
-*/
+    //a2.push_back(degree_step);
+    //a2.push_back(2*degree_step);
+
     //a1=ga;
-    a2=ga;
+    //a2=ga;
     a3=ga;
-    a4=ga;
+    a4=a2;
 
 
     wl.clear();
     //wl.push_back(-2*wstep);
-    wl.push_back(-wstep);
+    //wl.push_back(-wstep);
     wl.push_back(0);
-    wl.push_back(wstep);
+    //wl.push_back(wstep);
     //wl.push_back(2*wstep);
 
 }
@@ -472,13 +472,42 @@ void lrvFit::generate(std::vector<fitData> &fitSpace)
                                 a2.size()*
                                 a3.size()*
                                 a4.size()*
-                                ga.size()*wl.size()*9)+1);
+                                ga.size()*wl.size()*49)+1);
   //fitSpace=std::vector<fitData>(6076);
 
   fitData &l=larvaFitData;
   //BOOST_LOG_TRIVIAL(debug) << printVector(l.angles);
 
+ //Find midpoint tail equation to minimize sideways motion
   fitSpace[0]=larvaFitData;
+  double mtx = spine[8].x; //midtail
+  double mty = spine[8].y;
+  double tx = spine[11].x; //tail
+  double ty = spine[11].y;
+  /*double a,b,br;
+  double bw=2.0; //Width of zone 
+  bool vert=false;
+  bool hor=false;
+  bool fail=false;
+  if(mtx-tx!=0 && mty-ty!=0)
+  {
+    a = (mty-ty)/(mtx-tx) ; //slope
+    br = abs(a)*bw;
+  }
+  else if( mty-ty == 0 && mtx-tx==0)
+  {
+    fail=true;
+    BOOST_LOG_TRIVIAL(debug) << "FAILED FINDING OUT SLOPE WHEN RESTRICTED MODEL'S SIDEWAYS MOTION" << endl;
+  }
+  else if (mty-ty==0)
+  {
+    hor=true;
+  }
+  else if (mtx-tx==0)
+  {
+    vert=true;
+  }*/
+  
   size_t i=1;
   for(auto iag=0;iag<ga.size();++iag)
   {
@@ -492,12 +521,37 @@ void lrvFit::generate(std::vector<fitData> &fitSpace)
           {
             for(auto wp=0;wp<wl.size();wp++)
             {
-              for(auto mpx=-1;mpx<2;mpx++)
+              for(auto mpx=-3;mpx<4;mpx++)
               {
-                for(auto mpy=-1;mpy<2;mpy++)
+                for(auto mpy=-3;mpy<4;mpy++)
                 {
                   Point2f mp=Point2f(larvaFitData.midtail.x+mpx,
                               larvaFitData.midtail.y+mpy);
+		  /*if(!fail && !hor && !vert)
+		  {
+	            double yminusax=mpy-a*mpx;
+		    if(yminusax>br || yminusax<-br)
+		    {
+                      mp=Point2f(larvaFitData.midtail.x,
+                              larvaFitData.midtail.y);
+		    }
+		  }
+		  if(!fail && !hor && vert)
+		  {
+		    if(mpx>bw || mpx<-bw)
+		    {
+                      mp=Point2f(larvaFitData.midtail.x,
+                              larvaFitData.midtail.y);
+		    }
+		  }
+		  if(!fail && !vert && hor)
+		  {
+		    if(mpy>bw || mpy<-bw)
+		    {
+                      mp=Point2f(larvaFitData.midtail.x,
+                              larvaFitData.midtail.y);
+		    }
+		  }*/
                   fitSpace[i++]=fitData(mp,
                                         orig_length*(1.0+wl[wp]),
                                         orig_width*(1.0-wl[wp]),
@@ -852,11 +906,11 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
                                 bool verbose)
 {
   setupSpine();
-  Mat tmp=cv::Mat(maxy-miny+1+(2*PADDING),
-        maxx-minx+1+(2*PADDING),
+  Mat tmp=cv::Mat(maxy-miny+1+(2*PADDING+2),
+        maxx-minx+1+(2*PADDING+2),
         CV_8UC1,Scalar(0));
 
-  Point2f bp(minx-PADDING,miny-PADDING);
+  Point2f bp(minx-PADDING-1,miny-PADDING-1);
 
   if(fitBase.rows!=tmp.rows || fitBase.cols!=tmp.cols)
     return;
@@ -914,11 +968,11 @@ void lrvFit::createMatfromFit(Mat &larvaFitContour,
                                 bool verbose)
 {
   setupSpine();
-  Mat tmp=cv::Mat(maxy-miny+1+(2*PADDING),
-        maxx-minx+1+(2*PADDING),
+  Mat tmp=cv::Mat(maxy-miny+1+(2*PADDING+2),
+        maxx-minx+1+(2*PADDING+2),
         CV_8UC1,Scalar(0));
 
-  Point2f bp(minx-PADDING,miny-PADDING);
+  Point2f bp(minx-PADDING-1,miny-PADDING-1);
 
   for(size_t i=0; i<spine.size()-1;i++)
   {
@@ -1141,7 +1195,7 @@ void lrvFit::calculateContour2f()
   contour.resize((spine.size()*2)-2);
   contour[0]=spine[0];
   contour[spine.size()-1]=spine.back();
-  Point2f bp(minx-PADDING,miny-PADDING);
+  Point2f bp(minx-PADDING-1,miny-PADDING-1);
   for(auto i=1;i<spine.size()-1;i++)
   {
     calculateContourPoint2f(spine[i-1],

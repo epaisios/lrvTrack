@@ -17,6 +17,30 @@
 
 using namespace lrvTrack;
 
+//For debugging to extract type:
+std::string type2str(int type) {
+  std::string r;
+
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+  switch ( depth ) {
+    case CV_8U:  r = "8U"; break;
+    case CV_8S:  r = "8S"; break;
+    case CV_16U: r = "16U"; break;
+    case CV_16S: r = "16S"; break;
+    case CV_32S: r = "32S"; break;
+    case CV_32F: r = "32F"; break;
+    case CV_64F: r = "64F"; break;
+    default:     r = "User"; break;
+  }
+
+  r += "C";
+  r += (chans+'0');
+
+  return r;
+}
+
 //VideoWriter combOut;
 
 Point2f filterMidpoint(vector<larvaDistanceMap> &in,
@@ -536,6 +560,13 @@ bool check_contour(larvaObject &o)
 }
 
 bool check_roundness(size_t lID,
+		     double area,
+		     double length,
+		     double length_mean,
+		     double width,
+		     double width_mean,
+		     double perimeter,
+		     double perimeter_mean,
                      double rndMean,
                      double curRnd,
                      //double RndRat,
@@ -545,12 +576,17 @@ bool check_roundness(size_t lID,
                      bool IN
                      )
 {
-      /*BOOST_LOG_TRIVIAL(debug) << "RND, " << CURRENT_FRAME
+	/*BOOST_LOG_TRIVIAL(debug) << "RND, " << CURRENT_FRAME
         << ", " << lID
-        << ", " << curRnd
-        << ", " << distMin
-        << ", " << minHTDist_mean ;*/
-      if(!IN)
+	<< ", " << area
+	<< ", " << length
+	<< ", " << length_mean
+	<< ", " << width
+	<< ", " << width_mean
+	<< ", " << perimeter
+	<< ", " << perimeter_mean
+        << ", " << curRnd;*/
+      /*if(!IN)
       {
         if(curRnd<=rndMean*0.80 && distMin>minHTDist_mean*1.20)
         //if(curRnd<=2.9 && distMin>minHTDist_mean*1.20)
@@ -569,7 +605,33 @@ bool check_roundness(size_t lID,
         }
         else
           return false;
-      }
+      }*/
+	//These numbers were received from one 9cm dish and one 15cm dish
+	double ROUNDNESS_LIM=3.55;
+	double LW_LIM=3.35;
+	double LP_LIM=0.42;
+	if(curRnd<ROUNDNESS_LIM &
+	   length/width<LW_LIM &
+	   length/width>0.001 & //Reasonable numbers...
+	   length/perimeter<LP_LIM &
+	   length/perimeter>0.001)
+	{	
+		BOOST_LOG_TRIVIAL(debug) << "RND, " << CURRENT_FRAME
+			<< ", " << lID
+			<< ", " << area
+			<< ", " << length
+			<< ", " << length_mean
+			<< ", " << width
+			<< ", " << width_mean
+			<< ", " << perimeter
+			<< ", " << perimeter_mean
+			<< ", " << curRnd;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 double is_larva(larvaObject &f)
@@ -988,6 +1050,11 @@ void showTags2()
             data);
         if(data != "")
           lfds[l.updated_ID] << data;
+	else
+	{
+	  BOOST_LOG_TRIVIAL(debug) << "SKIP: " 
+		  << c_index << ", " << l.updated_ID << endl;
+	}
         /*if(l.blobs.size()-1==c_index)
         {
           lfds[l.updated_ID].close();
@@ -1989,7 +2056,6 @@ void findHeadTail(larvaObject &lrv,
   }
 }
 
-
 void updateOneLarva(cvb::CvBlobs &In,
                     cvb::CvBlobs &Prev,
                     cvb::CvBlobs::iterator it,
@@ -2147,8 +2213,26 @@ void updateOneLarva(cvb::CvBlobs &In,
       newLarva.minHTDist.push_back(distMin);
       newLarva.minHTDist_sum=newLarva.minHTDist.back();
       newLarva.minHTDist_mean=newLarva.minHTDist_sum;
+
+      bool curVal = check_roundness(newLarva.larva_ID,
+		      newLarva.area.back(),
+		      newLarva.length.back(),
+		      newLarva.length_mean,
+		      newLarva.width.back(),
+		      newLarva.width_mean,
+		      newLarva.perimeter.back(),
+		      newLarva.perimeter_mean,
+		      newLarva.roundness.back(),
+		      newLarva.roundness.back(),
+		      //RndRat,
+		      newLarva.minHTDist_mean,
+		      distMin,//var,
+		      false);
+      if(Distances.Spine.size()!=2)
+	      newLarva.round_flag.push_back(curVal);
+      else
+	      newLarva.round_flag.push_back(true);
     }
-    newLarva.round_flag.push_back(false);
 
 
     newLarva.lastFrameWithStats=CURRENT_FRAME;
@@ -2376,19 +2460,36 @@ void updateOneLarva(cvb::CvBlobs &In,
     //double RndRat=curRnd/preRnd;
     //double var=Distances.curvatureVariance;
     
-    if(cur_larva.round_flag.back()==false && 
-       check_roundness(cur_larva.larva_ID,
+    //if(cur_larva.round_flag.back()==false && 
+    bool curVal = check_roundness(cur_larva.larva_ID,
+	       	       cur_larva.area.back(),
+		       cur_larva.length.back(),
+		       cur_larva.length_mean,
+		       cur_larva.width.back(),
+		       cur_larva.width_mean,
+		       cur_larva.perimeter.back(),
+		       cur_larva.perimeter_mean,
                        rndMean,
                        curRnd,
                        //RndRat,
                        cur_larva.minHTDist_mean,
                        distMin,//var,
-                       false))
-    {
-      cur_larva.round_flag.push_back(true);
-    }
-    else if(cur_larva.round_flag.back()==true &&
+                       false);
+    //{
+    if(Distances.Spine.size()!=2)
+    	cur_larva.round_flag.push_back(curVal);
+    else
+	cur_larva.round_flag.push_back(true);
+    //}
+    /*else if(cur_larva.round_flag.back()==true &&
             check_roundness(cur_larva.larva_ID,
+			    cur_larva.area.back(),
+			    cur_larva.length.back(),
+			    cur_larva.length_mean,
+			    cur_larva.width.back(),
+			    cur_larva.width_mean,
+			    cur_larva.perimeter.back(),
+			    cur_larva.perimeter_mean,
                             rndMean,
                             curRnd,
                             //RndRat,
@@ -2405,7 +2506,7 @@ void updateOneLarva(cvb::CvBlobs &In,
     else if(cur_larva.round_flag.back()==false)
     {
       cur_larva.round_flag.push_back(false);
-    }
+    }*/
 
     cur_larva.heads.push_back(Head);
     cur_larva.tails.push_back(Tail);
@@ -3701,19 +3802,33 @@ void extract_background_offline(VideoCapture &capture,
     normalize(ctout,ctout,0,255,CV_MINMAX);
     //threshold(ctout,ctout,bgNorm-20,255,THRESH_BINARY_INV);
     adaptiveThreshold(ctout,ctout,255,ADAPTIVE_THRESH_GAUSSIAN_C,THRESH_BINARY_INV,355,0);
+     // imshow("DISH",ctout);
+     // waitKey(-1);
     //threshold(ctout,ctout,70,255,THRESH_OTSU);
     //bitwise_not(ctout, ctout);
       IplImage ipl= ctout;
       labelImg=cvCreateImage(
           cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
       cvLabel(&ipl, labelImg, dishBlob);
+      Mat ctout_col;
       cvb::cvFilterByArea(dishBlob, 1100400 ,3292529);
+      int bestDishIdx=0;
+      double bestRoundness=DBL_MAX;
       cout << "DishBlob Size: " << dishBlob.size() << endl;
       if(dishBlob.size() !=1 )
       {
         cout << "More than one dish blobs found!!!" << endl;
       }
-      CvBlob *pdish=dishBlob.begin()->second;
+      for(auto &dish:dishBlob)
+      {
+	double per = getPerimeter(*dish.second);
+	double area = dish.second->area;
+	double roundness = (per*per)/(2*CV_PI*area);
+	if(roundness<bestRoundness)
+          bestDishIdx=dish.first;
+      }
+      cerr << "We choose the best one : " << bestDishIdx << endl;
+      CvBlob *pdish=dishBlob[bestDishIdx];
       float cx=pdish->minx+((pdish->maxx-pdish->minx)/2);
       cerr << "cx: " << cx << endl;
       float cy=pdish->miny+((pdish->maxy-pdish->miny)/2);
@@ -4765,7 +4880,7 @@ void determineHeadTail(larvaObject &f)
     if(f.isCluster==true)
     {
       d << "|=============== Blob " << f.larva_ID << " is a cluster ========"
-        << endl ;
+        << endl;
       d << "|========================================= " << endl;
       BOOST_LOG_TRIVIAL(debug) << d.str();
       return;
@@ -4782,7 +4897,7 @@ void determineHeadTail(larvaObject &f)
       }
       else if(f.round_flag[i]==false && INBREAK==true)
       {
-        if(f.round_flag.size()>i && f.round_flag[i+1]==true)
+        if(f.round_flag.size()>=i && f.round_flag[i+1]==true)
           continue;
         breaks.push_back(i);
         INBREAK=false;
@@ -4836,8 +4951,14 @@ void determineHeadTail(larvaObject &f)
         Point2f bpPoint(f.blobs[j].minx,f.blobs[j].miny);
         Point2f hPoint=filterPoint(f.heads,j,F,f.blobs);
         Point2f tPoint=filterPoint(f.tails,j,F,f.blobs);
-        sumHeadGrey+=f.heads_brightness[j];
-        sumTailGrey+=f.tails_brightness[j];
+	//if(isfinite(f.heads_brightness[j]) && 
+	//   isfinite(f.tails_brightness[j]))
+	if(f.heads_brightness[j]>0 && f.heads_brightness[j] < 9999 &&
+	   f.tails_brightness[j]>0 && f.tails_brightness[j] < 9999)
+	{
+		sumHeadGrey+=f.heads_brightness[j];
+		sumTailGrey+=f.tails_brightness[j];
+	}
         if(j>preBreak+1)
         {
           Point2f prebpPoint(f.blobs[j-2].minx,f.blobs[j-2].miny);
@@ -4845,14 +4966,48 @@ void determineHeadTail(larvaObject &f)
           Point2f pretPoint=filterPoint(f.tails,j-2,F,f.blobs);
           //Point2f centroid=filterCentroid(f.blobs,j,F);
           Point2f midpoint=filterMidpoint(f.lrvDistances,j,F);
-          sumHeadDiff+=p2fdist(midpoint,prehPoint);
-          sumTailDiff+=p2fdist(midpoint,pretPoint);
-          sumHeadCnt+=p2fdist(hPoint,prehPoint);
-          sumTailCnt+=p2fdist(tPoint,pretPoint);
+	  double tmpd1,tmpd2,tmpd3,tmpd4;
+	  tmpd1 = p2fdist(midpoint,prehPoint);
+	  if(tmpd1>0 & tmpd1<100)
+          	sumHeadDiff+=tmpd1;
+	  tmpd2 = p2fdist(midpoint,pretPoint);
+	  if(tmpd2>0 & tmpd2<100)
+          	sumTailDiff+=tmpd2;
+	  tmpd3 = p2fdist(hPoint,prehPoint);
+	  if(tmpd3>0 & tmpd3<100)
+          	sumHeadCnt+=tmpd3;
+	  tmpd4 = p2fdist(tPoint,pretPoint);
+	  if(tmpd4>0 & tmpd4<100)
+          	sumTailCnt+=tmpd4;
+	  BOOST_LOG_TRIVIAL(debug) << "HTCHECK: " << f.larva_ID << "," << j <<
+		  "," << f.heads_brightness[j] <<
+		  "," << f.tails_brightness[j] <<
+		  "," << sumHeadGrey <<
+		  "," << sumTailGrey <<
+		  "," << tmpd1 <<
+		  "," << tmpd2 <<
+		  "," << tmpd3 <<
+		  "," << tmpd4;
         }
+	else
+	{
+	  BOOST_LOG_TRIVIAL(debug) << "HTCHECK: " << f.larva_ID << "," << j <<
+	  	"," << f.heads_brightness[j] <<
+	  	"," << f.tails_brightness[j] <<
+		"," << sumHeadGrey <<
+		"," << sumTailGrey <<
+		"," << 0 <<
+		"," << 0 <<
+		"," << 0 <<
+		"," << 0 ;
+	}
+	if(!isfinite(sumHeadGrey) || !isfinite(sumTailGrey))
+	{
+		BOOST_LOG_TRIVIAL(debug) << "VALUE GETS TO NaN here!!!" << endl;	
+	}
       }
       double vote_for_nochange=0;
-      size_t duration=endBreak-preBreak;
+      size_t duration=endBreak-preBreak+1;
 
       if(sumHeadDiff/duration<sumTailDiff/duration) //If head was infront most of the time vote for nochange
 	vote_for_nochange++;
@@ -4861,19 +5016,27 @@ void determineHeadTail(larvaObject &f)
 	vote_for_nochange--;
         //vote_for_nochange-=fabs(sumHeadDiff-sumTailDiff)/(sumHeadDiff+sumTailDiff);
 
-      if(sumHeadGrey/duration<sumTailGrey/duration) //If head was darker vote for no change
-	vote_for_nochange++;
-        //vote_for_nochange+=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
-      else
-	vote_for_nochange--;
-        //vote_for_nochange-=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+      if(sumHeadGrey!=0 & sumTailGrey!=0 && isfinite(sumHeadGrey) && isfinite(sumTailGrey)
+		      && duration>1 )
+      {
+        if(sumHeadGrey/duration<sumTailGrey/duration) //If head was darker vote for no change
+	  vote_for_nochange++;
+          //vote_for_nochange+=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+        else
+	  vote_for_nochange--;
+          //vote_for_nochange-=fabs(sumHeadGrey-sumTailGrey)/(sumHeadGrey+sumTailGrey);
+      }
 
-      if(sumHeadCnt/duration>sumTailCnt/duration) //If head made more distance vote for no change
-	vote_for_nochange++;
-        //vote_for_nochange+=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
-      else
-	vote_for_nochange--;
-        //vote_for_nochange-=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+      if(sumHeadCnt!=0 && sumTailCnt!=0 && isfinite(sumHeadCnt) && isfinite(sumTailCnt)
+		      && duration>1 )
+      {
+        if(sumHeadCnt/duration>sumTailCnt/duration) //If head made more distance vote for no change
+	  vote_for_nochange++;
+          //vote_for_nochange+=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+        else
+	  vote_for_nochange--;
+          //vote_for_nochange-=fabs(sumHeadCnt-sumTailCnt)/(sumHeadCnt+sumTailCnt);
+      }
 
       d << "|" << endl;
       d << "|      LarvaID, GHead, HeadForward, HeadDistance, Duration, Votes" << endl;

@@ -11,6 +11,7 @@
 #include <boost/accumulators/statistics/moment.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
 #include "lrvTrackDebug.hpp"
+#include <opencv2/highgui/highgui.hpp>
 
 using namespace boost::accumulators;
 using namespace lrvTrack;
@@ -1803,13 +1804,23 @@ double getSurroundingSize(cv::Point2f &point,
   //createLarvaContour(contourBlack, blob,CV_8UC1,PADDING);
 
   cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-  cv::erode(lrvROI,lrvROI,element);
+  //cv::imshow("Original",lrvROI);
+  //cv::waitKey(-1);
+  cv::dilate(lrvROI,lrvROI,element);
+  //cv::imshow("Eroded",lrvROI);
+  //cv::waitKey(-1);
   cv::bitwise_and(ROI,lrvROI,ROI);
+  //cv::equalizeHist(ROI, ROI);
   cv::Mat cROI(ROI.size(),ROI.depth());
   cROI=cv::Scalar(0);
-  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),blob.area/10,cv::Scalar(255),-1);
+  size_t xd=blob.maxx-blob.minx;
+  size_t yd=blob.maxy-blob.miny;
+  size_t sd = sqrt(xd*xd+yd*yd)/4;
+  cv::circle(cROI, cv::Point2f(point.x+PADDING,point.y+PADDING),sd,cv::Scalar(255),-1);
   cv::Mat area=ROI&cROI;
-  cv::equalizeHist( area, area);
+  //cv::imshow("headtail",area);
+  //cv::waitKey(-1);
+  //cv::equalizeHist( area, area);
   //lrvTrackNormalize(area,area,0,255,cv::NORM_MINMAX);
   double nz=cv::norm(area,cv::NORM_L1);
   double nc=cv::countNonZero(area);
