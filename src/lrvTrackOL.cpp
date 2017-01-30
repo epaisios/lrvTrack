@@ -3993,13 +3993,17 @@ void extract_background_offline(VideoCapture &capture,
   {
     if(LRVTRACK_ODOR_LR == "left")
     {
+      // BUG: This was hard to find but horrible!
       if(b.second->centroid.x < greyBgFrame.cols/2)
-        writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(b.second->centroid.y-cc.y));
+	writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(cc.y-b.second->centroid.y));
+	//writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(b.second->centroid.y-cc.y));
     }
     if(LRVTRACK_ODOR_LR == "right")
     {
+      // BUG: This was hard to find but horrible!
       if(b.second->centroid.x > greyBgFrame.cols/2)
-        writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(b.second->centroid.y-cc.y));
+        writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(cc.y-b.second->centroid.y));
+        //writeIni(ppm*(b.second->centroid.x-cc.x),ppm*(b.second->centroid.y-cc.y));
     }
     createBlobContour(cupContours,
         *b.second,
