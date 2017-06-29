@@ -35,7 +35,7 @@ void updateOneLarva(cvb::CvBlobs &In,
 double mh_dist(size_t N,size_t C);
 double kn_dist(size_t N,size_t C);
 
-/* 
+/*
  * Class to perform the computations for each larva.
  * The class is needed to perform these operations in parallel.
  * The format is based on this answer:
@@ -50,10 +50,10 @@ private:
   cvb::CvBlobs::iterator it;
 
 public:
-  larvaeUpdateBody(cvb::CvBlobs &IIn, 
+  larvaeUpdateBody(cvb::CvBlobs &IIn,
       cvb::CvBlobs &IPrev,
       tbb::concurrent_hash_map<size_t, larvaObject> &n
-      ): 
+      ):
     In(IIn),
     Prev(IPrev),
     NEW_LARVA(n)
@@ -87,7 +87,7 @@ public:
 class lrvMapping {
 
     double dst;
-  
+
   public:
     //The actual mapping
     // newID -> detectedLarvaeID
@@ -117,7 +117,7 @@ class lrvMapping {
       if(dst==-1)
         dst=mh_dist(nlrv,plrv);
         //dst=kn_dist(nlrv,plrv);
-      
+
       return dst;
     }
 };
@@ -125,7 +125,7 @@ class lrvMapping {
 // Vector of mappings: covers the possible assignments.
 typedef vector<lrvMapping> ltAssignments;
 
-void pair_powersets(vector<lrvMapping> &IN, 
+void pair_powersets(vector<lrvMapping> &IN,
     vector<ltAssignments > &OUT);
 
 
