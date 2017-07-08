@@ -3662,11 +3662,25 @@ bool get_next_frame(VideoCapture &capture, Mat &output, Mat &colorOutput,size_t 
                           LRVTRACK_BRIGHTNESS,
                           LRVTRACK_CONTRAST,
                           LRVTRACK_GAMMA);
-
+  Scalar meanS = mean(output);
+  double meanVal = meanS.val[0];
+  int nRows = output.rows;
+  int nCols = output.cols;
+  uchar *p;
+  for ( int i=0; i< nRows; ++i)
+  {
+	  p = output.ptr<uchar>(i);
+	  for(int j=0; j<nCols; ++j)
+	  {
+		  if(p[j]<meanVal)
+			  p[j]=meanVal;
+	  }
+  }
+  normalize(output,output,0,255,CV_MINMAX);
   cvtColor(output,colorOutput,CV_GRAY2BGR);
 
   //imshow("OUTPUT",output);
-  //waitKey(1);
+  //waitKey(0);
   return retval;
 //#endif
 }
@@ -3740,7 +3754,7 @@ void extract_background_offline(VideoCapture &capture,
   size_t count=0;//capture.get(CV_CAP_PROP_FRAME_COUNT);
   size_t total=capture.get(CV_CAP_PROP_FRAME_COUNT);
   cerr << "Background computation" << endl;
-  while(get_next_frame(capture,tmpFrame,origFrame,5))
+  while(get_next_frame(capture,tmpFrame,origFrame,10))
   {
     if(LRVTRACK_EXTRACT_OFFLINEBG_MIN)
       min(resultframe,tmpFrame,resultframe);
@@ -3813,13 +3827,13 @@ void extract_background_offline(VideoCapture &capture,
           cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
       cvLabel(&ipl, labelImg, dishBlob);
       Mat ctout_col;
-      cvb::cvFilterByArea(dishBlob, 1100400 ,3292529);
+      cvb::cvFilterByArea(dishBlob, 900400 ,6292529);
       int bestDishIdx=0;
       double bestRoundness=DBL_MAX;
       cout << "DishBlob Size: " << dishBlob.size() << endl;
       if(dishBlob.size() !=1 )
       {
-        cout << "More than one dish blobs found!!!" << endl;
+        cout << dishBlob.size() << " dish blobs found!!!" << endl;
       }
       for(auto &dish:dishBlob)
       {
@@ -3830,6 +3844,7 @@ void extract_background_offline(VideoCapture &capture,
           bestDishIdx=dish.first;
       }
       cerr << "We choose the best one : " << bestDishIdx << endl;
+      cerr << "With Area: " << dishBlob[bestDishIdx]->area << endl;
       CvBlob *pdish=dishBlob[bestDishIdx];
       float cx=pdish->minx+((pdish->maxx-pdish->minx)/2);
       cerr << "cx: " << cx << endl;
@@ -3945,7 +3960,7 @@ void extract_background_offline(VideoCapture &capture,
       }
       if(cups.size()<2)
       {
-	cerr << "Only ONE cup found!!!" << endl;
+	cerr << "Only " << cups.size() << " cups found!!!" << endl;
       }
       Mat cupMap=Mat::zeros(greyBgFrame.rows,greyBgFrame.cols, greyBgFrame.type());
       for(auto &cup:cups)
