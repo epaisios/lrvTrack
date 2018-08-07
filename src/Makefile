@@ -6,7 +6,7 @@ INCLUDES_GPU=-I/opt/opencv/${OPENCV_VER}/include/opencv -I/opt/opencv/${OPENCV_V
 INCLUDES_QT=-I/opt/opencv/${OPENCV_VER}-qt/include/opencv -I/opt/opencv/${OPENCV_VER}-qt/include -I.
 #GCCFLAGS=-fopenmp -DAE_CPU=AE_INTEL
 #GCCFLAGS=-DAE_CPU=AE_INTEL -std=c++11 -Wno-c++11-extensions
-GCCFLAGS=-std=c++0x -Wno-c++11-extensions -DBOOST_LOG_DYN_LINK
+GCCFLAGS=-std=c++0x -Wno-c++11-extensions -DBOOST_LOG_DYN_LINK #-DLRV_TRACK_VISUAL_DEBUG
 GCCFLAGS_GPU=-DLRVTRACK_WITH_CUDA
 GCCFLAGS_OCL=-DLRVTRACK_WITH_OPENCL
 OPTFLAGS=-Ofast -m64 -flto -funroll-loops -msse2 -DAE_CPU=AE_INTEL -march=native 
@@ -23,6 +23,7 @@ LIBS=-lm\
      -lopencv_imgproc\
      -lopencv_photo\
      -lopencv_ml\
+     -lopencv_plot\
      -lcvblob\
      -ltbb\
      -llpsolve55\

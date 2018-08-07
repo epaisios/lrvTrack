@@ -14,6 +14,9 @@
 #include "alglib/stdafx.h"
 #include "alglib/interpolation.h"
 //#define LRV_TRACK_VISUAL_DEBUG
+#ifdef LRV_TRACK_VISUAL_DEBUG
+#include <opencv2/plot.hpp>
+#endif
 
 using namespace lrvTrack;
 
@@ -1429,7 +1432,8 @@ void fixContour(
   blobToContourVector(blob,frame,2,ppoints);
   bool RECONSTRUCT_SPINE=false;
   std::string rec="NOREC";
-  if(ppoints.size()<0.8*RES)
+  if(ppoints.size()<0.1*RES)
+  //if(ppoints.size()<0.8*RES)
   {
     ppoints.clear();
     RECONSTRUCT_SPINE=true;
@@ -1586,7 +1590,8 @@ if(RECONSTRUCT_SPINE)
 else
 {
     //std::cout << "N" << std::endl;
-    nospline(xpoints,
+    sg_spline(xpoints,
+    //nospline(xpoints,
         d,
         w,
         xpoints.size(),
@@ -1866,11 +1871,62 @@ else
       cv::Scalar(0,0,255),-1);*/
 
   //if((blob.label==0) && blobs!=NULL && CURRENT_FRAME>60 && CURRENT_FRAME<160 && blobs->size()>63)
-  if(blob.label!=0)
+  if(blob.label==2)
   {
     size_t i;
+    cv::Mat plot_result;
+    std::cout << "HERE START" << std::endl;
+    std::cout << "=============================" << std::endl;
+    std::vector<float> c_tmp1, c_tmp2, c_tmp3;// c_tmp4;
+    int sf=(vcurv.size()*0.05);
+    smoothVec(vcurv,c_tmp1,sf,(float)0.0);
+    smoothVec(c_tmp1,c_tmp2,sf,(float)0.0);
+    smoothVec(c_tmp2,c_tmp3,sf,(float)0.0);
+    std::cout << printVector(c_tmp3) << std::endl;
+    cv::Mat curvature_data = cv::Mat(c_tmp3).reshape(0,c_tmp3.size());
+    curvature_data.convertTo(curvature_data,CV_64F);
+    cv::Ptr<cv::plot::Plot2d> plot = cv::plot::createPlot2d(curvature_data);
+    plot->setPlotLineColor(cv::Scalar( 50, 50, 255 ) );
+    plot->render( plot_result );
+    std::cerr << "HERE END" << std::endl;
 
-    cv::imshow("LRV1",cROI);
+    cv::Point p1 = cv::Point(
+		    (double)dIdx[0]/c_tmp3.size() * plot_result.cols,
+		    c_tmp3[dIdx[0]]/(
+		      *std::max_element(c_tmp3.begin(),
+		      c_tmp3.end()) - *std::min_element(
+		      c_tmp3.begin(),c_tmp3.end())) * plot_result.rows);
+    cv::Point p2 = cv::Point(
+		    (double)dIdx[1]/c_tmp3.size() * plot_result.cols,
+		    c_tmp3[dIdx[1]]/(
+		      *std::max_element(c_tmp3.begin(),
+		      c_tmp3.end()) - *std::min_element(
+		      c_tmp3.begin(),c_tmp3.end())) * plot_result.rows);
+    cv::circle(plot_result,p1,3,
+		    cv::Scalar(255,0,255));
+    cv::circle(plot_result,p2,3,
+		    cv::Scalar(255,0,255));
+    
+    std::cout << "cROI: " << cROI.size() << std::endl;
+    std::cout << "plot_result: " << plot_result.size() << std::endl;
+    if(cROI.cols > plot_result.cols)
+    {
+	cv::Size ns=cv::Size(
+			cROI.cols,
+			cROI.cols/plot_result.cols * plot_result.rows);
+        cv::resize(plot_result,plot_result,ns);
+    }
+    else if(cROI.cols < plot_result.cols)
+    {
+	cv::Size ns = cv::Size(plot_result.cols,
+		size_t(((double)plot_result.cols/cROI.cols) * cROI.rows));
+        cv::resize(cROI,cROI,ns);
+    }
+    cv::Mat C;
+    std::cout << "cROI: " << cROI.size() << std::endl;
+    std::cout << "plot_result: " << plot_result.size() << std::endl;
+    cv::vconcat(cROI,plot_result,C);
+    cv::imshow("C",C);
     /*for(i=0;i<Distances.Spine.size()-1;i++)
       std::cout << Distances.Spine[i] << ", " ;
     std::cout << Distances.Spine[i] << std::endl;
@@ -1884,7 +1940,7 @@ else
     //g1.remove_tmpfiles();
     //std::cerr << "dIdx: " <<  dIdx[0] << " , " << dIdx[1] << std::endl;
     i=0;
-    std::vector<float> c;
+    //std::vector<float> c;
     std::vector<float> c_tmp;
     //int sf=21;
     std::vector<double> idx;

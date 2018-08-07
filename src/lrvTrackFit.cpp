@@ -162,12 +162,19 @@ collisionModel::collisionModel(std::vector<size_t> clarvae,
 	cv::Scalar(0),
 	false);
     f.copyTo(sp);
+    //Create copy of f with spine marks
     for(auto &spp : o.lrvDistances[idx].Spine)
     {
       cv::circle(sp,spp-bp,0,cv::Scalar(200),-1);
     }
     Mat r;
     c.optimizeAndReturn(f,r);
+
+    cerr << "CollisionROI: " << CollisionROI.rows << " x " << CollisionROI.cols << endl;
+    cerr << "CollisionROI: " << CollisionROI.type() << endl;
+    cerr << "r: " << r.rows << " x " << r.cols << endl;
+    cerr << "r: " << r.type() << endl;
+    
     if(CollisionROI.empty())
       sp.copyTo(CollisionROI);
     else
@@ -472,7 +479,7 @@ void lrvFit::generate(std::vector<fitData> &fitSpace)
                                 a2.size()*
                                 a3.size()*
                                 a4.size()*
-                                ga.size()*wl.size()*49)+1);
+                                ga.size()*wl.size()*81)+1);
   //fitSpace=std::vector<fitData>(6076);
 
   fitData &l=larvaFitData;
@@ -507,6 +514,17 @@ void lrvFit::generate(std::vector<fitData> &fitSpace)
   {
     vert=true;
   }*/
+  //We want to have about 6 search steps
+  //	larvae can MAXIMALLY! move about 8mm per second in one direction
+  //    search space: +- 2/FPS mm
+  //    search space in px: +-(2/FPS)/MilimetersPerPixel
+  double max_pix_per_frame_f = (12/VIDEO_FPS)/LRVTRACK_MPP;
+  int coord_step = (int) max_pix_per_frame_f/6;
+  if (coord_step < 1)
+    coord_step = 1;
+  int max_pix_per_frame = max_pix_per_frame_f;
+  // BOOST_LOG_TRIVIAL(debug) << "MODEL STATS: coord_step=" << coord_step << endl;
+  // BOOST_LOG_TRIVIAL(debug) << "MODEL STATS: LRVTRACK_MPP=" << LRVTRACK_MPP << endl;
   
   size_t i=1;
   for(auto iag=0;iag<ga.size();++iag)
@@ -521,9 +539,9 @@ void lrvFit::generate(std::vector<fitData> &fitSpace)
           {
             for(auto wp=0;wp<wl.size();wp++)
             {
-              for(auto mpx=-3;mpx<4;mpx++)
+	      for(auto mpx=-4*coord_step;mpx<=4*coord_step;mpx+=coord_step)
               {
-                for(auto mpy=-3;mpy<4;mpy++)
+              	for(auto mpy=-4*coord_step;mpy<=4*coord_step;mpy+=coord_step)
                 {
                   Point2f mp=Point2f(larvaFitData.midtail.x+mpx,
                               larvaFitData.midtail.y+mpy);

@@ -12,6 +12,9 @@
 #include <boost/accumulators/statistics/variance.hpp>
 #include "lrvTrackDebug.hpp"
 #include <opencv2/highgui/highgui.hpp>
+#ifdef LRV_TRACK_VISUAL_DEBUG
+#include <opencv2/plot.hpp>
+#endif
 
 using namespace boost::accumulators;
 using namespace lrvTrack;
@@ -564,7 +567,11 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
   //{
   //    	  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : lrvROIlocal: " << lrvROIlocal.size() << std::endl;
   //}
-  if(! ( (dxu=(int) blob.minx-(int) minx)+PAD<0 || (dyu=(int)blob.miny-(int)miny)+PAD<0 || (dxb=(int)maxx-(int)blob.maxx)+PAD<0 || (dyb=(int)maxy-(int)blob.maxy)+PAD<0))
+  dxu=(int) blob.minx-(int) minx;
+  dyu=(int) blob.miny-(int) miny;
+  dxb=(int) maxx-(int) blob.maxx;
+  dyb=(int) maxy-(int) blob.maxy;
+  if(! ( dxu+PAD<0 || dyu+PAD<0 || dxb+PAD<0 || dyb+PAD<0))
   {
     if(dxu>MAXBORDER)
       dxu=0;
@@ -574,23 +581,43 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
       dxb=0;
     if(dyb>MAXBORDER)
       dyb=0;
-    if(verbose)
-    {
-      std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : cmb: " << dyu << "," << dyb <<"," << dxu <<"," << dxb << " PAD: " << PAD << std::endl;
-    }
+    //if(verbose)
+    //{
+    //  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : cmb: " << dyu << "," << dyb <<"," << dxu <<"," << dxb << " PAD: " << PAD << std::endl;
+    //}
     cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
 
   }
   else
   {
     if(dxu<0)
+    {
+      //remove dxu cols from the left of lrvROIlocal
+      cv::Mat tmpROI = lrvROIlocal.colRange(-1*dxu,lrvROIlocal.cols);
+      lrvROIlocal=tmpROI;
       dxu=0;
-    if(dyu<0)
-      dyu=0;
+    }
     if(dxb<0)
+    {
+      //remove dxb cols from the right of lrvROIlocal
+      cv::Mat tmpROI= lrvROIlocal.colRange(0,lrvROIlocal.cols+dxb);
+      lrvROIlocal=tmpROI;
       dxb=0;
+    }
+    if(dyu<0)
+    {
+      //remove dyu rows from the top of lrvROIlocal
+      cv::Mat tmpROI = lrvROIlocal.rowRange(-1*dyu,lrvROIlocal.rows);
+      lrvROIlocal=tmpROI;
+      dyu=0;
+    }
     if(dyb<0)
+    {
+      //remove dyb rows from the bottom of lrvROIlocal
+      cv::Mat tmpROI = lrvROIlocal.rowRange(0,lrvROIlocal.rows+dyb);
+      lrvROIlocal=tmpROI;
       dyb=0;
+    }
     if(dxu>MAXBORDER)
       dxu=0;
     if(dyu>MAXBORDER)
@@ -599,14 +626,13 @@ void createLarvaContour_custom(cv::Mat &lrvROI,
       dxb=0;
     if(dyb>MAXBORDER)
       dyb=0;
-    if(verbose)
-    {
-      std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : cmb: " << dyu << "," << dyb <<"," << dxu <<"," << dxb << " PAD: " << PAD << std::endl;
-    }
+    //if(verbose)
+    //{
+    //  std::cerr << "DBG: CREATELARVACONTOUR_CUSTOM : cmb: " << dyu << "," << dyb <<"," << dxu <<"," << dxb << " PAD: " << PAD << std::endl;
+    //}
     cv::copyMakeBorder(lrvROIlocal,lrvROI,dyu+PAD,dyb+PAD,dxu+PAD,dxb+PAD,cv::BORDER_CONSTANT,cv::Scalar(0));
 
   }
-  dxu=0;
 }
 
 void createLarvaContour(cv::Mat &lrvROI,
@@ -1125,9 +1151,6 @@ void getBestCurvatureS(std::vector<float> &curv,
   
   smoothVecMap(c_tmp3,curvatures,c,sf,(float)0.0);
   
-  //std::cout << printVector(c) << std::endl;
-  //std::cout << "=============================" << std::endl;
-
   //map storing maxima: curvature value, index
   std::map<float,std::vector<size_t> > maxima;
   
@@ -1189,6 +1212,7 @@ void getBestCurvatureS(std::vector<float> &curv,
   //If we didn't find enough maxima quit!!
   if(maxima.size()<2)
   {
+    //std::cerr << " NOT ENOUGHT MAXIMA! " << std::endl;
     return;
   }
 
@@ -1213,8 +1237,9 @@ void getBestCurvatureS(std::vector<float> &curv,
   float m2;
   i2=i1;
   //Trying to find largest next maxima 
-  //that is of distance more than 40 points
-  while(abs(i2-i1)<40 || (c.size()-abs(i2-i1))<40)
+  //that is of distance more than a fourth of the total points
+  int minDist = (double)curv.size()/6.0;
+  while(abs(i2-i1)<minDist || (c.size()-abs(i2-i1))<minDist)
   {
     if(f==maxima.rend())
       return;
@@ -1448,6 +1473,80 @@ void spline3(std::vector<cv::Point2f> &cp,
   std::vector<float> scurvature;
   curvVec(np,pvals,scurvature);
   //getBestCurvatureS(scurvature,curvatures,di,dmax,cvariance);
+}
+// Savitzky Golay filtered points
+void sg_spline(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures,
+           std::vector<float> &vcurv,
+           double &cvariance)
+{
+  double sigma=LRVTRACK_SMOOTHING;
+  cv::Mat G;
+  int order=3;
+  int sz=cp.size()*0.05*2+1;
+  int N = cp.size();
+  int W = cp.size() / 16 * 2 + 1;
+  std::vector<int> order_range = {0, 1, 2, 3};
+  int half_window = (W-1)/2;
+
+  std::vector<int> window_range;
+  for(int i=0;i<W+1;i++)
+	window_range.push_back(-half_window+i);
+  // Order 3, order_range size = 4
+  cv::Mat b(W+1,order+1,CV_32F);
+  for (int i=0;i<W+1;i++)
+  {
+	  for(int j=0;j<order+1;j++)
+		  b.at<float>(i,j) = pow(window_range[i],order_range[j]);
+  }
+  /*std::cout << " SAVITZKY GOLAY M(): " << std::endl; 
+  std::cout << b << std::endl;
+  */	
+  cv::Mat inv;
+  cv::invert(b,inv,cv::DECOMP_SVD);
+  cv::Mat m = inv.row(0);
+  //std::cout << " m.cols " << m.cols << std::endl;
+  //Mat fm;
+  //cv::flip(m,fm,0);
+  //std::cout << m << std::endl;
+  std::vector<cv::Point2f> tcp;
+  std::vector<cv::Point2f> tnp;
+  tcp.insert(tcp.end(),cp.begin(),cp.end());
+  tcp.insert(tcp.end(),cp.begin(),cp.end());
+  tcp.insert(tcp.end(),cp.begin(),cp.end());
+
+  cv::Point anchor(m.cols - 2, -1);
+  cv::filter2D(tcp, tnp, -1, m, anchor);
+  /*std::cout << "TNP: " << std::endl;*/
+
+
+  //cv::transpose(cv::getGaussianKernel(sz,sigma,CV_64FC1),G);
+  //cv::flip(G,G,0);
+  //cv::Point anchor(G.cols - sz -1, G.rows -0 -1);
+  //cv::filter2D(tcp,tnp,-1,G,anchor);
+  //cv::filter2D(tcp,tnp,-1,G);
+  np.insert(np.begin(),tnp.begin()+cp.size(),tnp.begin()+2*cp.size());
+  //std::cout << "CP SIZE: " << cp.size() << std::endl;
+  //std::cout << "NP SIZE: " << np.size() << std::endl;
+  //std::cout << printVector(cp) << std::endl;
+  //std::cout << printVector(np) << std::endl;
+
+  /*for (int i=0;i<np.size();i++)
+  {
+	std::cout << np[i] << " ";
+  }
+  std::cout << std::endl;*/
+  
+  curvVec(np,vcurv);
+  std::vector<float> dmax(di.size(),0);
+  getBestCurvatureS(vcurv,curvatures,di,dmax,cvariance);
+
 }
 
 void nospline(std::vector<cv::Point2f> &cp,

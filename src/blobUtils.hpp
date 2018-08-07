@@ -54,6 +54,17 @@ void nospline(std::vector<cv::Point2f> &cp,
            std::vector<float> &vcurv,
            double &cvariance);
 
+void sg_spline(std::vector<cv::Point2f> &cp,
+           std::vector<float> &d,
+           std::vector<float> &w,
+           int n,
+           int RES,
+           std::vector<cv::Point2f> &np,
+           std::vector<size_t> &di,
+           std::map<float,size_t> &curvatures,
+           std::vector<float> &vcurv,
+           double &cvariance);
+
 namespace lrvTrack{
   
 inline  double p2fdist(const double x1,const double y1,const double x2, const double y2)

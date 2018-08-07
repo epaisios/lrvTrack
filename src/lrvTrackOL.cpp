@@ -576,7 +576,7 @@ bool check_roundness(size_t lID,
                      bool IN
                      )
 {
-    BOOST_LOG_TRIVIAL(debug) << "RND, " << CURRENT_FRAME
+    /*BOOST_LOG_TRIVIAL(debug) << "RND, " << CURRENT_FRAME
 			<< ", " << lID
 			<< ", " << area
 			<< ", " << length
@@ -585,7 +585,7 @@ bool check_roundness(size_t lID,
 			<< ", " << width_mean
 			<< ", " << perimeter
 			<< ", " << perimeter_mean
-			<< ", " << curRnd;
+			<< ", " << curRnd;*/
 
 	/*BOOST_LOG_TRIVIAL(debug) << "RND, " << CURRENT_FRAME
         << ", " << lID
@@ -3236,262 +3236,6 @@ void contourLarvaeTrack(cvb::CvBlobs &In,
   updateLarvae(out,Prev);
 }
 
-
-/*
- * TODO:
- * IMPORTANT NOTE!!
- *  We have essentially three mappings:
- *   1) The previous frame blobs -> new frame blobs
- *   2) The new frame blobs -> previous frame blobs
- *   3) The new frame blobs -> updated numbers
- *
- *  The updated numbers are:
- *   a) the numbers that remained from the previous frame.
- *   b) the numbers that diverged from frames before the previous
- *   c) new numbers (increasing LARVAE_COUNT)
- */
-/*void newLarvaeTrack(cvb::CvBlobs &In,
-                    cvb::CvBlobs &Prev,
-                    cvb::CvBlobs &out)
-{
-
-
-  assignedNew.clear();
-  assignedPrevious.clear();
-  assignedPreMap.clear();
-  newInFrame.clear();
-  //newClusters.clear();
-
-  cvb::CvBlobs::iterator prevIt=Prev.begin();
-  while (prevIt!=Prev.end())
-  {
-    assignedPreMap[prevIt->first]=0;
-    ++prevIt;
-  }
-
-  BOOST_LOG_TRIVIAL(trace) << "========  Starting Tracking loop ==========";
-
-	prevIt=Prev.begin();
-  while (prevIt!=Prev.end())
-  {
-    //If the larvae from the previous frame has not been assigned
-    //  -- It may be that it is assigned during a previous larva
-    //     inspection.
-    if(assignedPreMap[prevIt->first]==0)
-    {
-      cvb::CvBlob *preBlob=prevIt->second;
-      size_t preID=prevIt->first;
-
-      // Get larva around it before and after
-      vector<size_t> preLarvaeNearby;
-      vector<size_t> postLarvaeNearby;
-      getNearbyLarvae(Prev,preBlob,preLarvaeNearby,true);
-      getNearbyLarvae(In,preBlob,postLarvaeNearby,false);
-
-      //BOOST_LOG_TRIVIAL(trace) << "Around larva " << prevIt->first
-      //                         << " we found " << preLarvaeNearby.size()
-      //                         << " larvae from the previous frame and "
-      //                         << postLarvaeNearby.size()
-      //                         << " from the new frame.";
-
-      //BOOST_LOG_TRIVIAL(trace) << "Around larva " << prevIt->first
-      //                         << " we found pre: "
-      //                         << printVector(preLarvaeNearby)
-      //                         << " and post: "
-      //                         << printVector(postLarvaeNearby);
-      // Great case collection now:
-
-      // CASE 1 -> 1
-      if(preLarvaeNearby.size()==1 && postLarvaeNearby.size()==1)
-      {
-        if(blobSizeIsRelevant(In[postLarvaeNearby[0]],preBlob))
-        {
-          double v;
-          if(centresMatch(In,Prev[preLarvaeNearby[0]],postLarvaeNearby,v,0.3))
-          {
-            //BOOST_LOG_TRIVIAL(trace) << "Larva " << prevIt->first
-            //                         << " from previous frame matches "
-            //                         << postLarvaeNearby[0]
-            //                         << " from new frame. Assigning.";
-            assign_one(preID,postLarvaeNearby[0]);
-          }
-          else
-          {
-            // Centres do NOT match! Maybe it disappeared.
-            // TODO: Check
-            BOOST_LOG_TRIVIAL(trace)
-              << "1-1: with size similar and centres not matching. !UNHANDLED!";
-          }
-        }
-        else
-        {
-          // Sizes are too different:
-          //  Cases:
-          //    1) Object dissapeared and another came into sight.
-          //       Case will be handled when the other one is handled
-          //    2) Merge with a large object.
-          //       Case will be handled when the large object is handled.
-          BOOST_LOG_TRIVIAL(trace)
-            << "1-1: with size too different. No assignment.";
-        }
-      }
-      // END OF 1-1 CASE
-      // GENERAL CASE:
-      else
-      {
-        // Try to assign obvious ones:
-        vector<size_t>::iterator preNearIt=preLarvaeNearby.begin();
-        while(preNearIt!=preLarvaeNearby.end())
-        {
-          bool erased=false;
-          vector<size_t>::iterator postNearIt=postLarvaeNearby.begin();
-          while(postNearIt!=postLarvaeNearby.end())
-          {
-            double val1,valb,vala;
-            bool cm1,cmb,cma;
-
-            cm1=centresMatch(Prev[*preNearIt],In[*postNearIt],val1,0.2);
-            cmb=centresMatch(Prev,In[*postNearIt],preLarvaeNearby,valb);
-            cma=centresMatch(In,Prev[*preNearIt],postLarvaeNearby,vala);
-
-            if ( blobSizeIsRelevant(Prev[*preNearIt],In[*postNearIt]) &&
-                 min(val1,valb)==val1 &&
-                 min(val1,vala)==val1 &&
-                 cm1)
-            {
-              //1-1 and one extra in sight
-              //New Larva matches preID larva therefore assign and ignore the
-              //other.
-              //BOOST_LOG_TRIVIAL(trace) << "Larva " << *preNearIt
-              //                         << " from previous frame matches "
-              //                         << *postNearIt
-              //                         << " from new frame. Assigning";
-              assign_one(*preNearIt,*postNearIt);
-              // erase the obvious assignments
-              try{
-                preLarvaeNearby.erase(preNearIt);
-                postLarvaeNearby.erase(postNearIt);
-              }
-              catch(...)
-              {
-                BOOST_LOG_TRIVIAL(warning) << "Problem erasing: "
-                  << *preNearIt << " or " << *postNearIt;
-              }
-              erased=true;
-            }
-            else{
-              //BOOST_LOG_TRIVIAL(trace) << "Larva " << *preNearIt
-              //                         <<" from previous frame doesn't match "
-              //                         << *postNearIt << " from new frame.";
-              erased=false;
-              ++postNearIt;
-            }
-          }
-          if(!erased)
-          {
-            ++preNearIt;
-            break;
-          }
-        }
-        // The rest are either appearing/disappearing/clustering/diverging
-        // BUT if the main one was indeed assigned then we are in luck
-        // and we move on
-        //BOOST_LOG_TRIVIAL(trace)<< "After initial assignment assignedPreMap: "
-        //                        << printUIMap(assignedPreMap)
-        //                        << " for larva with Id: "
-        //                        << preID;
-        if(assignedPreMap[preID]>0)
-        {
-          continue;
-        }
-
-        detect_clustering(preLarvaeNearby,postLarvaeNearby,Prev, In);
-
-        //BOOST_LOG_TRIVIAL(trace) << "After clustering check assignedPreMap: "
-        //                         << printUIMap(assignedPreMap)
-        //                         << " for larva with Id: " << preID;
-        if(assignedPreMap[preID]>0)
-        {
-          continue;
-        }
-
-        detect_diverging(preLarvaeNearby,postLarvaeNearby,Prev, In);
-        //BOOST_LOG_TRIVIAL(trace) << "After diverging check assignedPreMap: "
-        //                         << printUIMap(assignedPreMap)
-        //                         << " for larva with Id: " << preID;
-        if(assignedPreMap[preID]>0)
-        {
-          continue;
-        }
-        else
-          BOOST_LOG_TRIVIAL(trace)
-            << "FOUND TESTCASE FOR MIXED DIVERGING/CONVERGING";
-      }
-    }
-    ++prevIt;
-    map<size_t, vector<size_t> >::iterator prI=assignedPrevious.begin();
-    while(prI!=assignedPrevious.end())
-    {
-      if(prI->second.size()>0)
-      {
-      }
-      else
-      {
-        lost_blobs.push_back(prI->first);
-      }
-      prI++;
-    }
-
-    [>prI=assignedNew.begin();
-    while(prI!=assignedNew.end())
-    {
-      if(prI->second.size()>0)
-      {
-        //BOOST_LOG_TRIVIAL(trace) << prI->first << " -> "
-        //                         << printVector(prI->second);
-      }
-      else
-      {
-        //BOOST_LOG_TRIVIAL(trace) << prI->first << " -> []" ;
-      }
-      prI++;
-    }<]
-  }
-
-
-  cvb::CvBlobs::iterator bIT=In.begin();
-  while(bIT!=In.end())
-  {
-    if (assignedNew[bIT->first].size()>0)
-    {
-      bIT->second->n20=bIT->second->label;
-      bIT->second->label=assignedNew[bIT->first][0];
-      out[assignedNew[bIT->first][0]]=bIT->second;
-    }
-    else
-    {
-      //size_t Match=matchLostLarvae(bIT->first);
-      //if(Match==0)
-      //{
-        size_t NEWID=++LARVAE_COUNT;
-        newInFrame.push_back(NEWID);
-        bIT->second->n20=bIT->second->label;
-        bIT->second->label=NEWID;
-        out[NEWID]=bIT->second;
-      [>}
-      else
-      {
-        bIT->second->n20=bIT->second->label;
-        bIT->second->label=Match;
-        out[Match]=bIT->second;
-      }<]
-    }
-    bIT++;
-  }
-
-  updateLarvae(out,Prev);
-}*/
-
 /* Function to extract and process each frame so that the background is dark
  * and the forground white. Working with UMat
  *   Input:
@@ -3744,7 +3488,7 @@ void extract_background_offline(VideoCapture &capture,
   Mat tmpFrame32f;
   size_t width=capture.get(CV_CAP_PROP_FRAME_WIDTH);
   size_t height=capture.get(CV_CAP_PROP_FRAME_HEIGHT);
-  // LRVTRACK_EXTRACT_OFFLINEBG_MIN=true;
+  LRVTRACK_EXTRACT_OFFLINEBG_MIN=true;
   Mat resultframe;
   if(LRVTRACK_EXTRACT_OFFLINEBG_MIN)
     resultframe= Mat(height,width,CV_8UC1,Scalar(255));
@@ -3754,7 +3498,7 @@ void extract_background_offline(VideoCapture &capture,
   size_t count=0;//capture.get(CV_CAP_PROP_FRAME_COUNT);
   size_t total=capture.get(CV_CAP_PROP_FRAME_COUNT);
   cerr << "Background computation" << endl;
-  while(get_next_frame(capture,tmpFrame,origFrame,10))
+  while(get_next_frame(capture,tmpFrame,origFrame,10) && count < 100)
   {
     if(LRVTRACK_EXTRACT_OFFLINEBG_MIN)
       min(resultframe,tmpFrame,resultframe);
@@ -3933,49 +3677,30 @@ void extract_background_offline(VideoCapture &capture,
                      Scalar(255),
                      -1);
         }
+      else
+        fgROI=Mat::ones(greyBgFrame.rows,
+			greyBgFrame.cols,
+			greyBgFrame.depth());
 
       Mat thr;
       //thr=greyBgFrame&fgROI;
       greyBgFrame.copyTo(thr);
+      thr=fgROI&thr;
       morphologyEx(thr,thr,MORPH_OPEN,Mat(),Point2f(-1,-1),9);
-      /*
-      threshold(thr,
-                    thr,
-                    thresholdlow,
-                    thresholdhigh,
-                    THRESH_BINARY|THRESH_OTSU);
-                    */
-      double minRadius=4980/LRVTRACK_PETRIDISH;
-      double maxRadius=8300/LRVTRACK_PETRIDISH;
-      HoughCircles(thr, cups, CV_HOUGH_GRADIENT,
-          2,   // accumulator resolution (size of the image / 2)
-          400,  // minimum distance between two circles
-          100, // Canny high threshold
-          70, // minimum number of votes
-	  minRadius,maxRadius);
-      //    60, 100); // min and max radiusV
-      if(cups.size()>2)
-      {
-        cups.erase(cups.begin()+2,cups.end());
-      }
-      if(cups.size()<2)
-      {
-	cerr << "Only " << cups.size() << " cups found!!!" << endl;
-      }
-      Mat cupMap=Mat::zeros(greyBgFrame.rows,greyBgFrame.cols, greyBgFrame.type());
-      for(auto &cup:cups)
-      {
-        circle(cupMap,Point2f(cup[0],cup[1]),cup[2]*1.3,Scalar(255),-1);
-      }
-      cupMap=greyBgFrame&cupMap;
-      threshold(cupMap,cupMap,0,255,THRESH_OTSU+THRESH_BINARY);
-      waitKey(-1);
-      IplImage ipl= cupMap;
+      threshold(thr,thr,0,255,THRESH_OTSU+THRESH_BINARY);
+      IplImage ipl= thr;
       labelImg=cvCreateImage(
           cvGetSize(&ipl), IPL_DEPTH_LABEL, 1);
       cvLabel(&ipl, labelImg, cupBlobs);
       double minArea=1000*(613/LRVTRACK_PETRIDISH);
-      double maxArea=1000*(3090/LRVTRACK_PETRIDISH);
+      double maxArea=1200*(3090/LRVTRACK_PETRIDISH);
+      cout << "CupBlobs Size before size filter: " << cupBlobs.size() << endl;
+      cout << "minArea: " << minArea << endl;
+      cout << "maxArea: " << maxArea << endl;
+      for (auto &c: cupBlobs)
+      {
+	      cout << "C: " << c.second->area << endl;
+      }
       cvb::cvFilterByArea(cupBlobs, minArea, maxArea);
       cout << "CupBlobs Size: " << cupBlobs.size() << endl;
       //cout << "Blob Cup1" << endl;
@@ -4913,13 +4638,13 @@ void determineHeadTailBreaks(larvaObject &f)
     for (int i=1; i<c.size()-1;i++)
     {
         c[i]=(c_std[i-1]+c_std[i]+c_std[i+1])/3.0;
-        BOOST_LOG_TRIVIAL(debug) << "BREAKCHECK: " << f.larva_ID << "," << c[i];
+        //BOOST_LOG_TRIVIAL(debug) << "BREAKCHECK: " << f.larva_ID << "," << c[i];
 
     }
     //update round_flag vector.
     for (int i=0; i<c.size();i++)
     {
-        if(c[i]<-2.8)
+        if(c[i]<-3.0)
             f.round_flag[i]=true;
     }
 
@@ -5050,7 +4775,7 @@ void determineHeadTail(larvaObject &f)
 	  tmpd4 = p2fdist(tPoint,pretPoint);
 	  if(tmpd4>0 & tmpd4<100)
           	sumTailCnt+=tmpd4;
-	  BOOST_LOG_TRIVIAL(debug) << "HTCHECK: " << f.larva_ID << "," << j <<
+	  /*BOOST_LOG_TRIVIAL(debug) << "HTCHECK: " << f.larva_ID << "," << j <<
 		  "," << f.heads_brightness[j] <<
 		  "," << f.tails_brightness[j] <<
 		  "," << sumHeadGrey <<
@@ -5058,11 +4783,11 @@ void determineHeadTail(larvaObject &f)
 		  "," << tmpd1 <<
 		  "," << tmpd2 <<
 		  "," << tmpd3 <<
-		  "," << tmpd4;
+		  "," << tmpd4;*/
         }
 	else
 	{
-	  BOOST_LOG_TRIVIAL(debug) << "HTCHECK: " << f.larva_ID << "," << j <<
+	  /*BOOST_LOG_TRIVIAL(debug) << "HTCHECK: " << f.larva_ID << "," << j <<
 	  	"," << f.heads_brightness[j] <<
 	  	"," << f.tails_brightness[j] <<
 		"," << sumHeadGrey <<
@@ -5070,7 +4795,7 @@ void determineHeadTail(larvaObject &f)
 		"," << 0 <<
 		"," << 0 <<
 		"," << 0 <<
-		"," << 0 ;
+		"," << 0 ;*/
 	}
 	if(!isfinite(sumHeadGrey) || !isfinite(sumTailGrey))
 	{

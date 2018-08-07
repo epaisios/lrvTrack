@@ -9,6 +9,7 @@
 
 extern size_t CURRENT_FRAME;
 extern double VIDEO_FPS;
+extern double LRVTRACK_MPP;
 typedef std::pair<cv::Point2f,cv::Point2f > PointPair;
 
 /*double p2fdist(cv::Point2f a, cv::Point2f b);
